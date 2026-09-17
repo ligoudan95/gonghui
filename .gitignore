@@ -1,0 +1,8 @@
+# ZCode 工作区内部配置（非项目资源）
+.zcode/
+
+# 系统与临时文件
+Thumbs.db
+Desktop.ini
+~$*
+*.tmp
