@@ -4,7 +4,7 @@
     {
       "name": "gonghui-defense",
       "source": "./gonghui-defense",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "description": "冒险者工会团队工作流防线 hooks",
       "displayName": "Gonghui Defense Hooks",
       "displayName_i18n": { "zh-CN": "工会防线 Hooks" },

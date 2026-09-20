@@ -16,7 +16,7 @@
 | `task` 工具派工 | Agent 工具（subagent_type 直接填角色名，见上），提示词 = 任务 + **累计完整方案**（角色规则在类型定义中；子代理每次全新会话，任务上下文必须自包含） |
 | `task_id` 复用同一子代理会话 | 记录 spawn 返回的 **agentId**；同角色多轮讨论用 **SendMessage** 发同一 agentId 续聊，绝不重开新代理 |
 | 子代理产物经对话回 main | 子代理最终消息只回主代理、用户看不到；主代理必须在自己的回复中**完整呈现**阶段产物 |
-| 用户审核闸门 | 主代理呈现产物后**结束回合等用户**；拍板项用 AskUserQuestion；「用户未答复=冻结」红线（防线 hooks 插件 `gonghui-defense` 加固：`ask_gate`/`ask_timeout_gate` 随仓库 `plugins/` 分发，各机安装本地插件「工会防线 Hooks」即启用，勿删；配置文件注册已被实测否决，见「后续补充」第 5 条） |
+| 用户审核闸门 | 主代理呈现产物后**结束回合等用户**；拍板项用 AskUserQuestion；「用户未答复=冻结」红线（防线 hooks 插件 `gonghui-defense` 加固：`ask_gate`/`ask_timeout_gate` 随仓库 `plugins/` 分发，各机安装本地插件「工会防线 Hooks」即启用，勿删；0.3.0 已实弹闭环——hooks 必须 process 型 node，勿改 command 型 `shell:"bash"`（桌面进程 PATH 无 bash 必秒败，详见「后续补充」第 5 条）；配置文件注册已被实测否决） |
 | `.opencode/memory/`（MEMORY.md + logs/，opencode.json instructions 自动加载） | `.zcode/memory/`。ZCode **不会自动加载**它 → 根 AGENTS.md「会话启动检查」指示主代理会话开始先读 |
 | `permission: edit/bash: deny`（配置层硬禁） | frontmatter `tools:` 白名单**硬性限制**（等价 opencode permission；2026-09-20 实测：`tools:` 生效，`readOnly` 单独**不**生效——每个角色都必须写 tools 列表）；角色文内「行为权限」节作补充约束（如 planner 不读源码——工具层拦不住，靠规则） |
 
@@ -110,8 +110,8 @@ Team Lead（主代理 = ZCode 本体，规则见根 AGENTS.md）— 唯一持久
 5. **防线 hooks 插件化（2026-09-20，用户在线拍板「转插件化」，取代第 4 条方案 A）**：
    - **方案 A 否决证据**：工作区 hooks 注册在本平台（0.16.9）从未被 runner 执行——用户已点信任且持久化于 `~/.zcode/security/workspace-hook-trust-v1.json`（两条记录 decision:trusted），二次重启后启动日志仍报 `config.project_hooks.pending_trust`，实弹提问仍被 yolo 自动裁决（decision:"modify"）、零 hook 执行记录；当日 16 次启动 hookCount:0，用户级注册存活期的两次提问（08:58/09:09）亦无任何 hook 迹象——**用户级与工作区配置文件 hooks 均为装饰性**。推论：feitu 时代至今防线 hooks 在 ZCode 上一直未真正生效，实际防线是根 AGENTS.md 的「用户未答复=冻结」纪律（feitu 旧记忆"工作区 hooks 信任门且信任不持久化"方向正确，实况更糟）
    - **方案 A 实施物清理**：`.zcode/hooks/` 目录已删；工作区 `.zcode/config.json` 回退为仅 mcp 配置（与已提交版本一致）；用户级 `~/.zcode/cli/config.json` 保持 `{}`（原用户级注册内容已存档于 `.zcode/memory/logs/2026-09-20.md`）
-   - **插件结构**：源码在仓库 `plugins/gonghui-defense/`——`.zcode-plugin/plugin.json`（name=gonghui-defense、version=0.1.0、hooks 指向 `./hooks/hooks.json`）；`hooks/hooks.json` 为插件格式（外层 `hooks` 包装），两个 hook 仍 matcher `^AskUserQuestion$`、type process、`command: "node"`（走 PATH，免疫各机 node 安装路径差异）、`args: ["${CLAUDE_PLUGIN_ROOT}/hooks/<脚本名>"]`（插件根变量，免疫各机克隆路径差异）；`hooks/ask_gate.cjs` 与 `ask_timeout_gate.cjs` 与原脚本逐字节一致。本地市场 `plugins/marketplace.json`（name=dev-gonghui，条目 gonghui-defense，source `./gonghui-defense`，含中文 displayName「工会防线 Hooks」与 description）
-   - **分发语义**：每台电脑 clone 后手动两步——插件市场添加本地目录 `<仓库>/plugins`，安装「工会防线 Hooks」。插件 hooks 按官方文档自动启用（无信任门、无需 enabled 标志，任何插件贡献 hook 即启用 runner）；前置条件仍是机器装有 node。冒烟三场景全过（ask 输出 / 超时特征注入冻结文案 / 无特征空输出）、全部 JSON 合法；**插件实弹验证待用户完成 UI 安装后进行**
+   - **插件结构**：源码在仓库 `plugins/gonghui-defense/`——`.zcode-plugin/plugin.json`（name=gonghui-defense、version=0.3.0、hooks 指向 `./hooks/hooks.json`）；`hooks/hooks.json` 为插件格式（外层 `hooks` 包装），两个 hook 仍 matcher `^AskUserQuestion$`、type process、`command: "node"`（走 PATH，免疫各机 node 安装路径差异）、`args: ["${CLAUDE_PLUGIN_ROOT}/hooks/<脚本名>"]`（插件根变量，免疫各机克隆路径差异；ZCode 3.14.0 源码证实 process 型 command 与每个 args 元素均展开该变量）；`hooks/ask_gate.cjs` 与 `ask_timeout_gate.cjs` 与原脚本逐字节一致。本地市场 `plugins/marketplace.json`（name=dev-gonghui，条目 gonghui-defense，source `./gonghui-defense`，含中文 displayName「工会防线 Hooks」与 description）。⚠️ **hook 必须保持 process 型，勿改 command 型 `shell:"bash"`**：spawn 靠 PATH 裸名解析 bash，而 Windows Git 安装器默认只把 `<Git>\cmd` 加入系统 PATH（该目录无 bash.exe），ZCode 桌面进程 PATH 无 bash → spawn ENOENT 30ms 级秒败——与 ZCode 版本、Git 安装位置无关（0.16.9/3.14.0 同症），godot-prompter 插件同败同理；历批「冒烟全过」系盲区（终端会话 PATH 含 `usr\bin` 可解析 bash，与桌面进程不同）。中间版本 0.2.0 曾改 command+bash 范式即死于此，0.3.0 回归 process 型
+   - **分发语义**：每台电脑 clone 后手动两步——插件市场添加本地目录 `<仓库>/plugins`，安装「工会防线 Hooks」。插件 hooks 按官方文档自动启用（无信任门、无需 enabled 标志，任何插件贡献 hook 即启用 runner）；前置条件仍是机器装有 node。**0.3.0 已实弹终局闭环**（本机双 hook 零失败，2026-09-20）。两个运维坑（实测）：① 本地 directory 市场在「添加」时把 `plugins/` 复制为快照、市场读快照非源目录——改源文件后刷新无效，须**移除市场重新添加**强制重建快照才能识别新版本；② 插件更新后必须**完整重启 ZCode**——热注册钩表会残留旧版 hook 配置，致「装了新版却按旧版失败」的假象
 
 ---
 
