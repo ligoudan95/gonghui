@@ -1,5 +1,5 @@
-# ZCode 工作区内部配置（非项目资源）
-.zcode/
+# ZCode 会话工件（团队配置 .zcode/agents|docs|memory 与 config.json 入库）
+.zcode/plans/
 
 # 系统与临时文件
 Thumbs.db
