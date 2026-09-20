@@ -1,0 +1,34 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^AskUserQuestion$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/ask_gate.cjs\"",
+            "bash": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/ask_gate.cjs\"",
+            "shell": "bash",
+            "timeoutMs": 5000,
+            "statusMessage": "AskUserQuestion 强制人工确认（防自动放行）"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^AskUserQuestion$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/ask_timeout_gate.cjs\"",
+            "bash": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/ask_timeout_gate.cjs\"",
+            "shell": "bash",
+            "timeoutMs": 5000,
+            "statusMessage": "AskUserQuestion 超时未答复 → 注入冻结指令（防自行定稿）"
+          }
+        ]
+      }
+    ]
+  }
+}
