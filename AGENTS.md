@@ -72,7 +72,7 @@ opencode 的 `task` 工具 + `task_id` 复用，在 ZCode 中按以下方式实�
 - 一轮结束标志：@docs-updater 完成文档 + 你更新完工作日志
 - Agent 间信息只通过对话传递（你转发），严禁用文件作为通信媒介
 
-> 防线加固：用户级 hooks（PreToolUse `ask_gate` / PostToolUse `ask_timeout_gate`，注册于 `~/.zcode/cli/config.json`，脚本实体在 `C:\Users\A\.zcode\hooks\`——2026-09-20 自 feitu 迁入）会在 AskUserQuestion 前后拦截超时特征，是"冻结"红线的机制层保障，勿删。
+> 防线加固：hooks（PreToolUse `ask_gate` / PostToolUse `ask_timeout_gate`）以**本地插件 `gonghui-defense`** 分发（源码随仓库 `plugins/gonghui-defense/`，本地 marketplace `plugins/marketplace.json`；每台电脑 clone 后：插件市场 → 添加 → 本地目录 `<仓库>/plugins` → 安装「工会防线 Hooks」）。脚本用 `${CLAUDE_PLUGIN_ROOT}` 定位、命令 `node` 走 PATH。会在 AskUserQuestion 前后拦截超时特征，是"冻结"红线的机制层保障，勿删。⚠️ 背景：2026-09-20 实测配置文件 hooks（用户级+工作区）在本平台从未被 runner 执行，工作区注册还伴随信任门不生效问题，故走插件路线（插件 hooks 自动启用、无信任门）。
 
 ## 轻量路径（用户已确认的例外）
 
