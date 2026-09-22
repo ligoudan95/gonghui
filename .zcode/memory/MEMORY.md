@@ -1,5 +1,7 @@
 # MEMORY.md — gonghui 项目跨会话工作记忆
 
+> ⚠️ **跨机工作提示（2026-09-22）**：全库十审遗留待办 17 项（P-1~P-17：D/P 拍板补记、C 编号命名空间、17 案数值拍板组、跨案裁决等）已整理至 **`.zcode/memory/PENDING-ISSUES.md`**——用户将在另一台机器处理，两边会话以该文件为唯一工作清单，处理完逐项登记。
+
 > 每次会话开始由 Team Lead 先读本文件（根 `AGENTS.md`「会话启动检查」）。注意：ZCode 只自动加载根 AGENTS.md，本文件需主动读取。
 > 完成阶段性工作后在「近期关键记录」追加（新条目放最上面）；只保留关键事实与决策，过时条目及时清理。
 > 团队工作流：Team Lead 规则见根 `AGENTS.md`；角色定义见 `.zcode/agents/`；团队规程与机制对照见 `.zcode/docs/AGENTS_CONFIG.md`；与项目规范冲突时以根 AGENTS.md 为准。
