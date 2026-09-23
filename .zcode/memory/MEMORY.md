@@ -25,6 +25,8 @@
 
 ## 近期关键记录
 
+- 2026-09-23（A机第十七批·**godot-code-style 项目级 AI 技能入库**）：官方手册（stable=4.7）风格指南+静态类型两页蒸馏成 AI 技能 `.zcode/skills/godot-code-style/`（SKILL.md 主体+references/static-typing.md；**项目内为唯一权威副本**，用户级已删）。**跨机：git pull 后新会话自动生效，无需安装**；触发=写/改/审 .gd 或问 GDScript 规范。技能声明项目规范（全量静态类型铁律）优先。**限制：子代理无 Skill 工具**，派工 @programmer 写 GDScript 须在提示词注明读该文件。
+
 - 2026-09-23（A机第十五批·**DEMO 目录重组**）：用户拍板【文档+工程全移】——根目录新建 `DEMO/`，**DEMO 阶段所有文件（设计文档+Godot 工程+未来代码）统一入 DEMO/**（规则已记入根 AGENTS.md 项目速查）。git-admin（agent_8019362a）执行：2331 文件 git mv rename 保留历史（R 2315+RM 16），`新的规划/` 与根 `.godot/` 缓存清理；**DEMO/系统规划案/ 实测 23 个 md**（历史口径"22"系计数偏差，以 23 为准）。docs-updater（agent_14e95de9）6 文件引用修正（AGENTS.md 规则行+项目速查、planner/architect/docs-updater/git-admin 角色文件、AGENTS_CONFIG.md；顺带修复 planner/architect 指向已删《总体规划.md》的死链→DEMO/系统规划案/00-总案）。**待用户：重开 Godot 编辑器须打开 `DEMO/` 下工程**（根工程已移走）；godot-ai 会话将随重开重建。
 
 - 2026-09-23（A机第十四批·**DEMO 开发排期定稿**）：planner 出案+用户 6 项确认**全按推荐拍板**——**8 里程碑 M0-M7**（骨架数据基座→战棋原型→事件检定→探索层→经营层→整合→内容填充美术替换→打磨验收）+11.5-14 周折算参考、照总案 §8.5 战棋先行、混合验收（gdUnit4 自查+M1/M5/M7 用户人工试玩）、美术占位先行并行（M1 起→M6 同 id 替换）、**M1 硬验收门**（手感不达标不进 M2）。落盘 `新的规划/DEMO文档/DEMO开发排期.md` v1.0（261 行）+00-索引引用行。规模锚点：数据表约 27 张/委托 9 模板/技能 23 条/状态池 10-15/UI 约 16 界面/场景 7/美术约 80 件。planner=agent_d87e528e、docs-updater=agent_74f6edac 可复用。**下一步：M0 开工派 @architect**（输入=排期文档 M0 节+案 16/17/1）。未提交（累计：第十轮 15 文档+AGENTS.md+project.godot 改名+排期文档+索引行+本 MEMORY/日志）。
