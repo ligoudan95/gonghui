@@ -1,3 +1,7 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
 # ZCode 会话工件（团队配置 .zcode/agents|docs|memory 与 config.json 入库）
 .zcode/plans/
 
