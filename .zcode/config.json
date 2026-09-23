@@ -8,13 +8,22 @@
 					"--link-mode",
 					"copy",
 					"--from",
-					"godot-ai==3.2.4",
+					"godot-ai==4.2.1",
 					"godot-ai",
 					"attach",
 					"--port",
 					"8000",
 					"--ws-port",
 					"9500"
+				],
+				"env": {}
+			},
+			"godot-mcp": {
+				"type": "stdio",
+				"command": "npx",
+				"args": [
+					"-y",
+					"@coding-solo/godot-mcp"
 				],
 				"env": {}
 			}
