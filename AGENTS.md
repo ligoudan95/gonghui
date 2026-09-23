@@ -117,12 +117,22 @@ opencode 的 `task` 工具 + `task_id` 复用，在 ZCode 中按以下方式实�
 ## 项目速查【随项目推进回填】
 
 - 仓库：https://github.com/ligoudan95/gonghui.git（origin，main 分支）
-- 当前阶段：策划定稿（十轮盲审闭环）+ DEMO 开发排期定稿（M0-M7）+ Godot 4.7 工程已建
+- 当前阶段：DEMO 开发中——**M0 工程骨架与数据基座已完成**（2026-09-23 验收通过）；下一步 M1 战棋原型（硬验收门）
 - **目录规则（用户指令）**：DEMO 阶段的所有文件（设计文档、Godot 工程、代码）统一放在根目录 `DEMO/` 文件夹内，根目录不放 DEMO 阶段工作文件（团队基础设施除外）
 - 文档体系：`DEMO/`（系统规划案 23 份 + DEMO 开发排期；PROJECT_OVERVIEW / SYSTEM_FRAMEWORK / SCRIPT_FRAMEWORK / CODE_STANDARDS 四文档体系尚未建立，建立后由 @docs-updater 登记）
 - 总设计文档：`DEMO/系统规划案/00-总案-v0.5.md`（#1 拍板删《总体规划.md》后现行总设计文档；21 案索引见同目录 00-索引.md）
-- 项目编码规范 / 架构铁律：未建立（建立后在此登记，并覆盖 `.zcode/agents/programmer.md`、`architect.md` 中的通用模板）
-- 程序员自查命令：未建立
+- **项目编码规范 / 架构铁律**（M0 架构方案定稿）：
+  - 语言 GDScript，**全量静态类型标注**（函数签名、变量一律带类型）；数据表 = 自定义 Resource `.tres`（一表一条文件、按域分目录、文件名 == 记录 id）
+  - 铁律① 数据与逻辑分离：数值只存 `data/` 表，公式形态代码化、参数表化，代码零硬编码数值
+  - 铁律② id 全局小写下划线 + 域前缀（`cfg_/cls_/skl_/mgrp_/en_/enc_`，状态 BUFF_/DEBUFF_）；表内只存 id 绝不存路径，路径映射集中 AssetRegistry；文件名 == 记录 id
+  - 铁律③ 新表必登记：案 16 §2.2 总目录 + DataValidator 校验规则，缺一不算完成
+  - 铁律④ autoload 依赖单向：GameConfig→GameData→SaveManager→SceneManager，禁止反向；跨层只走公开接口
+  - 铁律⑤ 存档只经 SaveManager：只存运行态不存表数据；结构变更升 schema_version；出征中不自动存档（#26）
+  - 铁律⑥ 纯逻辑模块测试先行：校验/存档/数值公式先写 gdUnit4 用例
+  - 铁律⑦ 场景切换只经 SceneManager：SCENE_TABLE 集中映射
+  - 铁律⑧ 暂缓系统启用清单隔离：先建后空表与代码路径不得被运行时触达；`addons/` 一律不改，插件升级须架构师评估
+  - 全库资源命名信息集中登记于 `data/core/naming_registry.tres`（用户拍板新增）
+- **程序员自查命令**：`DEMO/selfcheck.cmd`（工作目录 `DEMO/`，M0 批 4 建立落地；内容 = gdUnit4 全量测试 + headless 数据校验报告）——批 1-3 期间 gdUnit4 直跑：`godot --headless -s res://addons/gdUnit4/bin/gdUnitCmdTool.gd -a`
 
 ## 规则
 

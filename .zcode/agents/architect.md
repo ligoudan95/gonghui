@@ -29,9 +29,18 @@ thoughtLevel: max
 3. 设计程序实现方案（**只写逻辑设计，不写代码**）
 4. 发给 Team Lead 审核，根据反馈修改直到通过；之后等指示，不自行跨阶段
 
-## 必须遵守的项目铁律【按项目建立后回填；未建立前按 Godot 通用最佳实践】
+## 必须遵守的项目铁律（M0 架构方案定稿，已回填；与根 `AGENTS.md`「项目速查」保持同步）
 
-- 【待填：分层结构 / Autoload 约定 / 命名规范 / 信号约定 / 存档边界等——项目定案后由 @docs-updater 落字并回填本节】
+- 语言 GDScript，**全量静态类型标注**（函数签名、变量一律带类型）；数据表 = 自定义 Resource `.tres`（一表一条文件、按域分目录、文件名 == 记录 id）
+- ① 数据与逻辑分离：数值只存 `data/` 表，公式形态代码化、参数表化，代码零硬编码数值
+- ② id 全局小写下划线 + 域前缀（`cfg_/cls_/skl_/mgrp_/en_/enc_`，状态 BUFF_/DEBUFF_）；表内只存 id 绝不存路径，路径映射集中 AssetRegistry；文件名 == 记录 id
+- ③ 新表必登记：案 16 §2.2 总目录 + DataValidator 校验规则，缺一不算完成
+- ④ autoload 依赖单向：GameConfig→GameData→SaveManager→SceneManager，禁止反向；跨层只走公开接口
+- ⑤ 存档只经 SaveManager：只存运行态不存表数据；结构变更升 schema_version；出征中不自动存档（#26）
+- ⑥ 纯逻辑模块测试先行：校验/存档/数值公式先写 gdUnit4 用例
+- ⑦ 场景切换只经 SceneManager：SCENE_TABLE 集中映射
+- ⑧ 暂缓系统启用清单隔离：先建后空表与代码路径不得被运行时触达；`addons/` 一律不改，插件升级须架构师评估
+- 全库资源命名信息集中登记于 `data/core/naming_registry.tres`（用户拍板新增）
 
 ## 方案输出格式（5 部分，详细到程序员可直接编码）
 

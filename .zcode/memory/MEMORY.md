@@ -18,12 +18,14 @@
 - **目录规则（用户指令 2026-09-23）**：DEMO 阶段所有文件（设计文档/Godot 工程/代码）统一放根目录 `DEMO/`，根目录不放 DEMO 工作文件（团队基础设施除外）
 - 总设计文档：`DEMO/系统规划案/00-总案-v0.5.md`（#1 拍板删原上位文件；2026-09-23 第十轮 L5 清理失效指向+同日 DEMO 重组迁入）
 - 文档体系：`DEMO/`（PROJECT_OVERVIEW / SYSTEM_FRAMEWORK / SCRIPT_FRAMEWORK / CODE_STANDARDS 四文档体系尚未建立；建立后由 @docs-updater 登记，并同步 `.zcode/agents/docs-updater.md` 文档映射表与 `architect.md` 阅读优先级）
-- 编码规范：未建立（建立后在根 AGENTS.md「项目速查」登记，覆盖 programmer.md 通用模板）
-- 程序员自查命令：未建立
+- 编码规范 / 架构铁律：**已建立（2026-09-23 M0 架构方案定稿）**——GDScript 全量静态类型+Resource .tres 八条铁律，全文见根 AGENTS.md「项目速查」（权威），此处不重复；GDScript 官方风格规范技能 `.zcode/skills/godot-code-style/`（子代理派工提示词须注明读它）
+- 程序员自查命令：**`DEMO/selfcheck.cmd`**（gdUnit4 全量+数据校验报告+汇总退出码；批 1-3 过渡期直跑 gdUnit 命令见根 AGENTS.md）
 - godot-ai MCP：`.zcode/config.json` 配置 uvx `godot-ai==4.2.1` attach 8000/9500 + 第二服务 `godot-mcp`（npx `@coding-solo/godot-mcp`，**配置零绝对路径、跨机通用**；npm 裸名 godot-mcp 系滞后包勿用）——godot-mcp 靠各机 PATH 解析 `godot.exe` 自动探测（本机已配：编辑器目录内 godot.exe 硬链接+用户 PATH；**另一台机器与编辑器升级换目录后均须重做两步**）；两个 MCP 需重启 ZCode 生效（勿再从 feitu 复制旧版）
 - 编辑器插件（2026-09-23 装齐 7 个，全未提交）：godot_ai 4.2.1 / limboai 1.8.1（GDExtension 自注册，**无 plugin.cfg 属正常**）/ dialogic 2.0-alpha-20 / gdUnit4 6.2.1（含 runtest.cmd 自查命令雏形）/ phantom_camera 0.11.0.3 / AsepriteWizard 9.8.0-4 / gd-plug 0.2.6（命令行工具免启用）；project.godot 已启用其中 5 个带 plugin.cfg 的——**需关闭重开编辑器加载**
 
 ## 近期关键记录
+
+- 2026-09-23（A机第十八批·**M0 工程骨架与数据基座验收通过**）：M0 四批施工闭环（programmer=agent_3611f071 全程复用；architect=agent_5fe0bef3 出案，用户拍板 .tres/id 定名表+**naming_registry 命名登记表**/中值占位）。产物：**49 张数据表 .tres**（职业 6/技能 23/状态 11+互斥/敌人 3+配置 3/核心 2）+DataValidator 14 检查位+7 autoload（4 新）+存档管理器（#26 四时点/出征锁/原子写）+场景流（标题→公会壳）+**selfcheck.cmd 自查命令**。验收四条全达成+用户 F5 试玩通过；**selfcheck ALL GREEN：52 测试+49 条数据校验零错误**。**Dialogic 报错根因=预写插件启用列表绕过 UI 启用**（InputMap 缺失），UI 关开修复——预防：插件一律 UI 启停。**环境实证集**：gdUnit before() 系套件级、GdUnitCmdTool.gd 大小写敏感+--ignoreHeadlessMode、-s 模式挂真实 autoload（自建同名被改 @X@2）、.tres 无 # 注释、枚举常量经 preload 访问。**待办**：M0 变更未提交（含 Dialogic [input] 段）；limboai ~dll 提交时 git rm；GODOT_BIN 陈旧建议清理。下一步 **M1 战棋原型（硬验收门）**——派 architect 出 M1 方案。
 
 - 2026-09-23（A机第十七批·**godot-code-style 项目级 AI 技能入库**）：官方手册（stable=4.7）风格指南+静态类型两页蒸馏成 AI 技能 `.zcode/skills/godot-code-style/`（SKILL.md 主体+references/static-typing.md；**项目内为唯一权威副本**，用户级已删）。**跨机：git pull 后新会话自动生效，无需安装**；触发=写/改/审 .gd 或问 GDScript 规范。技能声明项目规范（全量静态类型铁律）优先。**限制：子代理无 Skill 工具**，派工 @programmer 写 GDScript 须在提示词注明读该文件。
 
