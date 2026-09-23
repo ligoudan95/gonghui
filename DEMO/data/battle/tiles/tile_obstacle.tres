@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="TileTypeDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/tile_type_def.gd" id="1_iyjls"]
+
+[resource]
+script = ExtResource("1_iyjls")
+id = &"tile_obstacle"
+display_name = "障碍"
+kind = 1
+walkable = false
+comment = "【占位·试玩校准】障碍：不可通行、阻断视线；来源：17 案 §3.9 地格效果"

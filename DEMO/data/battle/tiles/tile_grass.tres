@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="TileTypeDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/tile_type_def.gd" id="1_ek32l"]
+
+[resource]
+script = ExtResource("1_ek32l")
+id = &"tile_grass"
+display_name = "草丛"
+kind = 2
+status_id = &"BUFF_tile_grass"
+comment = "【占位·试玩校准】草丛：站格闪避 +15%（17 案 §3.9）；来源：17 案 §3.9 地格效果"

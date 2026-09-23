@@ -11,6 +11,7 @@ extends Node
 enum SceneId {
 	TITLE,
 	GUILD_SHELL,
+	BATTLE_SCREEN,
 }
 
 ## 切换完成信号（from_id=切换前场景、to_id=目标场景；发起切换即发，
@@ -21,12 +22,14 @@ signal scene_changed(from_id: int, to_id: int)
 const SCENE_TABLE: Dictionary = {
 	SceneId.TITLE: "res://scenes/title/title_screen.tscn",
 	SceneId.GUILD_SHELL: "res://scenes/guild/guild_shell.tscn",
+	SceneId.BATTLE_SCREEN: "res://scenes/battle/battle_screen.tscn",
 }
 
 ## 场景名 -> SceneId 映射（SaveData.scene_id 的 StringName 到枚举的解析）
 const SCENE_NAME_TO_ID: Dictionary = {
 	&"title": SceneId.TITLE,
 	&"guild_shell": SceneId.GUILD_SHELL,
+	&"battle_screen": SceneId.BATTLE_SCREEN,
 }
 
 ## 当前场景 id（未进入任何场景时 = -1）

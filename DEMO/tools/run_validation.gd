@@ -1,4 +1,4 @@
-## M0 数据校验入口（headless 运行）
+## 数据校验入口（headless 运行）
 ## 职责：自建 GameData 实例扫描全库 → DataValidator.run_all → 报告写
 ## reports/validation_report.txt 并打印；退出码 0=零错误 / 1=存在错误（CI 判定用）。
 ## 用法：godot --headless -s res://tools/run_validation.gd

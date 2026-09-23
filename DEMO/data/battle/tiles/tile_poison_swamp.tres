@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="TileTypeDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/tile_type_def.gd" id="1_315le"]
+
+[resource]
+script = ExtResource("1_315le")
+id = &"tile_poison_swamp"
+display_name = "毒沼"
+kind = 2
+status_id = &"DEBUFF_tile_poison"
+comment = "【占位·试玩校准】毒沼：站格回合末固定 6 伤，固定值直接结算、不走减免轨（§3.9，同陷阱 D7 口径）；来源：17 案 §3.9 地格效果"

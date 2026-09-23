@@ -59,5 +59,87 @@ custom_minimum_size = Vector2(240, 56)
 focus_mode = 2
 text = "返回标题"
 
+[node name="DebugSeparator" type="HSeparator" parent="Center/Layout"]
+layout_mode = 2
+
+[node name="DebugTitle" type="Label" parent="Center/Layout"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "M1 战棋调试入口·M2 后拆除"
+horizontal_alignment = 1
+
+[node name="DebugClassRow" type="HBoxContainer" parent="Center/Layout"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 16
+
+[node name="CheckWarrior" type="CheckBox" parent="Center/Layout/DebugClassRow"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 2
+button_pressed = true
+text = "战士"
+
+[node name="CheckRogue" type="CheckBox" parent="Center/Layout/DebugClassRow"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 2
+button_pressed = true
+text = "盗贼"
+
+[node name="CheckMage" type="CheckBox" parent="Center/Layout/DebugClassRow"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 2
+button_pressed = true
+text = "法师"
+
+[node name="CheckPriest" type="CheckBox" parent="Center/Layout/DebugClassRow"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 2
+button_pressed = true
+text = "牧师"
+
+[node name="CheckRanger" type="CheckBox" parent="Center/Layout/DebugClassRow"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 2
+text = "游侠"
+
+[node name="CheckArcanist" type="CheckBox" parent="Center/Layout/DebugClassRow"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 2
+text = "奇术师"
+
+[node name="DebugBattleRow" type="HBoxContainer" parent="Center/Layout"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 16
+
+[node name="DebugRandomButton" type="Button" parent="Center/Layout/DebugBattleRow"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(220, 56)
+focus_mode = 2
+text = "随机遭遇战（8×8）"
+
+[node name="DebugLairButton" type="Button" parent="Center/Layout/DebugBattleRow"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(220, 56)
+focus_mode = 2
+text = "必然遭遇战（10×10）"
+
+[node name="DebugWarnLabel" type="Label" parent="Center/Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = ""
+horizontal_alignment = 1
+
 [connection signal="pressed" from="Center/Layout/SaveAndBackButton" to="." method="_on_save_and_back_pressed"]
 [connection signal="pressed" from="Center/Layout/BackButton" to="." method="_on_back_pressed"]
+[connection signal="pressed" from="Center/Layout/DebugBattleRow/DebugRandomButton" to="." method="_on_debug_random_pressed"]
+[connection signal="pressed" from="Center/Layout/DebugBattleRow/DebugLairButton" to="." method="_on_debug_lair_pressed"]

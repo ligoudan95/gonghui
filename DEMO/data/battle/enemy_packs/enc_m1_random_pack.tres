@@ -13,4 +13,5 @@ count_max = 3
 script = ExtResource("2_40u17")
 id = &"enc_m1_random_pack"
 entries = Array[ExtResource("1_rrgkd")]([SubResource("Resource_k1ui1")])
-comment = "【占位·试玩校准】随机遭遇：池（鼠/哥布林）×3（17 案 §3.8 配置）；battle_map_ref 批 4 地图系统落地后回填（随机图 8×8）"
+battle_map_ref = &"btm_m1_random_8x8"
+comment = "【占位·试玩校准】随机遭遇：池（鼠/哥布林）×3（17 案 §3.8 配置）；battle_map_ref=随机图 8×8（M1 批 1 回填）"

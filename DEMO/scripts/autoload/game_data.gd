@@ -28,6 +28,9 @@ var DOMAIN_SCHEMA: Dictionary[StringName, Array] = {
 	&"status/mutex_groups": [MutexGroupDef],
 	&"battle/enemies": [EnemyDef],
 	&"battle/enemy_packs": [EnemyPackDef],
+	&"battle/maps": [BattleMapDef],
+	&"battle/tiles": [TileTypeDef],
+	&"equip": [EquipDef],
 	&"assets": [AssetRegistry],
 }
 

@@ -18,4 +18,5 @@ count_max = 3
 script = ExtResource("2_d4xy8")
 id = &"enc_m1_lair_pack"
 entries = Array[ExtResource("1_78tdc")]([SubResource("Resource_b7gdk"), SubResource("Resource_8jf81")])
-comment = "【占位·试玩校准】必然遭遇：精英×1 + 池（鼠/哥布林）×2-3（17 案 §3.8 配置）；battle_map_ref 批 4 回填（必然图 10×10）"
+battle_map_ref = &"btm_m1_lair_10x10"
+comment = "【占位·试玩校准】必然遭遇：精英×1 + 池（鼠/哥布林）×2-3（17 案 §3.8 配置）；battle_map_ref=必然图 10×10（M1 批 1 回填）"

@@ -339,7 +339,105 @@ domain = &"battle/enemy_packs"
 display_name = "魔宠巢出口遭遇队"
 rule_note = "enc_<区域>_<语义>：敌方队伍配置（事件 B 出口遭遇，18 案 §4.1）"
 
+[sub_resource type="Resource" id="Resource_xxsy3"]
+script = ExtResource("1_xxsy3")
+resource_id = &"btm_m1_random_8x8"
+domain = &"battle/maps"
+display_name = "矿洞随机遭遇图（8×8）"
+rule_note = "btm_<区域>_<规格>：战场地图（m1=矿洞一层；8x8=随机遭遇规格，17 案 §3.9）"
+
+[sub_resource type="Resource" id="Resource_8hs6i"]
+script = ExtResource("1_xxsy3")
+resource_id = &"btm_m1_lair_10x10"
+domain = &"battle/maps"
+display_name = "巢穴必然遭遇图（10×10）"
+rule_note = "btm_<区域>_<规格>：战场地图（10x10=必然遭遇规格，17 案 §3.9）"
+
+[sub_resource type="Resource" id="Resource_xjr3h"]
+script = ExtResource("1_xxsy3")
+resource_id = &"tile_normal"
+domain = &"battle/tiles"
+display_name = "普通地面"
+rule_note = "tile_<语义>：地格类型定义（默认地格）"
+
+[sub_resource type="Resource" id="Resource_kjgb4"]
+script = ExtResource("1_xxsy3")
+resource_id = &"tile_obstacle"
+domain = &"battle/tiles"
+display_name = "障碍"
+rule_note = "tile_<语义>：地格类型定义（不可通行/阻断视线）"
+
+[sub_resource type="Resource" id="Resource_l8020"]
+script = ExtResource("1_xxsy3")
+resource_id = &"tile_grass"
+domain = &"battle/tiles"
+display_name = "草丛"
+rule_note = "tile_<语义>：地格类型定义（STATUS 类绑定 BUFF_tile_grass/STANDING）"
+
+[sub_resource type="Resource" id="Resource_hewr7"]
+script = ExtResource("1_xxsy3")
+resource_id = &"tile_highground"
+domain = &"battle/tiles"
+display_name = "高地"
+rule_note = "tile_<语义>：地格类型定义（STATUS 类绑定 BUFF_tile_highground/STANDING）"
+
+[sub_resource type="Resource" id="Resource_kqsjo"]
+script = ExtResource("1_xxsy3")
+resource_id = &"tile_poison_swamp"
+domain = &"battle/tiles"
+display_name = "毒沼"
+rule_note = "tile_<语义>：地格类型定义（STATUS 类绑定 DEBUFF_tile_poison/STANDING）"
+
+[sub_resource type="Resource" id="Resource_wxmxw"]
+script = ExtResource("1_xxsy3")
+resource_id = &"tile_trap"
+domain = &"battle/tiles"
+display_name = "陷阱"
+rule_note = "tile_<语义>：地格类型定义（ENEMY_ENTER_ONCE 触发·纯伤害无状态绑定，第九轮拍板）"
+
+[sub_resource type="Resource" id="Resource_3xjaa"]
+script = ExtResource("1_xxsy3")
+resource_id = &"eqp_init_warrior"
+domain = &"equip"
+display_name = "战士初始装备（重甲套）"
+rule_note = "eqp_init_<职业>：DEMO 初始装备（不可卸下，17 案 §3.4/§3.11 #7）"
+
+[sub_resource type="Resource" id="Resource_slrmy"]
+script = ExtResource("1_xxsy3")
+resource_id = &"eqp_init_rogue"
+domain = &"equip"
+display_name = "盗贼初始装备（皮甲套）"
+rule_note = "eqp_init_<职业>：DEMO 初始装备（不可卸下）"
+
+[sub_resource type="Resource" id="Resource_27uxc"]
+script = ExtResource("1_xxsy3")
+resource_id = &"eqp_init_ranger"
+domain = &"equip"
+display_name = "游侠初始装备（游侠皮甲套）"
+rule_note = "eqp_init_<职业>：DEMO 初始装备（不可卸下）"
+
+[sub_resource type="Resource" id="Resource_lbffk"]
+script = ExtResource("1_xxsy3")
+resource_id = &"eqp_init_mage"
+domain = &"equip"
+display_name = "法师初始装备（布甲套）"
+rule_note = "eqp_init_<职业>：DEMO 初始装备（不可卸下）"
+
+[sub_resource type="Resource" id="Resource_6fscd"]
+script = ExtResource("1_xxsy3")
+resource_id = &"eqp_init_priest"
+domain = &"equip"
+display_name = "牧师初始装备（布甲套）"
+rule_note = "eqp_init_<职业>：DEMO 初始装备（不可卸下）"
+
+[sub_resource type="Resource" id="Resource_p2ky8"]
+script = ExtResource("1_xxsy3")
+resource_id = &"eqp_init_arcanist"
+domain = &"equip"
+display_name = "奇术师初始装备（布甲套）"
+rule_note = "eqp_init_<职业>：DEMO 初始装备（不可卸下）"
+
 [resource]
 script = ExtResource("2_8hs6i")
-entries = Array[ExtResource("1_xxsy3")]([SubResource("Resource_7rp6k"), SubResource("Resource_oft80"), SubResource("Resource_n0ea3"), SubResource("Resource_8b336"), SubResource("Resource_hxk6g"), SubResource("Resource_l7131"), SubResource("Resource_8wgs3"), SubResource("Resource_ito87"), SubResource("Resource_mvlxc"), SubResource("Resource_bw3po"), SubResource("Resource_6s0uu"), SubResource("Resource_kpbtc"), SubResource("Resource_p5cqs"), SubResource("Resource_e25vx"), SubResource("Resource_inerj"), SubResource("Resource_pa4wo"), SubResource("Resource_coef1"), SubResource("Resource_dmwsm"), SubResource("Resource_h7b8d"), SubResource("Resource_pvxlm"), SubResource("Resource_8igpl"), SubResource("Resource_cwl1f"), SubResource("Resource_tomj8"), SubResource("Resource_67gfp"), SubResource("Resource_01rdt"), SubResource("Resource_p0axp"), SubResource("Resource_4uaip"), SubResource("Resource_dl7mi"), SubResource("Resource_d0vn1"), SubResource("Resource_wsgw6"), SubResource("Resource_oqqqu"), SubResource("Resource_x4q0o"), SubResource("Resource_0ucge"), SubResource("Resource_h3wwn"), SubResource("Resource_pk2js"), SubResource("Resource_cli47"), SubResource("Resource_w1hfh"), SubResource("Resource_gwor4"), SubResource("Resource_uyas2"), SubResource("Resource_3k27s"), SubResource("Resource_yry1n"), SubResource("Resource_j4c4f"), SubResource("Resource_b83j2"), SubResource("Resource_pubcw"), SubResource("Resource_ywjf5"), SubResource("Resource_fh5vw"), SubResource("Resource_u0rav"), SubResource("Resource_wk6it")])
-comment = "全库资源命名登记表（用户拍板②·2026-09-23）：每条记录资源 id/域前缀/中文名/命名规则；条目随资源增删同步维护"
+entries = Array[ExtResource("1_xxsy3")]([SubResource("Resource_7rp6k"), SubResource("Resource_oft80"), SubResource("Resource_n0ea3"), SubResource("Resource_8b336"), SubResource("Resource_hxk6g"), SubResource("Resource_l7131"), SubResource("Resource_8wgs3"), SubResource("Resource_ito87"), SubResource("Resource_mvlxc"), SubResource("Resource_bw3po"), SubResource("Resource_6s0uu"), SubResource("Resource_kpbtc"), SubResource("Resource_p5cqs"), SubResource("Resource_e25vx"), SubResource("Resource_inerj"), SubResource("Resource_pa4wo"), SubResource("Resource_coef1"), SubResource("Resource_dmwsm"), SubResource("Resource_h7b8d"), SubResource("Resource_pvxlm"), SubResource("Resource_8igpl"), SubResource("Resource_cwl1f"), SubResource("Resource_tomj8"), SubResource("Resource_67gfp"), SubResource("Resource_01rdt"), SubResource("Resource_p0axp"), SubResource("Resource_4uaip"), SubResource("Resource_dl7mi"), SubResource("Resource_d0vn1"), SubResource("Resource_wsgw6"), SubResource("Resource_oqqqu"), SubResource("Resource_x4q0o"), SubResource("Resource_0ucge"), SubResource("Resource_h3wwn"), SubResource("Resource_pk2js"), SubResource("Resource_cli47"), SubResource("Resource_w1hfh"), SubResource("Resource_gwor4"), SubResource("Resource_uyas2"), SubResource("Resource_3k27s"), SubResource("Resource_yry1n"), SubResource("Resource_j4c4f"), SubResource("Resource_b83j2"), SubResource("Resource_pubcw"), SubResource("Resource_ywjf5"), SubResource("Resource_fh5vw"), SubResource("Resource_u0rav"), SubResource("Resource_wk6it"), SubResource("Resource_xxsy3"), SubResource("Resource_8hs6i"), SubResource("Resource_xjr3h"), SubResource("Resource_kjgb4"), SubResource("Resource_l8020"), SubResource("Resource_hewr7"), SubResource("Resource_kqsjo"), SubResource("Resource_wxmxw"), SubResource("Resource_3xjaa"), SubResource("Resource_slrmy"), SubResource("Resource_27uxc"), SubResource("Resource_lbffk"), SubResource("Resource_6fscd"), SubResource("Resource_p2ky8")])
+comment = "全库资源命名登记表（用户拍板②·2026-09-23）：每条记录资源 id/域前缀/中文名/命名规则；条目随资源增删同步维护；M1 批 1 追加战斗域 14 条（共 62 条）"

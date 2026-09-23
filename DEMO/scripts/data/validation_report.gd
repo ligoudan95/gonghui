@@ -42,7 +42,7 @@ func to_text() -> String:
 	## 参数：无
 	## 返回：多行文本
 	var lines: Array[String] = []
-	lines.append("=== M0 数据校验报告 ===")
+	lines.append("=== 数据校验报告 ===")
 	lines.append("检查资源数：%d | 错误：%d | 警告：%d" % [checked_count, errors.size(), warnings.size()])
 	lines.append("结论：%s" % ("通过（零错误）" if is_ok() else "不通过（存在错误）"))
 	if not errors.is_empty():

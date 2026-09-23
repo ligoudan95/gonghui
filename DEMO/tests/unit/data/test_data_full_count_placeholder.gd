@@ -42,7 +42,8 @@ func test_enemy_def_count() -> void:
 	assert_int(_game_data.get_domain(&"battle/enemies").size()).is_equal(3)
 
 func test_enemy_pack_and_naming_counts() -> void:
-	## battle/enemy_packs 域 3 配置；命名登记表 48 条（47 新表 + cfg_main）
+	## battle/enemy_packs 域 3 配置；命名登记表 62 条（M0 批 2 的 48 条 +
+	## M1 批 1 战斗域 14 条：btm×2 / tile×6 / eqp×6）
 	assert_int(_game_data.get_domain(&"battle/enemy_packs").size()).is_equal(3)
 	var registry: NamingRegistry = _game_data.get_record(&"naming_registry")
-	assert_int(registry.entries.size()).is_equal(48)
+	assert_int(registry.entries.size()).is_equal(62)

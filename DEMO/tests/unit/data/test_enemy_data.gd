@@ -68,7 +68,7 @@ func test_enemy_stat_values() -> void:
 
 func test_pack_compositions() -> void:
 	## 队伍编成：随机=池×3；巢穴=精英1+池2-3；魔宠巢=鼠2+哥布林1；
-	## battle_map_ref 留空（批 4 地图系统回填）
+	## battle_map_ref 已回填（M1 批 1：随机→8×8 / 巢穴→10×10 / 魔宠巢→复用 8×8）
 	var random_pack: EnemyPackDef = _game_data.get_record(&"enc_m1_random_pack")
 	assert_int(random_pack.entries.size()).is_equal(1)
 	assert_bool(random_pack.entries[0].enemy_ids.has(&"en_m1_mutant_rat")).is_true()
@@ -76,17 +76,17 @@ func test_pack_compositions() -> void:
 	assert_int(random_pack.entries[0].count_min).is_equal(3)
 	assert_int(random_pack.entries[0].count_max).is_equal(3)
 	assert_bool(random_pack.entries[0].is_elite).is_false()
+	assert_str(String(random_pack.battle_map_ref)).is_equal("btm_m1_random_8x8")
 	var lair_pack: EnemyPackDef = _game_data.get_record(&"enc_m1_lair_pack")
 	assert_int(lair_pack.entries.size()).is_equal(2)
 	assert_str(String(lair_pack.entries[0].enemy_ids[0])).is_equal("en_m1_elite_boss")
 	assert_bool(lair_pack.entries[0].is_elite).is_true()
 	assert_int(lair_pack.entries[1].count_min).is_equal(2)
 	assert_int(lair_pack.entries[1].count_max).is_equal(3)
+	assert_str(String(lair_pack.battle_map_ref)).is_equal("btm_m1_lair_10x10")
 	var wisp_pack: EnemyPackDef = _game_data.get_record(&"enc_m1_wisp_nest")
 	assert_int(wisp_pack.entries.size()).is_equal(2)
 	assert_str(String(wisp_pack.entries[0].enemy_ids[0])).is_equal("en_m1_mutant_rat")
 	assert_int(wisp_pack.entries[0].count_min).is_equal(2)
 	assert_int(wisp_pack.entries[1].count_min).is_equal(1)
-	for record: Resource in _game_data.get_domain(&"battle/enemy_packs"):
-		var pack := record as EnemyPackDef
-		assert_str(String(pack.battle_map_ref)).is_empty()
+	assert_str(String(wisp_pack.battle_map_ref)).is_equal("btm_m1_random_8x8")

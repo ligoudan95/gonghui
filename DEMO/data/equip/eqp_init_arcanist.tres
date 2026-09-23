@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="EquipDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/equip_def.gd" id="1_wkkjm"]
+
+[resource]
+script = ExtResource("1_wkkjm")
+id = &"eqp_init_arcanist"
+display_name = "奇术师初始装备（布甲套）"
+class_ref = &"cls_arcanist"
+weapon_bonus = 2
+armor_value = 1
+comment = "【占位·试玩校准】DEMO 初始装备（普通档）·不可卸下；数值来源：17 案 §3.4 武器加值行 + §3.11 #7；护甲物理/法术双轨同计"

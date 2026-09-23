@@ -1,7 +1,11 @@
 ## 数据校验器（DataValidator，纯静态类）
-## 职责：对 GameData 已加载的全库数据表跑 14 条 M0 校验规则（错误阻断 / 警告非阻断），
-## 产出 ValidationReport；供 tools/run_validation.gd（CI 退出码）与 gdUnit 断言消费。
-## 数据来源：data/ 全域 .tres；规则口径=M0 批 2 方案（12 条规则展开为 14 个检查位）。
+## 职责：对 GameData 已加载的全库数据表跑 14 条 M0 校验规则 + 6 条 V-M1-* 战斗域
+## 规则 + 1 条 V-M1-ref-asset 资源引用规则（错误阻断 / 警告非阻断），产出
+## ValidationReport；供 tools/run_validation.gd（CI 退出码）与 gdUnit 断言消费。
+## 数据来源：data/ 全域 .tres；规则口径=M0 批 2 方案（12 条规则展开为 14 个检查位）
+## + M1 批 1 方案（V-M1-* 六条：地格状态绑定/地图布局/出生位/技能地格引用/
+## 队伍地图引用加严/战斗域计数）+ 插队任务（V-M1-ref-asset：AssetRegistry
+## 非空条目 path 必须文件存在——案 16 资源引用规范的落盘校验位）。
 ## 用法：DataValidator.run_all(game_data)——game_data 为 GameData 自动加载单例或其实例。
 class_name DataValidator
 extends RefCounted
@@ -32,16 +36,20 @@ const DOMAIN_PREFIXES: Dictionary[StringName, Array] = {
 	&"status/mutex_groups": [&"mgrp_"],
 	&"battle/enemies": [&"en_"],
 	&"battle/enemy_packs": [&"enc_"],
+	&"battle/maps": [&"btm_"],
+	&"battle/tiles": [&"tile_"],
+	&"equip": [&"eqp_"],
 }
 
 ## 六数据域键（校验遍历范围；core 域单独处理）
 const DATA_DOMAINS: Array[StringName] = [
 	&"class/classes", &"class/skills", &"status/stats",
 	&"status/mutex_groups", &"battle/enemies", &"battle/enemy_packs",
+	&"battle/maps", &"battle/tiles", &"equip",
 ]
 
 static func run_all(game_data: Node) -> ValidationReport:
-	## 全库校验入口：顺序跑 14 条规则并返回报告
+	## 全库校验入口：顺序跑 14 条 M0 规则 + 6 条 V-M1-* 规则并返回报告
 	## 参数 game_data：已完成扫描的 GameData 实例（autoload 或手动建树）
 	## 返回：ValidationReport（零错误即通过；计数类问题为 warning）
 	var report := ValidationReport.new()
@@ -60,6 +68,15 @@ static func run_all(game_data: Node) -> ValidationReport:
 	_CheckRefMutex(report, game_data)
 	_CheckNumericDomains(report, game_data)
 	_CheckCounts(report, game_data)
+	# ---- M1 批 1 新增（V-M1-* 六条）----
+	_CheckTileStatus(report, game_data)
+	_CheckMapLayout(report, game_data)
+	_CheckMapSpawns(report, game_data)
+	_CheckRefSkillTile(report, game_data)
+	_CheckRefPackMap(report, game_data)
+	_CheckBattleCounts(report, game_data)
+	# ---- 插队任务新增（单位占位 sprite 资源登记）----
+	_CheckRefAssetPath(report, game_data)
 	return report
 
 # --------------------------------------------------------------------------
@@ -164,6 +181,10 @@ static func _CheckEnumDomains(report: ValidationReport, game_data: Node) -> void
 	for record: Resource in _DomainRecords(game_data, &"battle/enemies"):
 		var enemy := record as EnemyDef
 		_CheckEnumRange(report, enemy.id, "EnemyDef.race_tag", enemy.race_tag, 1)
+	for record: Resource in _DomainRecords(game_data, &"battle/tiles"):
+		var tile := record as TileTypeDef
+		_CheckEnumRange(report, tile.id, "TileTypeDef.kind", tile.kind, 2)
+		_CheckEnumRange(report, tile.id, "TileTypeDef.trigger", tile.trigger, 1)
 
 static func _CheckEnumRange(report: ValidationReport, record_id: StringName,
 		field_name: String, value: int, max_value: int) -> void:
@@ -273,8 +294,8 @@ static func _CheckRefEnemySkill(report: ValidationReport, game_data: Node) -> vo
 					"owner 为敌人但 side != ENEMY")
 
 static func _CheckRefPack(report: ValidationReport, game_data: Node) -> void:
-	## V-M0-ref-pack：队伍条目敌人引用闭合；数量区间 1≤min≤max≤4；
-	## battle_map_ref 非空时必须可解析（当前地图域未建，非空即报错、空=批 4 回填放行）
+	## V-M0-ref-pack：队伍条目敌人引用闭合；数量区间 1≤min≤max≤4
+	## （battle_map_ref 校验自 M1 批 1 起移入 V-M1-ref-pack-map 加严规则）
 	## 参数：报告 / GameData
 	## 返回：无
 	for record: Resource in _DomainRecords(game_data, &"battle/enemy_packs"):
@@ -287,9 +308,6 @@ static func _CheckRefPack(report: ValidationReport, game_data: Node) -> void:
 			if entry.count_min < 1 or entry.count_min > entry.count_max or entry.count_max > 4:
 				report.add_error("V-M0-ref-pack", pack.id,
 						"数量区间非法（min=%d, max=%d，要求 1≤min≤max≤4）" % [entry.count_min, entry.count_max])
-		if not String(pack.battle_map_ref).is_empty() and game_data.get_record(pack.battle_map_ref) == null:
-			report.add_error("V-M0-ref-pack", pack.id,
-					"战场地图引用 '%s' 不存在" % pack.battle_map_ref)
 
 static func _CheckRefMutex(report: ValidationReport, game_data: Node) -> void:
 	## V-M0-ref-mutex：互斥组双向一致——组员存在且组员.mutex_group_id 指回本组；
@@ -399,6 +417,150 @@ static func _CheckCounts(report: ValidationReport, game_data: Node) -> void:
 	var pack_count: int = game_data.get_domain_ids(&"battle/enemy_packs").size()
 	if pack_count != 3:
 		report.add_warning("V-M0-count", "<packs>", "敌方队伍计数 %d != 3" % pack_count)
+
+# --------------------------------------------------------------------------
+# M1 批 1 战斗域规则（V-M1-* 六条）
+# --------------------------------------------------------------------------
+
+static func _CheckTileStatus(report: ValidationReport, game_data: Node) -> void:
+	## V-M1-tile-status：地格 status_id 非空时必须存在且目标状态 allowed_sources 含 TILE
+	## （陷阱纯伤害地格 status_id 为空、跳过——第九轮拍板口径）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"battle/tiles"):
+		var tile := record as TileTypeDef
+		if String(tile.status_id).is_empty():
+			continue
+		var status: StatusDef = game_data.get_record(tile.status_id) as StatusDef
+		if status == null:
+			report.add_error("V-M1-tile-status", tile.id,
+					"绑定状态 '%s' 不存在" % tile.status_id)
+		elif not status.allowed_sources.has(&"TILE"):
+			report.add_error("V-M1-tile-status", tile.id,
+					"绑定状态 '%s' 的 allowed_sources 不含 TILE" % tile.status_id)
+
+static func _CheckMapLayout(report: ValidationReport, game_data: Node) -> void:
+	## V-M1-map-layout：地图 rows 行数 == size.y / 每行行长 == size.x /
+	## 布局字符 ∈ legend / legend 值为已存在的地格 id
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"battle/maps"):
+		var map_def := record as BattleMapDef
+		if map_def.rows.size() != map_def.size.y:
+			report.add_error("V-M1-map-layout", map_def.id,
+					"rows 行数 %d != size.y %d" % [map_def.rows.size(), map_def.size.y])
+		for row_index: int in map_def.rows.size():
+			var row: String = map_def.rows[row_index]
+			if row.length() != map_def.size.x:
+				report.add_error("V-M1-map-layout", map_def.id,
+						"第 %d 行行长 %d != size.x %d" % [row_index, row.length(), map_def.size.x])
+				continue
+			for row_char: String in row:
+				if not map_def.legend.has(row_char):
+					report.add_error("V-M1-map-layout", map_def.id,
+							"布局字符 '%s' 不在 legend" % row_char)
+		for legend_char: String in map_def.legend:
+			var tile_id: StringName = map_def.legend[legend_char]
+			if game_data.get_record(tile_id) == null:
+				report.add_error("V-M1-map-layout", map_def.id,
+						"legend 值 '%s'（字符 '%s'）不是已存在的地格 id" % [tile_id, legend_char])
+
+static func _CheckMapSpawns(report: ValidationReport, game_data: Node) -> void:
+	## V-M1-map-spawns：出生位界内 / 非障碍 / 不重复（我方+敌方联合查重）；
+	## player_spawns ≥ 4 为 warning 级
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"battle/maps"):
+		var map_def := record as BattleMapDef
+		var seen_cells: Dictionary = {}
+		# 外层不类型化（Array[Vector2i] 与 Array[Array] 之间无常变协变，Godot 类型化集合不变式）
+		var spawn_lists: Array = [map_def.player_spawns, map_def.enemy_spawns]
+		for spawn_list: Array in spawn_lists:
+			for cell: Vector2i in spawn_list:
+				if cell.x < 0 or cell.x >= map_def.size.x or cell.y < 0 or cell.y >= map_def.size.y:
+					report.add_error("V-M1-map-spawns", map_def.id,
+							"出生位 (%d, %d) 越界" % [cell.x, cell.y])
+					continue
+				var char_key: String = map_def.rows[cell.y][cell.x]
+				var tile: TileTypeDef = game_data.get_record(map_def.legend.get(char_key, &"")) as TileTypeDef
+				if tile == null or not tile.walkable:
+					report.add_error("V-M1-map-spawns", map_def.id,
+							"出生位 (%d, %d) 位于不可通行地格" % [cell.x, cell.y])
+				if seen_cells.has(cell):
+					report.add_error("V-M1-map-spawns", map_def.id,
+							"出生位 (%d, %d) 重复" % [cell.x, cell.y])
+				else:
+					seen_cells[cell] = true
+		if map_def.player_spawns.size() < 4:
+			report.add_warning("V-M1-map-spawns", map_def.id,
+					"player_spawns 数 %d < 4" % map_def.player_spawns.size())
+
+static func _CheckRefSkillTile(report: ValidationReport, game_data: Node) -> void:
+	## V-M1-ref-skill-tile：技能 TILE_SPAWN 效果的地格类型引用必须存在
+	## （启用 M0 预留口——地格域 M1 批 1 落地后收紧）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"class/skills"):
+		var skill := record as SkillDef
+		for effect: SkillEffect in skill.effects:
+			if effect.effect_kind != SkillEffect.EffectKind.TILE_SPAWN:
+				continue
+			if game_data.get_record(effect.tile_type_id) == null:
+				report.add_error("V-M1-ref-skill-tile", skill.id,
+						"地格类型引用 '%s' 不存在" % effect.tile_type_id)
+
+static func _CheckRefPackMap(report: ValidationReport, game_data: Node) -> void:
+	## V-M1-ref-pack-map：敌方队伍 battle_map_ref 非空强制（error）且必须可解析
+	## （M0 预留口加严：空 = error；地图域 M1 批 1 落地）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"battle/enemy_packs"):
+		var pack := record as EnemyPackDef
+		if String(pack.battle_map_ref).is_empty():
+			report.add_error("V-M1-ref-pack-map", pack.id,
+					"battle_map_ref 为空（M1 起强制回填）")
+			continue
+		var map_def: BattleMapDef = game_data.get_record(pack.battle_map_ref) as BattleMapDef
+		if map_def == null:
+			report.add_error("V-M1-ref-pack-map", pack.id,
+					"战场地图引用 '%s' 不存在" % pack.battle_map_ref)
+
+static func _CheckBattleCounts(report: ValidationReport, game_data: Node) -> void:
+	## V-M1-count：战斗域计数带校验（地图 2 / 地格 6 / 装备 6）——warning 级
+	## 参数：报告 / GameData
+	## 返回：无
+	var map_count: int = game_data.get_domain_ids(&"battle/maps").size()
+	if map_count != 2:
+		report.add_warning("V-M1-count", "<maps>", "战场地图计数 %d != 2" % map_count)
+	var tile_count: int = game_data.get_domain_ids(&"battle/tiles").size()
+	if tile_count != 6:
+		report.add_warning("V-M1-count", "<tiles>", "地格类型计数 %d != 6" % tile_count)
+	var equip_count: int = game_data.get_domain_ids(&"equip").size()
+	if equip_count != 6:
+		report.add_warning("V-M1-count", "<equip>", "初始装备计数 %d != 6" % equip_count)
+
+static func _CheckRefAssetPath(report: ValidationReport, game_data: Node) -> void:
+	## V-M1-ref-asset：AssetRegistry 非空条目的 path 必须 res:// 开头且文件存在
+	## （FileAccess 物理存在或 ResourceLoader 已导入任一命中即通过——兼容
+	## headless 未 import 的工具环境与编辑器导入后的运行时环境双场景）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"assets"):
+		var registry := record as AssetRegistry
+		if registry == null:
+			continue
+		for asset_id: StringName in registry.mapping:
+			var path: String = registry.mapping[asset_id]
+			if path.is_empty():
+				report.add_error("V-M1-ref-asset", asset_id, "path 为空")
+				continue
+			if not path.begins_with("res://"):
+				report.add_error("V-M1-ref-asset", asset_id,
+						"path '%s' 不以 res:// 开头" % path)
+				continue
+			if not (FileAccess.file_exists(path) or ResourceLoader.exists(path)):
+				report.add_error("V-M1-ref-asset", asset_id,
+						"path '%s' 文件不存在" % path)
 
 # --------------------------------------------------------------------------
 # 辅助

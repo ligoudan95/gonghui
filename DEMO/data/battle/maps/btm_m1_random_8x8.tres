@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="BattleMapDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/battle_map_def.gd" id="1_0ovtp"]
+
+[resource]
+script = ExtResource("1_0ovtp")
+id = &"btm_m1_random_8x8"
+display_name = "矿洞随机遭遇图（8×8）"
+size = Vector2i(8, 8)
+rows = Array[String](["........", "........", "..X..g.X", ".X.X.h..", "..Xg.gX.", ".Xh.p..X", "........", "........"])
+legend = Dictionary[String, StringName]({
+".": &"tile_normal",
+"X": &"tile_obstacle",
+"g": &"tile_grass",
+"h": &"tile_highground",
+"p": &"tile_poison_swamp"
+})
+player_spawns = Array[Vector2i]([Vector2i(2, 7), Vector2i(3, 7), Vector2i(4, 7), Vector2i(5, 7)])
+enemy_spawns = Array[Vector2i]([Vector2i(2, 0), Vector2i(3, 0), Vector2i(4, 0), Vector2i(5, 0)])
+comment = "【占位·试玩校准】随机遭遇战场（17 案 §3.9：随机 8×8）；enc_m1_random_pack/enc_m1_wisp_nest 引用；布置：障碍约 10%、草丛 3、高地 2、毒沼 1-2、中线散布、出生区避让、出生位-敌方区连通（试玩校准点）"

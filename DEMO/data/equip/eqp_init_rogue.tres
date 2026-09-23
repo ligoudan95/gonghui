@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="EquipDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/equip_def.gd" id="1_d5w8x"]
+
+[resource]
+script = ExtResource("1_d5w8x")
+id = &"eqp_init_rogue"
+display_name = "盗贼初始装备（皮甲套）"
+class_ref = &"cls_rogue"
+weapon_bonus = 3
+armor_value = 3
+comment = "【占位·试玩校准】DEMO 初始装备（普通档）·不可卸下；数值来源：17 案 §3.4 武器加值行 + §3.11 #7；护甲物理/法术双轨同计"

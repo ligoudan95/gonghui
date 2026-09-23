@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="BattleMapDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/battle_map_def.gd" id="1_0ownb"]
+
+[resource]
+script = ExtResource("1_0ownb")
+id = &"btm_m1_lair_10x10"
+display_name = "巢穴必然遭遇图（10×10）"
+size = Vector2i(10, 10)
+rows = Array[String](["..........", "..........", "..X..g.X..", ".X..X..h..", "...X..Xg..", ".gX...h.X.", ".X.p.X....", "....X.pX..", "..........", ".........."])
+legend = Dictionary[String, StringName]({
+".": &"tile_normal",
+"X": &"tile_obstacle",
+"g": &"tile_grass",
+"h": &"tile_highground",
+"p": &"tile_poison_swamp"
+})
+player_spawns = Array[Vector2i]([Vector2i(3, 9), Vector2i(4, 9), Vector2i(5, 9), Vector2i(6, 9)])
+enemy_spawns = Array[Vector2i]([Vector2i(3, 0), Vector2i(4, 0), Vector2i(5, 0), Vector2i(6, 0)])
+comment = "【占位·试玩校准】必然遭遇战场（17 案 §3.9：必然 10×10）；enc_m1_lair_pack 引用；布置：障碍约 10%、草丛 3、高地 2、毒沼 1-2、中线散布、出生区避让、出生位-敌方区连通（试玩校准点）"

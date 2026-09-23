@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="AssetRegistry" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/asset_registry.gd" id="1_rn8ha"]
+
+[resource]
+script = ExtResource("1_rn8ha")
+mapping = Dictionary[StringName, String]({
+&"spr_cls_arcanist": "res://assets/units/spr_cls_arcanist.png",
+&"spr_cls_mage": "res://assets/units/spr_cls_mage.png",
+&"spr_cls_priest": "res://assets/units/spr_cls_priest.png",
+&"spr_cls_ranger": "res://assets/units/spr_cls_ranger.png",
+&"spr_cls_rogue": "res://assets/units/spr_cls_rogue.png",
+&"spr_cls_warrior": "res://assets/units/spr_cls_warrior.png",
+&"spr_en_elite_boss": "res://assets/units/spr_en_elite_boss.png",
+&"spr_en_goblin_miner": "res://assets/units/spr_en_goblin_miner.png",
+&"spr_en_mutant_rat": "res://assets/units/spr_en_mutant_rat.png"
+})
+comment = "【占位·像素小人】spr_* = M1 战棋单位临时资源（tools/gen_unit_sprites.gd 程序化绘制，可重复执行）；M6 按案 20 正式二次元资源同 id 原位替换"
