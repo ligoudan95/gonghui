@@ -117,7 +117,7 @@ opencode 的 `task` 工具 + `task_id` 复用，在 ZCode 中按以下方式实�
 ## 项目速查【随项目推进回填】
 
 - 仓库：https://github.com/ligoudan95/gonghui.git（origin，main 分支）
-- 当前阶段：DEMO 开发中——**M0 工程骨架与数据基座已完成**（2026-09-23 验收通过）；下一步 M1 战棋原型（硬验收门）
+- 当前阶段：DEMO 开发中——M0 已完成；**M1 战棋原型三批实施完成（2026-09-24），硬验收门待用户试玩**；下一步 M2 事件与检定（待 M1 验收通过后出架构方案）
 - **目录规则（用户指令）**：DEMO 阶段的所有文件（设计文档、Godot 工程、代码）统一放在根目录 `DEMO/` 文件夹内，根目录不放 DEMO 阶段工作文件（团队基础设施除外）
 - 文档体系：`DEMO/`（系统规划案 23 份 + DEMO 开发排期；PROJECT_OVERVIEW / SYSTEM_FRAMEWORK / SCRIPT_FRAMEWORK / CODE_STANDARDS 四文档体系尚未建立，建立后由 @docs-updater 登记）
 - 总设计文档：`DEMO/系统规划案/00-总案-v0.5.md`（#1 拍板删《总体规划.md》后现行总设计文档；21 案索引见同目录 00-索引.md）
