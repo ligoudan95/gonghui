@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="SkillDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/skill_effect.gd" id="1_3gma0"]
+[ext_resource type="Script" path="res://scripts/data_defs/skill_def.gd" id="2_rcxl4"]
+
+[resource]
+script = ExtResource("2_rcxl4")
+id = &"skl_atk_priest"
+display_name = "圣击"
+owner_id = &"cls_priest"
+attr_weights = Dictionary[StringName, float]({
+&"perception": 1.0
+})
+damage_type = 1
+comment = "【占位·试玩校准】参数来源：17 案 §3.4（DEMO 技能参数表）/§3.8（敌方技能表 17-C12~C16）"

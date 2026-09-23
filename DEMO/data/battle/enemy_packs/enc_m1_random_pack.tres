@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="EnemyPackDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/pack_entry.gd" id="1_rrgkd"]
+[ext_resource type="Script" path="res://scripts/data_defs/enemy_pack_def.gd" id="2_40u17"]
+
+[sub_resource type="Resource" id="Resource_k1ui1"]
+script = ExtResource("1_rrgkd")
+enemy_ids = Array[StringName]([&"en_m1_mutant_rat", &"en_m1_goblin_miner"])
+count_min = 3
+count_max = 3
+
+[resource]
+script = ExtResource("2_40u17")
+id = &"enc_m1_random_pack"
+entries = Array[ExtResource("1_rrgkd")]([SubResource("Resource_k1ui1")])
+comment = "【占位·试玩校准】随机遭遇：池（鼠/哥布林）×3（17 案 §3.8 配置）；battle_map_ref 批 4 地图系统落地后回填（随机图 8×8）"

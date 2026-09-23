@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="StatusDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/status_def.gd" id="1_mggan"]
+
+[resource]
+script = ExtResource("1_mggan")
+id = &"BUFF_tile_highground"
+display_name = "高地压制"
+polarity = 0
+modifiers = Dictionary[StringName, float]({
+&"damage_panel_mult": 1.2
+})
+default_duration = 0
+stack_rule = &"no_stack_take_larger"
+allowed_sources = Array[StringName]([&"TILE"])
+remove_policy = &"on_leave_tile"
+comment = "【占位·试玩校准】高地格：面板伤害 ×1.2（随技能系数同层乘算：(Σ权重×属性+武器)×系数×1.2，17 案 §3.9）"

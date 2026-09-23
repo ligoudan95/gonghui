@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="StatusDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/dot_params.gd" id="1_osd23"]
+[ext_resource type="Script" path="res://scripts/data_defs/status_def.gd" id="2_4u3gj"]
+
+[sub_resource type="Resource" id="Resource_8x2y4"]
+script = ExtResource("1_osd23")
+fixed = 6
+ratio = 0.0
+
+[resource]
+script = ExtResource("2_4u3gj")
+id = &"DEBUFF_tile_poison"
+display_name = "毒沼"
+category = 1
+dot = SubResource("Resource_8x2y4")
+default_duration = 0
+stack_rule = &"no_stack_take_larger"
+allowed_sources = Array[StringName]([&"TILE"])
+remove_policy = &"on_leave_tile"
+comment = "【占位·试玩校准】毒沼格：回合末固定 6 伤，固定值直接结算、不走减免轨（§3.9，同陷阱 D7 口径）"

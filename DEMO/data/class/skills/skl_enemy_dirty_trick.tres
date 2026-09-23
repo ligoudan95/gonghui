@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="SkillDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/skill_effect.gd" id="1_igypl"]
+[ext_resource type="Script" path="res://scripts/data_defs/skill_def.gd" id="2_0g24u"]
+
+[sub_resource type="Resource" id="Resource_6dv83"]
+script = ExtResource("1_igypl")
+effect_kind = 3
+key = &"crit_bonus"
+value = 0.1
+
+[resource]
+script = ExtResource("2_0g24u")
+id = &"skl_enemy_dirty_trick"
+display_name = "下流偷袭"
+side = 1
+owner_id = &"en_m1_goblin_miner"
+resource_type = 2
+resource_cost = 6
+attr_weights = Dictionary[StringName, float]({
+&"agility": 0.4,
+&"strength": 0.6
+})
+damage_type = 0
+power_coefficient = 0.9
+effects = Array[ExtResource("1_igypl")]([SubResource("Resource_6dv83")])
+comment = "【占位·试玩校准】参数来源：17 案 §3.4（DEMO 技能参数表）/§3.8（敌方技能表 17-C12~C16）"

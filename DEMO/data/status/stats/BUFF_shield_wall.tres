@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="StatusDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/status_def.gd" id="1_ywvvr"]
+
+[resource]
+script = ExtResource("1_ywvvr")
+id = &"BUFF_shield_wall"
+display_name = "盾墙"
+polarity = 0
+modifiers = Dictionary[StringName, float]({
+&"armor_physical": 4.0
+})
+default_duration = 2
+stack_rule = &"no_stack_take_larger"
+allowed_sources = Array[StringName]([&"SKILL"])
+comment = "【占位·试玩校准】物理护甲 +4（17 案 §3.4 盾墙行）"

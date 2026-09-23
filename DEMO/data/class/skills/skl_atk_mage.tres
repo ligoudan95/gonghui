@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="SkillDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/skill_effect.gd" id="1_a2tw4"]
+[ext_resource type="Script" path="res://scripts/data_defs/skill_def.gd" id="2_8n7oo"]
+
+[resource]
+script = ExtResource("2_8n7oo")
+id = &"skl_atk_mage"
+display_name = "魔弹"
+owner_id = &"cls_mage"
+attr_weights = Dictionary[StringName, float]({
+&"intelligence": 1.0
+})
+damage_type = 1
+comment = "【占位·试玩校准】参数来源：17 案 §3.4（DEMO 技能参数表）/§3.8（敌方技能表 17-C12~C16）"

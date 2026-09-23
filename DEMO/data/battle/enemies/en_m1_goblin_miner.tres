@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="EnemyDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/enemy_def.gd" id="1_sb3s0"]
+
+[resource]
+script = ExtResource("1_sb3s0")
+id = &"en_m1_goblin_miner"
+display_name = "哥布林矿工"
+role_tag = &"trash"
+race_tag = 1
+attrs = Dictionary[StringName, int]({
+&"agility": 9,
+&"constitution": 9,
+&"intelligence": 9,
+&"luck": 9,
+&"perception": 9,
+&"strength": 9,
+&"willpower": 9
+})
+hp = 55
+weapon_bonus = 3
+armor = 2
+move_range = 4
+resource_pool = 12
+skill_ids = Array[StringName]([&"skl_enemy_dirty_trick"])
+comment = "【占位·试玩校准】区间中值来源 17 案 §3.8（杂兵武器加值区间 2-3 取上值 3，见完成报告偏差注）；护甲物理/法术双轨同值（§3.8 表注）"

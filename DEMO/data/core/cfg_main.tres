@@ -1,0 +1,52 @@
+[gd_resource type="Resource" script_class="CoreConfig" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/core_config.gd" id="1_27yns"]
+
+[resource]
+script = ExtResource("1_27yns")
+id = &"cfg_main"
+enabled_systems = Dictionary[StringName, bool]({
+&"adventurer": true,
+&"auto_save": true,
+&"battle": true,
+&"calendar": true,
+&"class_skill": true,
+&"craft_chain": false,
+&"economy": true,
+&"event_check": true,
+&"event_exit_d": false,
+&"guild_facility": true,
+&"hidden_content": false,
+&"map_explore": true,
+&"npc_place": false,
+&"quest": true,
+&"quest_noncombat": false,
+&"second_class": false,
+&"shop": false,
+&"status": true,
+&"story": false,
+&"stress": false,
+&"ui_config": true,
+&"world_scene": true
+})
+attr_modifier_offset = 10
+attr_modifier_divisor = 2
+difficulty_tiers = Dictionary[String, int]({
+"困难": 14,
+"容易": 8,
+"普通": 11,
+"极易": 5,
+"极难": 17
+})
+crit_success_drop_divisor = 3
+crit_success_line_min = 16
+luck_floor_y = 4
+luck_floor_z_base = 2
+luck_floor_z_divisor = 4
+vision_radius = 3
+secret_door_trigger_radius = 2
+status_stack_limit = 2
+hit_clamp_min = 0.05
+hit_clamp_max = 0.95
+damage_floor = 1
+comment = "【占位·试玩校准】数值来源：17 案 §3.1/§3.3/§3.10/§3.11（DEMO 最小数值集）"

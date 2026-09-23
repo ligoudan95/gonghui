@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="StatusDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/status_def.gd" id="1_wk1fm"]
+
+[resource]
+script = ExtResource("1_wk1fm")
+id = &"DEBUFF_root"
+display_name = "定身"
+category = 2
+control_kind = 1
+stack_rule = &"no_stack_take_larger"
+mutex_group_id = &"mgrp_control"
+allowed_sources = Array[StringName]([&"SKILL"])
+comment = "【占位·试玩校准】硬控制：无法移动，1 回合（17 案 §3.9）"

@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="SkillDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/skill_effect.gd" id="1_xva6v"]
+[ext_resource type="Script" path="res://scripts/data_defs/skill_def.gd" id="2_gnc5g"]
+
+[sub_resource type="Resource" id="Resource_u2h1f"]
+script = ExtResource("1_xva6v")
+effect_kind = 3
+key = &"race_undead_damage_mult"
+value = 1.5
+
+[resource]
+script = ExtResource("2_gnc5g")
+id = &"skl_priest_smite"
+display_name = "圣光惩击"
+owner_id = &"cls_priest"
+tier = 1
+resource_type = 1
+resource_cost = 8
+range = 5
+attr_weights = Dictionary[StringName, float]({
+&"perception": 1.0
+})
+damage_type = 1
+power_coefficient = 1.2
+effects = Array[ExtResource("1_xva6v")]([SubResource("Resource_u2h1f")])
+comment = "【占位·试玩校准】参数来源：17 案 §3.4（DEMO 技能参数表）/§3.8（敌方技能表 17-C12~C16）"

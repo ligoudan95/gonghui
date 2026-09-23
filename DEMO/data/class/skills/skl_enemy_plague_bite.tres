@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="SkillDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/skill_effect.gd" id="1_vx2p8"]
+[ext_resource type="Script" path="res://scripts/data_defs/skill_def.gd" id="2_cpm82"]
+
+[sub_resource type="Resource" id="Resource_62n04"]
+script = ExtResource("1_vx2p8")
+status_id = &"DEBUFF_slow"
+duration = 1
+
+[resource]
+script = ExtResource("2_cpm82")
+id = &"skl_enemy_plague_bite"
+display_name = "疫病撕咬"
+side = 1
+owner_id = &"en_m1_mutant_rat"
+resource_type = 2
+resource_cost = 6
+attr_weights = Dictionary[StringName, float]({
+&"constitution": 0.4,
+&"strength": 0.6
+})
+damage_type = 0
+power_coefficient = 0.9
+effects = Array[ExtResource("1_vx2p8")]([SubResource("Resource_62n04")])
+comment = "【占位·试玩校准】参数来源：17 案 §3.4（DEMO 技能参数表）/§3.8（敌方技能表 17-C12~C16）"

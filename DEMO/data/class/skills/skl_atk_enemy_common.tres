@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="SkillDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/skill_effect.gd" id="1_loj4a"]
+[ext_resource type="Script" path="res://scripts/data_defs/skill_def.gd" id="2_4567x"]
+
+[resource]
+script = ExtResource("2_4567x")
+id = &"skl_atk_enemy_common"
+display_name = "敌方普攻"
+side = 1
+attr_weights = Dictionary[StringName, float]({
+&"strength": 1.0
+})
+damage_type = 0
+comment = "【占位·试玩校准】参数来源：17 案 §3.4（DEMO 技能参数表）/§3.8（敌方技能表 17-C12~C16）"

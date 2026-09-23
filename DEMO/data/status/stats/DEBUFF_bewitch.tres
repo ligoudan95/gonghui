@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="StatusDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/status_def.gd" id="1_breu4"]
+
+[resource]
+script = ExtResource("1_breu4")
+id = &"DEBUFF_bewitch"
+display_name = "蛊惑"
+category = 2
+control_kind = 2
+stack_rule = &"no_stack_take_larger"
+mutex_group_id = &"mgrp_control"
+allowed_sources = Array[StringName]([&"SKILL"])
+comment = "【占位·试玩校准】延迟型控制：下回合行动异常，1 回合（案 10 §2.3）"

@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="EnemyDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/enemy_def.gd" id="1_spxoc"]
+
+[resource]
+script = ExtResource("1_spxoc")
+id = &"en_m1_elite_boss"
+display_name = "矿洞祸首"
+role_tag = &"elite"
+race_tag = 1
+attrs = Dictionary[StringName, int]({
+&"agility": 11,
+&"constitution": 11,
+&"intelligence": 11,
+&"luck": 11,
+&"perception": 11,
+&"strength": 11,
+&"willpower": 11
+})
+hp = 110
+weapon_bonus = 4
+armor = 4
+resist_pct = 0.05
+move_range = 4
+resource_pool = 32
+skill_ids = Array[StringName]([&"skl_enemy_relentless", &"skl_enemy_intimidating_roar"])
+comment = "【占位·试玩校准】区间中值来源 17 案 §3.8（杂兵武器加值区间 2-3 取上值 3，见完成报告偏差注）；护甲物理/法术双轨同值（§3.8 表注）"

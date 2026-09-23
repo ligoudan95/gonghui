@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="SkillDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/skill_effect.gd" id="1_tddy3"]
+[ext_resource type="Script" path="res://scripts/data_defs/skill_def.gd" id="2_rt6sn"]
+
+[sub_resource type="Resource" id="Resource_v0dgw"]
+script = ExtResource("1_tddy3")
+status_id = &"DEBUFF_root"
+duration = 1
+
+[sub_resource type="Resource" id="Resource_3uni0"]
+script = ExtResource("1_tddy3")
+status_id = &"DEBUFF_slow"
+duration = 2
+
+[resource]
+script = ExtResource("2_rt6sn")
+id = &"skl_mage_frost_chain"
+display_name = "寒冰锁链"
+owner_id = &"cls_mage"
+tier = 1
+resource_type = 1
+resource_cost = 10
+range = 5
+attr_weights = Dictionary[StringName, float]({
+&"intelligence": 1.0
+})
+damage_type = 1
+power_coefficient = 0.6
+effects = Array[ExtResource("1_tddy3")]([SubResource("Resource_v0dgw"), SubResource("Resource_3uni0")])
+comment = "【占位·试玩校准】参数来源：17 案 §3.4（DEMO 技能参数表）/§3.8（敌方技能表 17-C12~C16）"

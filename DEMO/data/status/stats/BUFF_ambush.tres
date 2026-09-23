@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="StatusDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/status_def.gd" id="1_khrth"]
+
+[resource]
+script = ExtResource("1_khrth")
+id = &"BUFF_ambush"
+display_name = "伏击增益"
+polarity = 0
+modifiers = Dictionary[StringName, float]({
+&"hit": 0.1
+})
+stack_rule = &"no_stack_take_larger"
+allowed_sources = Array[StringName]([&"CHECKIN"])
+comment = "【占位·试玩校准】命中 +10%、持续 1 回合（参照 DEBUFF_exposed 式样，18 案伏击链）【占位·完整版启用时生效】"

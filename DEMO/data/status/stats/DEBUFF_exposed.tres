@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="StatusDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/status_def.gd" id="1_irt05"]
+
+[resource]
+script = ExtResource("1_irt05")
+id = &"DEBUFF_exposed"
+display_name = "暴露减益"
+modifiers = Dictionary[StringName, float]({
+&"dodge": -0.1
+})
+stack_rule = &"no_stack_take_larger"
+allowed_sources = Array[StringName]([&"CHECKIN"])
+comment = "【占位·试玩校准】闪避 −10%、持续 1 回合（18 案链二被伏击出口/18-C7）【占位·试玩校准】"

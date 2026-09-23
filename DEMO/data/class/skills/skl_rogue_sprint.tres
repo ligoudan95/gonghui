@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="SkillDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/skill_effect.gd" id="1_0ipve"]
+[ext_resource type="Script" path="res://scripts/data_defs/skill_def.gd" id="2_8lq3s"]
+
+[sub_resource type="Resource" id="Resource_dfl50"]
+script = ExtResource("1_0ipve")
+status_id = &"BUFF_sprint"
+
+[resource]
+script = ExtResource("2_8lq3s")
+id = &"skl_rogue_sprint"
+display_name = "疾步"
+owner_id = &"cls_rogue"
+tier = 1
+resource_type = 2
+resource_cost = 8
+target_side = 2
+range = 0
+power_coefficient = 0.0
+effects = Array[ExtResource("1_0ipve")]([SubResource("Resource_dfl50")])
+comment = "【占位·试玩校准】参数来源：17 案 §3.4（DEMO 技能参数表）/§3.8（敌方技能表 17-C12~C16）"

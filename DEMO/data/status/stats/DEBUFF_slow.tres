@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="StatusDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/status_def.gd" id="1_ao7rr"]
+
+[resource]
+script = ExtResource("1_ao7rr")
+id = &"DEBUFF_slow"
+display_name = "减速"
+modifiers = Dictionary[StringName, float]({
+&"move_range": -2.0
+})
+default_duration = 2
+stack_rule = &"no_stack_take_larger"
+allowed_sources = Array[StringName]([&"SKILL"])
+comment = "【占位·试玩校准】移动力 −2；我方施加 2 回合/敌方施加 1 回合（技能 effect duration 覆盖）；同名不叠加取较大（P-10）"

@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="StatusDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/dot_params.gd" id="1_kvhbd"]
+[ext_resource type="Script" path="res://scripts/data_defs/status_def.gd" id="2_m3w5u"]
+
+[sub_resource type="Resource" id="Resource_7p5ti"]
+script = ExtResource("1_kvhbd")
+mode = 1
+attr_id = &"willpower"
+
+[resource]
+script = ExtResource("2_m3w5u")
+id = &"DEBUFF_curse"
+display_name = "蚀命诅咒"
+category = 1
+dot = SubResource("Resource_7p5ti")
+default_duration = 3
+stack_rule = &"no_stack_take_larger"
+allowed_sources = Array[StringName]([&"SKILL"])
+comment = "【占位·试玩校准】每跳 = 意志 × 0.5，持续 3 回合；跳伤不过减免轨（17 案 §3.4 已定稿）"

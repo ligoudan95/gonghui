@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="EnemyPackDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/pack_entry.gd" id="1_78tdc"]
+[ext_resource type="Script" path="res://scripts/data_defs/enemy_pack_def.gd" id="2_d4xy8"]
+
+[sub_resource type="Resource" id="Resource_b7gdk"]
+script = ExtResource("1_78tdc")
+enemy_ids = Array[StringName]([&"en_m1_elite_boss"])
+is_elite = true
+
+[sub_resource type="Resource" id="Resource_8jf81"]
+script = ExtResource("1_78tdc")
+enemy_ids = Array[StringName]([&"en_m1_mutant_rat", &"en_m1_goblin_miner"])
+count_min = 2
+count_max = 3
+
+[resource]
+script = ExtResource("2_d4xy8")
+id = &"enc_m1_lair_pack"
+entries = Array[ExtResource("1_78tdc")]([SubResource("Resource_b7gdk"), SubResource("Resource_8jf81")])
+comment = "【占位·试玩校准】必然遭遇：精英×1 + 池（鼠/哥布林）×2-3（17 案 §3.8 配置）；battle_map_ref 批 4 回填（必然图 10×10）"

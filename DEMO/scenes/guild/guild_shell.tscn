@@ -1,0 +1,63 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/scene_flow/guild_shell.gd" id="1_guild"]
+
+[node name="GuildShell" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_guild")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.1, 0.11, 0.09, 1)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Layout" type="VBoxContainer" parent="Center"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="HeaderLabel" type="Label" parent="Center/Layout"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+text = "公会主场景（占位）"
+horizontal_alignment = 1
+
+[node name="SaveInfoLabel" type="Label" parent="Center/Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "（无运行态存档）"
+horizontal_alignment = 1
+
+[node name="SaveAndBackButton" type="Button" parent="Center/Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(240, 56)
+focus_mode = 2
+text = "保存并返回标题"
+
+[node name="BackButton" type="Button" parent="Center/Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(240, 56)
+focus_mode = 2
+text = "返回标题"
+
+[connection signal="pressed" from="Center/Layout/SaveAndBackButton" to="." method="_on_save_and_back_pressed"]
+[connection signal="pressed" from="Center/Layout/BackButton" to="." method="_on_back_pressed"]

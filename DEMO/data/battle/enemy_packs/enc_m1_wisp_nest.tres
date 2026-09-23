@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="EnemyPackDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/pack_entry.gd" id="1_mkhws"]
+[ext_resource type="Script" path="res://scripts/data_defs/enemy_pack_def.gd" id="2_18573"]
+
+[sub_resource type="Resource" id="Resource_n37ab"]
+script = ExtResource("1_mkhws")
+enemy_ids = Array[StringName]([&"en_m1_mutant_rat"])
+count_min = 2
+count_max = 2
+
+[sub_resource type="Resource" id="Resource_0hjxo"]
+script = ExtResource("1_mkhws")
+enemy_ids = Array[StringName]([&"en_m1_goblin_miner"])
+
+[resource]
+script = ExtResource("2_18573")
+id = &"enc_m1_wisp_nest"
+entries = Array[ExtResource("1_mkhws")]([SubResource("Resource_n37ab"), SubResource("Resource_0hjxo")])
+comment = "【占位·试玩校准】事件 B 出口遭遇：鼠×2 + 哥布林×1（18 案 §4.1）；battle_map_ref 批 4 回填（复用矿道随机图 8×8）"

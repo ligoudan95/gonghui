@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="StatusDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/status_def.gd" id="1_uuqyt"]
+
+[resource]
+script = ExtResource("1_uuqyt")
+id = &"BUFF_tile_grass"
+display_name = "草丛遮蔽"
+polarity = 0
+modifiers = Dictionary[StringName, float]({
+&"dodge": 0.15
+})
+default_duration = 0
+stack_rule = &"no_stack_take_larger"
+allowed_sources = Array[StringName]([&"TILE"])
+remove_policy = &"on_leave_tile"
+comment = "【占位·试玩校准】草丛格：闪避 +15%（站格期间持续，离格移除）"

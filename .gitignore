@@ -10,3 +10,6 @@ Thumbs.db
 Desktop.ini
 ~$*
 *.tmp
+
+# gdUnit / 校验器运行时产物
+DEMO/reports/

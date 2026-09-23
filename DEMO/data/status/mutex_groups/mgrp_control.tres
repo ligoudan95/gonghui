@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="MutexGroupDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/mutex_group_def.gd" id="1_nfnhn"]
+
+[resource]
+script = ExtResource("1_nfnhn")
+id = &"mgrp_control"
+members = Array[StringName]([&"DEBUFF_root", &"DEBUFF_bewitch"])
+comment = "【占位·试玩校准】定身/蛊惑互斥（17 案 §3.9 已定示例）"

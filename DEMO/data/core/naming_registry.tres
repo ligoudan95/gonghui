@@ -1,0 +1,345 @@
+[gd_resource type="Resource" script_class="NamingRegistry" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/naming_entry.gd" id="1_xxsy3"]
+[ext_resource type="Script" path="res://scripts/data_defs/naming_registry.gd" id="2_8hs6i"]
+
+[sub_resource type="Resource" id="Resource_7rp6k"]
+script = ExtResource("1_xxsy3")
+resource_id = &"cfg_main"
+domain = &"core"
+display_name = "总控配置"
+rule_note = "core 域固定主配置名：cfg_ 前缀 + main（全库唯一，不随内容扩展）；文件名与 id 同名"
+
+[sub_resource type="Resource" id="Resource_oft80"]
+script = ExtResource("1_xxsy3")
+resource_id = &"cls_warrior"
+domain = &"class/classes"
+display_name = "战士"
+rule_note = "cls_<英文职业名>：职业定义表；六职业英文名与案 20 用例一致（warrior/rogue/mage/priest/ranger/arcanist）"
+
+[sub_resource type="Resource" id="Resource_n0ea3"]
+script = ExtResource("1_xxsy3")
+resource_id = &"cls_rogue"
+domain = &"class/classes"
+display_name = "盗贼"
+rule_note = "cls_<英文职业名>：职业定义表；文件名与 id 同名"
+
+[sub_resource type="Resource" id="Resource_8b336"]
+script = ExtResource("1_xxsy3")
+resource_id = &"cls_mage"
+domain = &"class/classes"
+display_name = "法师"
+rule_note = "cls_<英文职业名>：职业定义表；文件名与 id 同名"
+
+[sub_resource type="Resource" id="Resource_hxk6g"]
+script = ExtResource("1_xxsy3")
+resource_id = &"cls_priest"
+domain = &"class/classes"
+display_name = "牧师"
+rule_note = "cls_<英文职业名>：职业定义表；文件名与 id 同名"
+
+[sub_resource type="Resource" id="Resource_l7131"]
+script = ExtResource("1_xxsy3")
+resource_id = &"cls_ranger"
+domain = &"class/classes"
+display_name = "游侠"
+rule_note = "cls_<英文职业名>：职业定义表；文件名与 id 同名"
+
+[sub_resource type="Resource" id="Resource_8wgs3"]
+script = ExtResource("1_xxsy3")
+resource_id = &"cls_arcanist"
+domain = &"class/classes"
+display_name = "奇术师"
+rule_note = "cls_<英文职业名>：职业定义表；文件名与 id 同名"
+
+[sub_resource type="Resource" id="Resource_ito87"]
+script = ExtResource("1_xxsy3")
+resource_id = &"skl_atk_warrior"
+domain = &"class/skills"
+display_name = "挥击（战士普攻）"
+rule_note = "skl_atk_<职业>：职业内置普攻（tier=0 出生自带，D3 定细 2026-09-23）"
+
+[sub_resource type="Resource" id="Resource_mvlxc"]
+script = ExtResource("1_xxsy3")
+resource_id = &"skl_atk_rogue"
+domain = &"class/skills"
+display_name = "突刺（盗贼普攻）"
+rule_note = "skl_atk_<职业>：职业内置普攻"
+
+[sub_resource type="Resource" id="Resource_bw3po"]
+script = ExtResource("1_xxsy3")
+resource_id = &"skl_atk_mage"
+domain = &"class/skills"
+display_name = "魔弹（法师普攻）"
+rule_note = "skl_atk_<职业>：职业内置普攻"
+
+[sub_resource type="Resource" id="Resource_6s0uu"]
+script = ExtResource("1_xxsy3")
+resource_id = &"skl_atk_priest"
+domain = &"class/skills"
+display_name = "圣击（牧师普攻）"
+rule_note = "skl_atk_<职业>：职业内置普攻"
+
+[sub_resource type="Resource" id="Resource_kpbtc"]
+script = ExtResource("1_xxsy3")
+resource_id = &"skl_atk_ranger"
+domain = &"class/skills"
+display_name = "射击（游侠普攻）"
+rule_note = "skl_atk_<职业>：职业内置普攻"
+
+[sub_resource type="Resource" id="Resource_p5cqs"]
+script = ExtResource("1_xxsy3")
+resource_id = &"skl_atk_arcanist"
+domain = &"class/skills"
+display_name = "咒击（奇术师普攻）"
+rule_note = "skl_atk_<职业>：职业内置普攻"
+
+[sub_resource type="Resource" id="Resource_e25vx"]
+script = ExtResource("1_xxsy3")
+resource_id = &"skl_atk_enemy_common"
+domain = &"class/skills"
+display_name = "敌方普攻"
+rule_note = "skl_atk_enemy_common：敌方通用普攻（17-C16 承接行，owner 空=敌方·通用，全库唯一 owner 放行）"
+
+[sub_resource type="Resource" id="Resource_inerj"]
+script = ExtResource("1_xxsy3")
+resource_id = &"skl_warrior_power_strike"
+domain = &"class/skills"
+display_name = "痛击"
+rule_note = "skl_<职业>_<英文>：职业主动技能，owner 归属 cls_warrior、tier=1 档"
+
+[sub_resource type="Resource" id="Resource_pa4wo"]
+script = ExtResource("1_xxsy3")
+resource_id = &"skl_warrior_shield_wall"
+domain = &"class/skills"
+display_name = "盾墙"
+rule_note = "skl_<职业>_<英文>：职业主动技能，owner 归属 cls_warrior、tier=1 档"
+
+[sub_resource type="Resource" id="Resource_coef1"]
+script = ExtResource("1_xxsy3")
+resource_id = &"skl_rogue_backstab"
+domain = &"class/skills"
+display_name = "背刺"
+rule_note = "skl_<职业>_<英文>：职业主动技能，owner 归属 cls_rogue、tier=1 档"
+
+[sub_resource type="Resource" id="Resource_dmwsm"]
+script = ExtResource("1_xxsy3")
+resource_id = &"skl_rogue_sprint"
+domain = &"class/skills"
+display_name = "疾步"
+rule_note = "skl_<职业>_<英文>：职业主动技能，owner 归属 cls_rogue、tier=1 档"
+
+[sub_resource type="Resource" id="Resource_h7b8d"]
+script = ExtResource("1_xxsy3")
+resource_id = &"skl_mage_fireball"
+domain = &"class/skills"
+display_name = "火球术"
+rule_note = "skl_<职业>_<英文>：职业主动技能，owner 归属 cls_mage、tier=1 档"
+
+[sub_resource type="Resource" id="Resource_pvxlm"]
+script = ExtResource("1_xxsy3")
+resource_id = &"skl_mage_frost_chain"
+domain = &"class/skills"
+display_name = "寒冰锁链"
+rule_note = "skl_<职业>_<英文>：职业主动技能，owner 归属 cls_mage、tier=1 档"
+
+[sub_resource type="Resource" id="Resource_8igpl"]
+script = ExtResource("1_xxsy3")
+resource_id = &"skl_priest_heal"
+domain = &"class/skills"
+display_name = "治愈术"
+rule_note = "skl_<职业>_<英文>：职业主动技能，owner 归属 cls_priest、tier=1 档"
+
+[sub_resource type="Resource" id="Resource_cwl1f"]
+script = ExtResource("1_xxsy3")
+resource_id = &"skl_priest_smite"
+domain = &"class/skills"
+display_name = "圣光惩击"
+rule_note = "skl_<职业>_<英文>：职业主动技能，owner 归属 cls_priest、tier=1 档"
+
+[sub_resource type="Resource" id="Resource_tomj8"]
+script = ExtResource("1_xxsy3")
+resource_id = &"skl_ranger_piercing_arrow"
+domain = &"class/skills"
+display_name = "穿云箭"
+rule_note = "skl_<职业>_<英文>：职业主动技能，owner 归属 cls_ranger、tier=1 档"
+
+[sub_resource type="Resource" id="Resource_67gfp"]
+script = ExtResource("1_xxsy3")
+resource_id = &"skl_ranger_set_trap"
+domain = &"class/skills"
+display_name = "布置陷阱"
+rule_note = "skl_<职业>_<英文>：职业主动技能，owner 归属 cls_ranger、tier=1 档"
+
+[sub_resource type="Resource" id="Resource_01rdt"]
+script = ExtResource("1_xxsy3")
+resource_id = &"skl_arcanist_curse"
+domain = &"class/skills"
+display_name = "蚀命诅咒"
+rule_note = "skl_<职业>_<英文>：职业主动技能，owner 归属 cls_arcanist、tier=1 档"
+
+[sub_resource type="Resource" id="Resource_p0axp"]
+script = ExtResource("1_xxsy3")
+resource_id = &"skl_arcanist_bewitch"
+domain = &"class/skills"
+display_name = "蛊惑"
+rule_note = "skl_<职业>_<英文>：职业主动技能，owner 归属 cls_arcanist、tier=1 档"
+
+[sub_resource type="Resource" id="Resource_4uaip"]
+script = ExtResource("1_xxsy3")
+resource_id = &"skl_enemy_plague_bite"
+domain = &"class/skills"
+display_name = "疫病撕咬"
+rule_note = "skl_enemy_<英文>：敌方技能（17-C12），owner 归属 en_m1_mutant_rat"
+
+[sub_resource type="Resource" id="Resource_dl7mi"]
+script = ExtResource("1_xxsy3")
+resource_id = &"skl_enemy_dirty_trick"
+domain = &"class/skills"
+display_name = "下流偷袭"
+rule_note = "skl_enemy_<英文>：敌方技能（17-C13），owner 归属 en_m1_goblin_miner"
+
+[sub_resource type="Resource" id="Resource_d0vn1"]
+script = ExtResource("1_xxsy3")
+resource_id = &"skl_enemy_relentless"
+domain = &"class/skills"
+display_name = "穷追猛打"
+rule_note = "skl_enemy_<英文>：敌方技能（17-C14），owner 归属 en_m1_elite_boss"
+
+[sub_resource type="Resource" id="Resource_wsgw6"]
+script = ExtResource("1_xxsy3")
+resource_id = &"skl_enemy_intimidating_roar"
+domain = &"class/skills"
+display_name = "威吓怒吼"
+rule_note = "skl_enemy_<英文>：敌方技能（17-C15），owner 归属 en_m1_elite_boss"
+
+[sub_resource type="Resource" id="Resource_oqqqu"]
+script = ExtResource("1_xxsy3")
+resource_id = &"BUFF_shield_wall"
+domain = &"status/stats"
+display_name = "盾墙"
+rule_note = "BUFF_<英文>：增益状态（案 11 式样——大写极性前缀+小写语义）"
+
+[sub_resource type="Resource" id="Resource_x4q0o"]
+script = ExtResource("1_xxsy3")
+resource_id = &"BUFF_sprint"
+domain = &"status/stats"
+display_name = "疾步"
+rule_note = "BUFF_<英文>：增益状态"
+
+[sub_resource type="Resource" id="Resource_0ucge"]
+script = ExtResource("1_xxsy3")
+resource_id = &"BUFF_ambush"
+domain = &"status/stats"
+display_name = "伏击增益"
+rule_note = "BUFF_<英文>：增益状态（检定带入 CHECKIN 来源）"
+
+[sub_resource type="Resource" id="Resource_h3wwn"]
+script = ExtResource("1_xxsy3")
+resource_id = &"BUFF_tile_grass"
+domain = &"status/stats"
+display_name = "草丛遮蔽"
+rule_note = "BUFF_tile_<地格>：地格来源状态（TILE）"
+
+[sub_resource type="Resource" id="Resource_pk2js"]
+script = ExtResource("1_xxsy3")
+resource_id = &"BUFF_tile_highground"
+domain = &"status/stats"
+display_name = "高地压制"
+rule_note = "BUFF_tile_<地格>：地格来源状态（TILE）"
+
+[sub_resource type="Resource" id="Resource_cli47"]
+script = ExtResource("1_xxsy3")
+resource_id = &"DEBUFF_root"
+domain = &"status/stats"
+display_name = "定身"
+rule_note = "DEBUFF_<英文>：减益/控制状态"
+
+[sub_resource type="Resource" id="Resource_w1hfh"]
+script = ExtResource("1_xxsy3")
+resource_id = &"DEBUFF_slow"
+domain = &"status/stats"
+display_name = "减速"
+rule_note = "DEBUFF_<英文>：减益状态"
+
+[sub_resource type="Resource" id="Resource_gwor4"]
+script = ExtResource("1_xxsy3")
+resource_id = &"DEBUFF_curse"
+domain = &"status/stats"
+display_name = "蚀命诅咒"
+rule_note = "DEBUFF_<英文>：减益/DOT 状态"
+
+[sub_resource type="Resource" id="Resource_uyas2"]
+script = ExtResource("1_xxsy3")
+resource_id = &"DEBUFF_bewitch"
+domain = &"status/stats"
+display_name = "蛊惑"
+rule_note = "DEBUFF_<英文>：减益/控制状态"
+
+[sub_resource type="Resource" id="Resource_3k27s"]
+script = ExtResource("1_xxsy3")
+resource_id = &"DEBUFF_exposed"
+domain = &"status/stats"
+display_name = "暴露减益"
+rule_note = "DEBUFF_<英文>：减益状态（检定带入 CHECKIN 来源）"
+
+[sub_resource type="Resource" id="Resource_yry1n"]
+script = ExtResource("1_xxsy3")
+resource_id = &"DEBUFF_tile_poison"
+domain = &"status/stats"
+display_name = "毒沼"
+rule_note = "DEBUFF_tile_<地格>：地格来源状态（TILE）"
+
+[sub_resource type="Resource" id="Resource_j4c4f"]
+script = ExtResource("1_xxsy3")
+resource_id = &"mgrp_control"
+domain = &"status/mutex_groups"
+display_name = "控制互斥组"
+rule_note = "mgrp_<语义>：状态互斥组（成员=[DEBUFF_root, DEBUFF_bewitch]，17 案 §3.9 定身/蛊惑互斥）"
+
+[sub_resource type="Resource" id="Resource_b83j2"]
+script = ExtResource("1_xxsy3")
+resource_id = &"en_m1_mutant_rat"
+domain = &"battle/enemies"
+display_name = "变异鼠"
+rule_note = "en_<区域>_<英文>：敌人定义（m1=矿洞一层，18 案区域码）；杂兵 role=trash"
+
+[sub_resource type="Resource" id="Resource_pubcw"]
+script = ExtResource("1_xxsy3")
+resource_id = &"en_m1_goblin_miner"
+domain = &"battle/enemies"
+display_name = "哥布林矿工"
+rule_note = "en_<区域>_<英文>：敌人定义（m1=矿洞一层）；杂兵 role=trash"
+
+[sub_resource type="Resource" id="Resource_ywjf5"]
+script = ExtResource("1_xxsy3")
+resource_id = &"en_m1_elite_boss"
+domain = &"battle/enemies"
+display_name = "矿洞祸首"
+rule_note = "en_<区域>_<英文>：敌人定义（m1=矿洞一层）；精英 role=elite"
+
+[sub_resource type="Resource" id="Resource_fh5vw"]
+script = ExtResource("1_xxsy3")
+resource_id = &"enc_m1_random_pack"
+domain = &"battle/enemy_packs"
+display_name = "矿洞随机遭遇队"
+rule_note = "enc_<区域>_<语义>：敌方队伍配置（随机遭遇：池×3，17 案 §3.8）"
+
+[sub_resource type="Resource" id="Resource_u0rav"]
+script = ExtResource("1_xxsy3")
+resource_id = &"enc_m1_lair_pack"
+domain = &"battle/enemy_packs"
+display_name = "巢穴必然遭遇队"
+rule_note = "enc_<区域>_<语义>：敌方队伍配置（必然遭遇：1 精英+2-3 杂兵）"
+
+[sub_resource type="Resource" id="Resource_wk6it"]
+script = ExtResource("1_xxsy3")
+resource_id = &"enc_m1_wisp_nest"
+domain = &"battle/enemy_packs"
+display_name = "魔宠巢出口遭遇队"
+rule_note = "enc_<区域>_<语义>：敌方队伍配置（事件 B 出口遭遇，18 案 §4.1）"
+
+[resource]
+script = ExtResource("2_8hs6i")
+entries = Array[ExtResource("1_xxsy3")]([SubResource("Resource_7rp6k"), SubResource("Resource_oft80"), SubResource("Resource_n0ea3"), SubResource("Resource_8b336"), SubResource("Resource_hxk6g"), SubResource("Resource_l7131"), SubResource("Resource_8wgs3"), SubResource("Resource_ito87"), SubResource("Resource_mvlxc"), SubResource("Resource_bw3po"), SubResource("Resource_6s0uu"), SubResource("Resource_kpbtc"), SubResource("Resource_p5cqs"), SubResource("Resource_e25vx"), SubResource("Resource_inerj"), SubResource("Resource_pa4wo"), SubResource("Resource_coef1"), SubResource("Resource_dmwsm"), SubResource("Resource_h7b8d"), SubResource("Resource_pvxlm"), SubResource("Resource_8igpl"), SubResource("Resource_cwl1f"), SubResource("Resource_tomj8"), SubResource("Resource_67gfp"), SubResource("Resource_01rdt"), SubResource("Resource_p0axp"), SubResource("Resource_4uaip"), SubResource("Resource_dl7mi"), SubResource("Resource_d0vn1"), SubResource("Resource_wsgw6"), SubResource("Resource_oqqqu"), SubResource("Resource_x4q0o"), SubResource("Resource_0ucge"), SubResource("Resource_h3wwn"), SubResource("Resource_pk2js"), SubResource("Resource_cli47"), SubResource("Resource_w1hfh"), SubResource("Resource_gwor4"), SubResource("Resource_uyas2"), SubResource("Resource_3k27s"), SubResource("Resource_yry1n"), SubResource("Resource_j4c4f"), SubResource("Resource_b83j2"), SubResource("Resource_pubcw"), SubResource("Resource_ywjf5"), SubResource("Resource_fh5vw"), SubResource("Resource_u0rav"), SubResource("Resource_wk6it")])
+comment = "全库资源命名登记表（用户拍板②·2026-09-23）：每条记录资源 id/域前缀/中文名/命名规则；条目随资源增删同步维护"

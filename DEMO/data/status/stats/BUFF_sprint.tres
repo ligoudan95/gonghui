@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="StatusDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/status_def.gd" id="1_qs35v"]
+
+[resource]
+script = ExtResource("1_qs35v")
+id = &"BUFF_sprint"
+display_name = "疾步"
+polarity = 0
+modifiers = Dictionary[StringName, float]({
+&"dodge": 0.15,
+&"move_range": 2.0
+})
+default_duration = 0
+stack_rule = &"no_stack_take_larger"
+allowed_sources = Array[StringName]([&"SKILL"])
+comment = "【占位·试玩校准】本回合移动力 +2、闪避 +15%（duration=0 即时生效）"
