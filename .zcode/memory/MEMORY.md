@@ -10,19 +10,26 @@
 
 - 仓库：https://github.com/ligoudan95/gonghui.git（origin，main 分支）
 - 平台：Windows；ZCode 命令行环境 Git Bash（路径含空格须引号）
-- 项目：冒险者工会（游戏）——当前处于**策划/规划阶段，尚无代码**
+- 项目：冒险者工会（游戏）——策划定稿推进中；**Godot 4.7 工程已建立**（2026-09-23 入库 7f10f6f，七开发插件齐）
 - 防线 hooks（用户级 `~/.zcode/cli/config.json` 注册，脚本实体在 `C:\Users\liangqihang\.zcode\hooks\`，config 已指向该路径——勿删、勿移回工作区）：AskUserQuestion 前后拦截超时特征，支撑「用户未答复=冻结」红线
 
 ## 项目速查【随推进回填】
 
-- 总体规划：`新的规划/总体规划.md`
-- 文档体系：`新的规划/`（PROJECT_OVERVIEW / SYSTEM_FRAMEWORK / SCRIPT_FRAMEWORK / CODE_STANDARDS 四文档体系尚未建立；建立后由 @docs-updater 登记，并同步 `.zcode/agents/docs-updater.md` 文档映射表与 `architect.md` 阅读优先级）
+- **目录规则（用户指令 2026-09-23）**：DEMO 阶段所有文件（设计文档/Godot 工程/代码）统一放根目录 `DEMO/`，根目录不放 DEMO 工作文件（团队基础设施除外）
+- 总设计文档：`DEMO/系统规划案/00-总案-v0.5.md`（#1 拍板删原上位文件；2026-09-23 第十轮 L5 清理失效指向+同日 DEMO 重组迁入）
+- 文档体系：`DEMO/`（PROJECT_OVERVIEW / SYSTEM_FRAMEWORK / SCRIPT_FRAMEWORK / CODE_STANDARDS 四文档体系尚未建立；建立后由 @docs-updater 登记，并同步 `.zcode/agents/docs-updater.md` 文档映射表与 `architect.md` 阅读优先级）
 - 编码规范：未建立（建立后在根 AGENTS.md「项目速查」登记，覆盖 programmer.md 通用模板）
 - 程序员自查命令：未建立
 - godot-ai MCP：`.zcode/config.json` 配置 uvx `godot-ai==4.2.1` attach 8000/9500 + 第二服务 `godot-mcp`（npx `@coding-solo/godot-mcp`，**配置零绝对路径、跨机通用**；npm 裸名 godot-mcp 系滞后包勿用）——godot-mcp 靠各机 PATH 解析 `godot.exe` 自动探测（本机已配：编辑器目录内 godot.exe 硬链接+用户 PATH；**另一台机器与编辑器升级换目录后均须重做两步**）；两个 MCP 需重启 ZCode 生效（勿再从 feitu 复制旧版）
 - 编辑器插件（2026-09-23 装齐 7 个，全未提交）：godot_ai 4.2.1 / limboai 1.8.1（GDExtension 自注册，**无 plugin.cfg 属正常**）/ dialogic 2.0-alpha-20 / gdUnit4 6.2.1（含 runtest.cmd 自查命令雏形）/ phantom_camera 0.11.0.3 / AsepriteWizard 9.8.0-4 / gd-plug 0.2.6（命令行工具免启用）；project.godot 已启用其中 5 个带 plugin.cfg 的——**需关闭重开编辑器加载**
 
 ## 近期关键记录
+
+- 2026-09-23（A机第十五批·**DEMO 目录重组**）：用户拍板【文档+工程全移】——根目录新建 `DEMO/`，**DEMO 阶段所有文件（设计文档+Godot 工程+未来代码）统一入 DEMO/**（规则已记入根 AGENTS.md 项目速查）。git-admin（agent_8019362a）执行：2331 文件 git mv rename 保留历史（R 2315+RM 16），`新的规划/` 与根 `.godot/` 缓存清理；**DEMO/系统规划案/ 实测 23 个 md**（历史口径"22"系计数偏差，以 23 为准）。docs-updater（agent_14e95de9）6 文件引用修正（AGENTS.md 规则行+项目速查、planner/architect/docs-updater/git-admin 角色文件、AGENTS_CONFIG.md；顺带修复 planner/architect 指向已删《总体规划.md》的死链→DEMO/系统规划案/00-总案）。**待用户：重开 Godot 编辑器须打开 `DEMO/` 下工程**（根工程已移走）；godot-ai 会话将随重开重建。
+
+- 2026-09-23（A机第十四批·**DEMO 开发排期定稿**）：planner 出案+用户 6 项确认**全按推荐拍板**——**8 里程碑 M0-M7**（骨架数据基座→战棋原型→事件检定→探索层→经营层→整合→内容填充美术替换→打磨验收）+11.5-14 周折算参考、照总案 §8.5 战棋先行、混合验收（gdUnit4 自查+M1/M5/M7 用户人工试玩）、美术占位先行并行（M1 起→M6 同 id 替换）、**M1 硬验收门**（手感不达标不进 M2）。落盘 `新的规划/DEMO文档/DEMO开发排期.md` v1.0（261 行）+00-索引引用行。规模锚点：数据表约 27 张/委托 9 模板/技能 23 条/状态池 10-15/UI 约 16 界面/场景 7/美术约 80 件。planner=agent_d87e528e、docs-updater=agent_74f6edac 可复用。**下一步：M0 开工派 @architect**（输入=排期文档 M0 节+案 16/17/1）。未提交（累计：第十轮 15 文档+AGENTS.md+project.godot 改名+排期文档+索引行+本 MEMORY/日志）。
+
+- 2026-09-23（A机第十二~十三批·拉取+配置覆盖修复+第十轮盲审闭环）：①拉取 3dce9cd→**5892f3b**。②**本机 Godot「新建/导入」覆盖事故**：project.godot 被模板化（丢 autoload 三项/五插件启用/[dialogic] 节、Forward Plus→Mobile）+.gitignore 规则再丢——git-admin checkout 恢复 + programmer 改正式项目名 **gonghui**（一行，未提交）；**教训：打开项目走「打开」勿「新建/导入」**（正常打开不复发，已验证）。③godot-mcp A 机两步配置完成（`F:\Godot_v4.7.2-stable_win64.exe\godot.exe` 硬链接+用户 PATH；A 机用户目录 `C:\Users\A`，与推送机 D 盘编辑器/liangqihang 目录不同）。④**godot-mcp 超时根因=官方 npm 源本机极慢**（npm view 34.5s > 30s 超时窗），已配 npmmirror 镜像（1.07s）+initialize 冒烟通过，**重启 ZCode 后生效**；npm 发包须临时改回官方源。⑤**第十轮五席盲审全闭环**：31 条→去重 24 项（高 0/中 2/低 22），五席复算数值链全过。M1 回城交付=出口交互点 `evp_village_exit`+双通道分流（案 6/7/15/18）；M2 牧师法穿=智力口径重算 §3.8（惩击杂兵 ≈15/精英 ≈13/参与 ≈77，其余结论链不动）；**L14 预解锁=仅初始 4 人**（驳回 docs-updater 职业级连带修正；案 5 §3 实例「预解锁标记」为唯一载体、招募富余 3 点、案 10 零净变更）。docs-updater=agent_b621eacc 可复用。落盘 15 文档+根 AGENTS.md（项目速查指向已改 00-总案-v0.5.md）。**未提交**：第十轮改动+项目名 gonghui。
 
 - 2026-09-23（第十一批·**今日全部工作入库推送**）：三批提交推送 origin/main 成功（一次推送无重试）——**eea7b31**（docs：策划文档 17 份 +106/−70，三条新增修改批 17-C20/#25/D3+第八轮 17 项+第九轮 16 项盲审修正+用户手改精简）、**14b4a1a**（chore：记忆 4 份+MCP 双服务配置）、**7f10f6f**（chore：Godot 4.7 工程初始化+七开发插件 2309 文件 +169333 行，含 gd-plug 4.7 兼容补丁；.gitignore 补回 5 条被 Godot 模板覆盖丢失的规则：`.zcode/plans/`/Thumbs.db/Desktop.ini/`~$*`/*.tmp）。远程 HEAD=7f10f6f；`.godot/` 与 `.zcode/plans/` 核实被忽略未入库；addons 无缓存杂质。git-admin=agent_53381b94。另一台机器直接 git pull 即可同步（拉取=pull 口径）。
 

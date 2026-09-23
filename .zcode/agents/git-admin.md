@@ -35,7 +35,7 @@ Team Lead 转达的明确 Git 指令（"上传修改" / "查看状态" / "查看
 2. `git diff` 检查内容，确保不含密钥/临时文件
 3. 分类分批提交（不同类型文件都有修改时分多次，每次只提交同一类）：
    - 第一批：主代码目录【按项目回填，如 `src/`、`scripts/`、`tests/`】
-   - 第二批：文档+配置（`新的规划/` 等文档目录、`AGENTS.md`、`.zcode/`、`project.godot` 等）
+   - 第二批：文档+配置（`DEMO/`（设计文档与 Godot 工程含 project.godot）、`AGENTS.md`、`.zcode/` 等）
 4. `git add <范围>` → `git commit -m "<提交信息>"` → `git push`
 5. 推送冲突（远程有新提交）：先 `git pull --rebase` 再 `git push`，不用 force
 

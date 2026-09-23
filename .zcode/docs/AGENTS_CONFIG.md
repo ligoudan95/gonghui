@@ -60,7 +60,7 @@ Team Lead（主代理 = ZCode 本体，规则见根 AGENTS.md）— 唯一持久
 ```
 项目根目录/
 ├── AGENTS.md                      # Team Lead 规则（ZCode 每次会话自动加载）
-├── 新的规划/                      # 项目文档目录（通用模板为 docs/，按项目实际）
+├── DEMO/                          # DEMO 阶段工作目录（设计文档、Godot 工程、代码统一放此；通用模板为 docs/，按项目实际）
 ├── plugins/                       # 本地插件市场（防线 hooks 插件化，见「后续补充」第 5 条）
 │   ├── marketplace.json           # 市场清单（name=dev-gonghui，条目 gonghui-defense）
 │   └── gonghui-defense/           # 插件「工会防线 Hooks」（中文 displayName/description）

@@ -23,7 +23,7 @@ thoughtLevel: max
 
 1. **先读项目文档**（按此优先级；尚未建立的跳过并说明）：
    1. 根 `AGENTS.md`「项目速查」（项目铁律/规范登记处）
-   2. 项目规划/设计文档（当前：`新的规划/总体规划.md`）
+   2. 项目规划/设计文档（当前：`DEMO/系统规划案/`，以 `00-总案-v0.5.md` 为纲）
    3. 【建立后回填】PROJECT_OVERVIEW.md → SYSTEM_FRAMEWORK.md → SCRIPT_FRAMEWORK.md → CODE_STANDARDS.md
 2. 再读方案涉及的相关源文件，参考现有代码写法和模式
 3. 设计程序实现方案（**只写逻辑设计，不写代码**）
