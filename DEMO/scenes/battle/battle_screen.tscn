@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/battle/battle_screen.gd" id="1_screen"]
 [ext_resource type="Script" path="res://scripts/battle/battle_controller.gd" id="2_controller"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://scripts/ui/battle/turn_order_bar.gd" id="4_orderbar"]
 [ext_resource type="Script" path="res://scripts/ui/battle/result_panel.gd" id="5_result"]
 [ext_resource type="Script" path="res://scripts/ui/battle/unit_info_card.gd" id="6_infocard"]
+[ext_resource type="Script" path="res://scripts/ui/battle/battle_log.gd" id="7_log"]
 
 [node name="BattleScreen" type="Control"]
 layout_mode = 3
@@ -137,6 +138,22 @@ offset_bottom = 264.0
 grow_horizontal = 0
 script = ExtResource("6_infocard")
 
+[node name="BattleLog" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(284, 0)
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -296.0
+offset_top = 272.0
+offset_right = -12.0
+offset_bottom = -108.0
+grow_horizontal = 0
+grow_vertical = 2
+script = ExtResource("7_log")
+
 [node name="ResultLayer" type="CenterContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
@@ -144,6 +161,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 
 [node name="ResultPanel" type="PanelContainer" parent="ResultLayer"]
 unique_name_in_owner = true

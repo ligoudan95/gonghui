@@ -40,9 +40,10 @@ func _ready() -> void:
 	add_child(box)
 	visible = false
 
-func show_result(result: BattleResult) -> void:
+func show_result(result: BattleResult, name_lookup: Callable = Callable()) -> void:
 	## 展示终局结算（文案按口径；战报摘要附详情行）
-	## 参数 result：战斗结果
+	## 参数 result：战斗结果；name_lookup：unit_id → 显示名解析（2026-09-24
+	## 七轮反馈：倒地名单中文化；缺省回退 id 原文）
 	## 返回：无
 	match result.kind:
 		BattleResult.ResultKind.VICTORY:
@@ -57,7 +58,10 @@ func show_result(result: BattleResult) -> void:
 			_title_label.text = "撤退成功·委托失败"
 			_title_label.add_theme_color_override("font_color", Color(0.7, 0.8, 0.95))
 			_detail_label.text = "委托按失败结算（占位文案——M2 委托结算接入）"
-	var downed_text: String = "、".join(result.downed_units.map(func(unit_id): return String(unit_id)))
+	var downed_text: String = "、".join(result.downed_units.map(func(unit_id):
+		if name_lookup.is_valid():
+			return String(name_lookup.call(unit_id))
+		return String(unit_id)))
 	_detail_label.text += "\n回合数：%d｜倒地：%s" % [
 		result.rounds_used,
 		downed_text if not downed_text.is_empty() else "无",

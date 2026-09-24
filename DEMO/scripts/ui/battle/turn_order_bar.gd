@@ -84,9 +84,14 @@ func _TextureOf(sprite_id: StringName) -> Texture2D:
 	return texture
 
 func _SpriteIdOf(unit: BattleUnit) -> StringName:
-	## 单位 → sprite 资源 id（同 BattleBoard 口径）
+	## 单位 → sprite 资源 id（批 A H3 表驱动：ClassDef/EnemyDef.sprite_id——
+	## 经 GameData 查表，删除原拼接规则复刻；查无回退空 id 走占位色块）
 	## 参数 unit：单位
 	## 返回：sprite id
+	if _game_data == null:
+		return &""
 	if unit.side == SkillDef.SkillSide.ALLY:
-		return StringName("spr_%s" % unit.class_id)
-	return StringName("spr_en_%s" % String(unit.enemy_id).trim_prefix("en_m1_"))
+		var cls: ClassDef = _game_data.get_record(unit.class_id) as ClassDef
+		return cls.sprite_id if cls != null else &""
+	var enemy: EnemyDef = _game_data.get_record(unit.enemy_id) as EnemyDef
+	return enemy.sprite_id if enemy != null else &""

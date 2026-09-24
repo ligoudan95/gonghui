@@ -82,7 +82,14 @@ func _MakeStatusIcon(instance: StatusInstance) -> Control:
 				else Color(0.85, 0.35, 0.3)
 		var mod_text: String = ""
 		for key: StringName in status.modifiers:
-			mod_text += "%s%+g " % [key, status.modifiers[key]]
+			# 修正量显示（2026-09-24 九轮后 BUG 修复：%g 非 GDScript % 运算符
+			# 支持的格式字符——改 %d/%f 系；整数域不带小数点、小数域两位小数）
+			var mod_value: float = status.modifiers[key]
+			var sign: String = "+" if mod_value >= 0.0 else ""
+			if is_equal_approx(mod_value, roundf(mod_value)):
+				mod_text += "%s%s%d " % [String(key), sign, int(mod_value)]
+			else:
+				mod_text += "%s%s%.2f " % [String(key), sign, mod_value]
 		detail = "%s（%s）｜剩余 %d 回合%s%s" % [
 			display_name, polarity, instance.remaining,
 			("｜修正 " + mod_text) if not mod_text.is_empty() else "",

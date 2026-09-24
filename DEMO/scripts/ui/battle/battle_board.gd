@@ -1,30 +1,39 @@
 ## 战场板层（BattleBoard，Control——格子网格 + 覆盖层 + 单位徽章容器）
 ## 职责：按 BattleContext 渲染战场——地格色块池（tile 表 kind/status_id 驱动：
-## 草丛绿/高地亮黄凸边/毒沼紫黑/障碍深灰块/普通土色）、动态地格标记（陷阱点）、
-## 覆盖层（移动范围高亮/技能范围红显/路径预览/二次确认提示）、单位徽章池、
-## 飘字伤害数字；提供本地坐标 → 格坐标换算（点击命中入口）。
+## 草丛绿/高地亮黄凸边/毒沼紫黑/障碍深灰岩块描边/普通土色）、地格 hover 描述
+## （特殊/障碍格 PASS + tooltip_text，文案取 tile 表 description——UI 零硬编码；
+## 2026-09-24 试玩反馈）、动态地格标记（陷阱点）、覆盖层（移动范围高亮+亮边框/
+## 技能范围红显/路径预览/二次确认提示）、单位徽章池、飘字伤害数字；
+## 提供本地坐标 → 格坐标换算（点击命中入口）。
 ## 数据来源：M1 批 3 方案 §7.1；格子尺寸自适应版面（40-88px 钳制）。
 ## 输入口径：本层 gui_input 统一接点按（battle_screen 分发两段式确认）；
-## 徽章与覆盖块均不消费鼠标。
+## 徽章与覆盖块均不消费鼠标；地格块 PASS 参与命中后冒泡回本层（点击链路不变）。
 class_name BattleBoard
 extends Control
 
 ## 格子尺寸钳制带（像素）
 const CELL_SIZE_MIN: float = 40.0
 const CELL_SIZE_MAX: float = 88.0
-## 地格配色（tile kind/status_id -> 底色）
-const COLOR_NORMAL: Color = Color(0.32, 0.36, 0.29)
-const COLOR_OBSTACLE: Color = Color(0.16, 0.16, 0.18)
-const COLOR_GRASS: Color = Color(0.24, 0.50, 0.26)
-const COLOR_HIGHGROUND: Color = Color(0.86, 0.76, 0.32)
-const COLOR_HIGHGROUND_INNER: Color = Color(0.70, 0.60, 0.24)
-const COLOR_POISON: Color = Color(0.30, 0.15, 0.36)
-## 覆盖层配色（移动高亮/技能红显/路径/确认点）
-const COLOR_MOVE_RANGE: Color = Color(0.4, 0.7, 1.0, 0.30)
-const COLOR_SKILL_RANGE: Color = Color(1.0, 0.3, 0.25, 0.28)
-const COLOR_PATH: Color = Color(1.0, 0.9, 0.4, 0.45)
-const COLOR_CONFIRM: Color = Color(1.0, 0.95, 0.5, 0.65)
+## 覆盖层边框条宽（像素）
+const OVERLAY_BORDER_WIDTH: float = 2.0
+## 覆盖层配色（移动高亮/技能红显/路径/确认点——范围层「极淡填充 + 粗边框」，
+## 层级对比：确认 > 路径；地格底色自批 A H2 起入 tile 表——battle/tiles 域）
+const COLOR_MOVE_RANGE: Color = Color(0.4, 0.7, 1.0, 0.10)
+const COLOR_MOVE_BORDER: Color = Color(0.55, 0.85, 1.0, 0.95)
+const COLOR_SKILL_RANGE: Color = Color(1.0, 0.3, 0.25, 0.10)
+const COLOR_SKILL_BORDER: Color = Color(1.0, 0.42, 0.35, 0.95)
+## 视线阻断格配色（十四轮反馈：射程内但被障碍挡视线的格——暗灰边框 +
+## 中心斜杠，一眼可辨「打不到」）
+const COLOR_BLOCKED_FILL: Color = Color(0.35, 0.35, 0.38, 0.08)
+const COLOR_BLOCKED_BORDER: Color = Color(0.45, 0.45, 0.5, 0.85)
+const COLOR_BLOCKED_SLASH: Color = Color(0.55, 0.55, 0.6, 0.9)
+const COLOR_PATH: Color = Color(1.0, 0.9, 0.4, 0.60)
+const COLOR_CONFIRM: Color = Color(1.0, 0.95, 0.5, 0.75)
 const COLOR_TRAP_MARK: Color = Color(1.0, 0.5, 0.1, 0.8)
+## 范围层边框条宽（像素——加粗以显边界）
+const RANGE_BORDER_WIDTH: float = 3.0
+## 视线阻断格中心斜杠条高（像素）
+const BLOCKED_SLASH_WIDTH: float = 3.0
 
 ## 战斗上下文（setup 注入）
 var context: BattleSetup.BattleContext = null
@@ -35,12 +44,22 @@ var origin: Vector2 = Vector2.ZERO
 
 ## 地格色块池（Vector2i -> Control）
 var _cells: Dictionary = {}
-## 覆盖层池（三层）
-var _move_overlays: Array[ColorRect] = []
-var _skill_overlays: Array[ColorRect] = []
-var _path_overlays: Array[ColorRect] = []
+## 覆盖层池（三层；每格一个容器 Control——填充 + 可选边框）
+var _move_overlays: Array[Control] = []
+var _skill_overlays: Array[Control] = []
+var _path_overlays: Array[Control] = []
+## 覆盖层专用父容器（懒建全屏 IGNORE——2026-09-24 九轮后修复：覆盖层与
+## tips 同为 board 子节点时，tips 显示后重建的覆盖层会 add 到尾部压住 tips；
+## 分层后覆盖层全部收进容器，tips 恒在容器之上，无论覆盖层何时重建）
+var _overlay_layer: Control = null
 ## 单位徽章池（unit_id -> UnitBadge）
 var _badges: Dictionary = {}
+## 目标确认 tips 面板（技能点选目标的属性数据小窗——懒建单例，九轮反馈）
+var _tips_panel: PanelContainer = null
+## tips 第一行（预计伤害/治疗/技能名）
+var _tips_line1: Label = null
+## tips 第二行（命中率；空文本 = 隐藏）
+var _tips_line2: Label = null
 ## sprite 纹理缓存（sprite id -> Texture2D）
 var _texture_cache: Dictionary = {}
 ## GameData（sprite 路径解析）
@@ -58,9 +77,12 @@ func setup(board_context: BattleSetup.BattleContext, game_data: Node) -> void:
 	RefreshDynamicMarks()
 
 func cell_from_local(local_pos: Vector2) -> Vector2i:
-	## 本地坐标 → 格坐标（界外返回 (-1, -1)）
+	## 本地坐标 → 格坐标（界外返回 (-1, -1)；降级路径 context 空守卫——
+	## 盲审批 1-6：直开场景点击不崩，返回界外哨兵）
 	## 参数 local_pos：BoardLayer 本地坐标
 	## 返回：格坐标
+	if context == null or context.grid == null:
+		return Vector2i(-1, -1)
 	var grid_size: Vector2i = context.grid.size
 	var cell: Vector2i = Vector2i(int(floor((local_pos - origin).x / cell_size)),
 			int(floor((local_pos - origin).y / cell_size)))
@@ -74,17 +96,38 @@ func cell_rect(cell: Vector2i) -> Rect2:
 	## 返回：Rect2
 	return Rect2(origin + Vector2(cell) * cell_size, Vector2(cell_size, cell_size))
 
+func cell_visual(cell: Vector2i) -> Control:
+	## 取地格视觉根节点（tooltip/输入契约测试与 UI 查询入口）
+	## 参数 cell：格坐标
+	## 返回：视觉根；未建返回 null
+	return _cells.get(cell, null)
+
 func show_move_range(cells: Array[Vector2i]) -> void:
-	## 移动范围高亮（清旧画新）
+	## 移动范围高亮（清旧画新；极淡填充 + 3px 亮蓝边框——2026-09-24 二轮反馈：
+	## 纯边框化，不盖状态地格底色）
 	## 参数 cells：可达格列表
 	## 返回：无
-	_ShowOverlay(cells, COLOR_MOVE_RANGE, _move_overlays)
+	_ShowOverlay(cells, COLOR_MOVE_RANGE, _move_overlays, COLOR_MOVE_BORDER,
+			RANGE_BORDER_WIDTH)
 
-func show_skill_range(cells: Array[Vector2i]) -> void:
-	## 技能范围红显（清旧画新）
-	## 参数 cells：射程内格列表
+func show_skill_range(cells: Array[Vector2i], caster_pos: Vector2i,
+		los_required: bool) -> void:
+	## 技能范围红显（清旧画新；2026-09-24 十四轮反馈：按视线通/断分组——
+	## 通格红边框；断格暗灰边框 + 中心斜杠标记，被障碍挡住的格一眼可辨）。
+	## los_required = 技能射程 > 1（与 SkillExecutor 视线校验同口径——近战
+	## 射程 1 免视线，全部格视为通）；进入技能模式/切换技能/移动后重显时重算
+	## 参数 cells：射程内格列表；caster_pos：施放者格；los_required：是否判视线
 	## 返回：无
-	_ShowOverlay(cells, COLOR_SKILL_RANGE, _skill_overlays)
+	var visible: Array[Vector2i] = []
+	var blocked: Array[Vector2i] = []
+	for cell: Vector2i in cells:
+		if los_required and not context.grid.has_line_of_sight(caster_pos, cell):
+			blocked.append(cell)
+		else:
+			visible.append(cell)
+	_ShowOverlay(visible, COLOR_SKILL_RANGE, _skill_overlays, COLOR_SKILL_BORDER,
+			RANGE_BORDER_WIDTH)
+	_ShowBlockedOverlay(blocked, _skill_overlays)
 
 func show_path_preview(from_cell: Vector2i, to_cell: Vector2i) -> void:
 	## 路径预览（直线近似：起终间逐格高亮——M1 无寻路折线渲染，确认执行后以
@@ -107,12 +150,114 @@ func show_target_confirm(cell: Vector2i) -> void:
 	_ShowOverlay(cells, COLOR_CONFIRM, _path_overlays)
 
 func clear_overlays() -> void:
-	## 清空全部覆盖层
+	## 清空全部覆盖层 + 伤害预览 + 目标确认 tips（预览/tips 生命周期与覆盖层
+	## 一致——确认/取消/行动轮开始/技能执行后均经此清理，防残留）
 	## 参数：无
 	## 返回：无
 	_ClearOverlay(_move_overlays)
 	_ClearOverlay(_skill_overlays)
 	_ClearOverlay(_path_overlays)
+	clear_damage_previews()
+	hide_target_tips()
+
+func show_damage_preview(unit: BattleUnit, amount: int) -> void:
+	## 目标单位血条伤害预览（转发徽章——2026-09-24 二轮试玩反馈：技能确认
+	## 前显示预计伤害）
+	## 参数 unit：目标单位；amount：预计伤害
+	## 返回：无
+	var badge: UnitBadge = _badges.get(unit.unit_id, null)
+	if badge != null:
+		badge.show_damage_preview(amount)
+
+func clear_damage_previews() -> void:
+	## 清全部徽章伤害预览（不影响覆盖层——换目标重选时单独调用）
+	## 参数：无
+	## 返回：无
+	for badge: UnitBadge in _badges.values():
+		badge.clear_damage_preview()
+
+func show_target_tips(cell: Vector2i, line1: String, line2: String = "") -> void:
+	## 目标确认 tips 弹出（2026-09-24 九轮反馈）：目标格上方小窗显示最终
+	## 数据两行（文案与数值由 battle_screen 拼装，本层只管定位与生命周期）；
+	## 纯展示 IGNORE 不遮目标格再次点击确认（ResultLayer 事故口径）
+	## 参数 cell/line1/line2：目标格、第一行文本、第二行文本（空 = 隐藏）
+	## 返回：无
+	_EnsureTipsPanel()
+	_tips_line1.text = line1
+	_tips_line2.text = line2
+	_tips_line2.visible = not line2.is_empty()
+	var tips_size: Vector2 = _tips_panel.get_minimum_size()
+	_tips_panel.size = tips_size
+	# 定位：格上方居中；上界出界改格下方；左右钳制板内（定位方式参照飘字）
+	var rect: Rect2 = cell_rect(cell)
+	var pos: Vector2 = Vector2(rect.position.x + (rect.size.x - tips_size.x) * 0.5,
+			rect.position.y - tips_size.y - 8.0)
+	if pos.y < 0.0:
+		pos.y = rect.position.y + rect.size.y + 8.0
+	pos.x = clampf(pos.x, 4.0, maxf(4.0, size.x - tips_size.x - 4.0))
+	_tips_panel.position = pos
+	_tips_panel.visible = true
+	# 置顶（2026-09-24 九轮后修复：覆盖层在 tips 之后重建会压住 tips——
+	# 每次显示挪到子节点最尾，z 序恒高于任何后建覆盖层）
+	move_child(_tips_panel, get_child_count() - 1)
+
+func hide_target_tips() -> void:
+	## 隐藏目标确认 tips（幂等）
+	## 参数：无
+	## 返回：无
+	if _tips_panel != null:
+		_tips_panel.visible = false
+
+func is_target_tips_visible() -> bool:
+	## tips 可见状态（测试契约查询）
+	## 参数：无
+	## 返回：true = 显示中
+	return _tips_panel != null and is_instance_valid(_tips_panel) and _tips_panel.visible
+
+func target_tips_text() -> String:
+	## tips 当前文本（可见行拼接；测试契约查询）
+	## 参数：无
+	## 返回：文本（未显示返回空）
+	if not is_target_tips_visible():
+		return ""
+	if _tips_line2.visible:
+		return "%s\n%s" % [_tips_line1.text, _tips_line2.text]
+	return _tips_line1.text
+
+func target_tips_panel() -> PanelContainer:
+	## tips 面板引用（测试断言 mouse_filter 契约用；可能为 null）
+	## 参数：无
+	## 返回：PanelContainer
+	return _tips_panel
+
+func _EnsureTipsPanel() -> void:
+	## 懒建 tips 面板（半透明深底风格同日志栏；子节点与自身全 IGNORE）
+	## 参数：无
+	## 返回：无
+	if _tips_panel != null and is_instance_valid(_tips_panel):
+		return
+	_tips_panel = PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.07, 0.08, 0.09, 0.92)
+	style.set_corner_radius_all(6)
+	style.set_content_margin_all(8)
+	_tips_panel.add_theme_stylebox_override("panel", style)
+	_tips_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var box := VBoxContainer.new()
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_theme_constant_override("separation", 2)
+	_tips_line1 = Label.new()
+	_tips_line1.add_theme_font_size_override("font_size", 14)
+	_tips_line1.add_theme_color_override("font_color", Color(0.98, 0.6, 0.5))
+	_tips_line1.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(_tips_line1)
+	_tips_line2 = Label.new()
+	_tips_line2.add_theme_font_size_override("font_size", 13)
+	_tips_line2.add_theme_color_override("font_color", Color(0.85, 0.88, 0.9))
+	_tips_line2.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(_tips_line2)
+	_tips_panel.add_child(box)
+	add_child(_tips_panel)
 
 func refresh_badge(unit: BattleUnit) -> void:
 	## 刷新单单位徽章（HP/资源/倒地态）
@@ -172,12 +317,14 @@ func show_damage_number(cell: Vector2i, amount: int, is_crit: bool) -> void:
 	tween.tween_callback(label.queue_free)
 
 func RefreshDynamicMarks() -> void:
-	## 动态地格标记刷新（陷阱橙色点——调试可见口径）
+	## 动态地格标记刷新（陷阱橙色点——调试可见口径）；地格 hover 描述全量重算
+	## （动态陷阱格经 tile_at 动态优先获得陷阱描述，消耗后回落基础层）
 	## 参数：无
 	## 返回：无
 	for child: Node in get_children():
 		if child is ColorRect and child.get_meta(&"trap_mark", false):
 			child.queue_free()
+	_ApplyAllCellTooltips()
 	for cell: Vector2i in context.grid.dynamic_tiles:
 		var mark := ColorRect.new()
 		mark.color = COLOR_TRAP_MARK
@@ -197,7 +344,8 @@ func _BuildLayout() -> void:
 	origin = (size - Vector2(grid_size) * cell_size) * 0.5
 
 func _BuildCells() -> void:
-	## 地格色块池（kind/status_id 驱动配色；高地双层凸边）
+	## 地格色块池（kind/status_id 驱动配色；高地双层凸边；障碍岩块描边）
+	## + 地格 hover 描述配置
 	## 参数：无
 	## 返回：无
 	for y: int in context.grid.size.y:
@@ -205,32 +353,41 @@ func _BuildCells() -> void:
 			var cell: Vector2i = Vector2i(x, y)
 			var tile: TileTypeDef = context.grid.tile_at(cell)
 			_cells[cell] = _MakeCellVisual(cell, tile)
+	_ApplyAllCellTooltips()
 
 func _MakeCellVisual(cell: Vector2i, tile: TileTypeDef) -> Control:
-	## 构建单个地格视觉（返回容器便于高地挂内层）
+	## 构建单个地格视觉（批 A H2 表驱动：fill_color/accent_color/style 三字段
+	## 驱动——UI 只按样式枚举分支，新增状态地格改表零改码）
 	## 参数 cell：格坐标；tile：地格定义
 	## 返回：视觉根节点
-	var rect: ColorRect
-	if tile != null and tile.kind == TileTypeDef.Kind.OBSTACLE:
-		rect = _MakeCellRect(cell, COLOR_OBSTACLE, 0.0)
-		var inner := ColorRect.new()
-		inner.color = COLOR_OBSTACLE.darkened(0.3)
-		inner.size = Vector2(cell_size - 12, cell_size - 12)
-		inner.position = Vector2(6, 6)
-		inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		rect.add_child(inner)
-	elif tile != null and tile.status_id == &"BUFF_tile_highground":
-		# 高地：亮黄外层 + 深黄内层 = 凸边效果
-		rect = _MakeCellRect(cell, COLOR_HIGHGROUND, 0.0)
-		var inner_high := ColorRect.new()
-		inner_high.color = COLOR_HIGHGROUND_INNER
-		inner_high.size = Vector2(cell_size - 12, cell_size - 12)
-		inner_high.position = Vector2(6, 6)
-		inner_high.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		rect.add_child(inner_high)
-	else:
-		rect = _MakeCellRect(cell, _TileColorOf(tile), 2.0)
-	return rect
+	if tile == null:
+		return _MakeCellRect(cell, Color(0.32, 0.36, 0.29), 2.0)
+	match tile.style:
+		TileTypeDef.Style.BLOCK:
+			# 障碍岩块：底色 + 深色内块（darkened 同原式）+ 强调色描边
+			var rect := _MakeCellRect(cell, tile.fill_color, 0.0)
+			var inner := ColorRect.new()
+			inner.color = tile.fill_color.darkened(0.3)
+			inner.size = Vector2(cell_size - 12, cell_size - 12)
+			inner.position = Vector2(6, 6)
+			inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			rect.add_child(inner)
+			for edge: ColorRect in _MakeEdgeStrips(inner.size, tile.accent_color):
+				inner.add_child(edge)
+			return rect
+		TileTypeDef.Style.RAISED:
+			# 平台凸边：外层底色 + 内层强调色双层
+			var raised := _MakeCellRect(cell, tile.fill_color, 0.0)
+			var inner_raised := ColorRect.new()
+			inner_raised.color = tile.accent_color
+			inner_raised.size = Vector2(cell_size - 12, cell_size - 12)
+			inner_raised.position = Vector2(6, 6)
+			inner_raised.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			raised.add_child(inner_raised)
+			return raised
+		_:
+			# PLAIN：平色块（格间缝）
+			return _MakeCellRect(cell, tile.fill_color, 2.0)
 
 func _MakeCellRect(cell: Vector2i, color: Color, gap: float) -> ColorRect:
 	## 构建地格底色块（gap = 格间缝）
@@ -243,20 +400,6 @@ func _MakeCellRect(cell: Vector2i, color: Color, gap: float) -> ColorRect:
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(rect)
 	return rect
-
-func _TileColorOf(tile: TileTypeDef) -> Color:
-	## 地格底色（status_id 驱动；kind=STATUS 未识别状态回退普通色）
-	## 参数 tile：地格定义
-	## 返回：颜色
-	if tile == null:
-		return COLOR_NORMAL
-	match tile.status_id:
-		&"BUFF_tile_grass":
-			return COLOR_GRASS
-		&"DEBUFF_tile_poison":
-			return COLOR_POISON
-		_:
-			return COLOR_NORMAL
 
 func _BuildBadges() -> void:
 	## 单位徽章池（sprite 经 GameData.get_asset_path 解析，缓存复用）
@@ -284,31 +427,140 @@ func _TextureOf(sprite_id: StringName) -> Texture2D:
 	return texture
 
 func _SpriteIdOf(unit: BattleUnit) -> StringName:
-	## 单位 → sprite 资源 id（我方 spr_cls_<职业>；敌方 spr_en_<敌名去区域前缀>）
+	## 单位 → sprite 资源 id（批 A H3 表驱动：ClassDef/EnemyDef.sprite_id——
+	## 经 GameData 查表，删除原拼接规则；查无回退空 id 走占位色块）
 	## 参数 unit：单位
 	## 返回：sprite id
+	if _game_data == null:
+		return &""
 	if unit.side == SkillDef.SkillSide.ALLY:
-		return StringName("spr_%s" % unit.class_id)
-	return StringName("spr_en_%s" % String(unit.enemy_id).trim_prefix("en_m1_"))
+		var cls: ClassDef = _game_data.get_record(unit.class_id) as ClassDef
+		return cls.sprite_id if cls != null else &""
+	var enemy: EnemyDef = _game_data.get_record(unit.enemy_id) as EnemyDef
+	return enemy.sprite_id if enemy != null else &""
 
-func _ShowOverlay(cells: Array[Vector2i], color: Color, pool: Array[ColorRect]) -> void:
-	## 覆盖层画制（清池重画）
-	## 参数 cells/color/pool：格列表、颜色、目标池
+func _ShowOverlay(cells: Array[Vector2i], color: Color, pool: Array[Control],
+		border_color: Color = Color(0, 0, 0, 0), border_width: float = OVERLAY_BORDER_WIDTH) -> void:
+	## 覆盖层画制（清池重画；每格容器 = 极淡填充 + 可选四边框；挂覆盖层专用
+	## 容器——层级见 _overlay_layer 注）
+	## 参数 cells/color/pool/border_color/border_width：格列表、填充色、目标池、
+	## 边框色（alpha ≤ 0 无边框）、边框条宽
 	## 返回：无
 	_ClearOverlay(pool)
+	_EnsureOverlayLayer()
 	for cell: Vector2i in cells:
-		var overlay := ColorRect.new()
-		overlay.color = color
-		overlay.position = origin + Vector2(cell) * cell_size
-		overlay.size = Vector2(cell_size, cell_size)
-		overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		add_child(overlay)
-		pool.append(overlay)
+		var holder := Control.new()
+		holder.position = origin + Vector2(cell) * cell_size
+		holder.size = Vector2(cell_size, cell_size)
+		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var fill := ColorRect.new()
+		fill.color = color
+		fill.size = holder.size
+		fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		holder.add_child(fill)
+		if border_color.a > 0.0:
+			for edge: ColorRect in _MakeEdgeStrips(holder.size, border_color, border_width):
+				holder.add_child(edge)
+		_overlay_layer.add_child(holder)
+		pool.append(holder)
 
-func _ClearOverlay(pool: Array[ColorRect]) -> void:
+func _EnsureOverlayLayer() -> void:
+	## 懒建覆盖层专用容器（全屏 IGNORE——徽章之后建立保持「地格→徽章→
+	## 覆盖层」现状层级；tips 恒在其后建，z 序恒高）
+	## 参数：无
+	## 返回：无
+	if _overlay_layer != null and is_instance_valid(_overlay_layer):
+		return
+	_overlay_layer = Control.new()
+	_overlay_layer.name = "OverlayLayer"
+	_overlay_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_overlay_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_overlay_layer)
+
+func _ShowBlockedOverlay(cells: Array[Vector2i], pool: Array[Control]) -> void:
+	## 视线阻断格渲染（十四轮反馈）：极淡灰填充 + 灰边框 + 中心 45° 斜杠
+	## （ColorRect 旋转组合）；holder 带 &"los_blocked" 元标记（测试/调试契约）
+	## 参数 cells/pool：格列表、目标池
+	## 返回：无
+	_EnsureOverlayLayer()
+	for cell: Vector2i in cells:
+		var holder := Control.new()
+		holder.position = origin + Vector2(cell) * cell_size
+		holder.size = Vector2(cell_size, cell_size)
+		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		holder.set_meta(&"los_blocked", true)
+		var fill := ColorRect.new()
+		fill.color = COLOR_BLOCKED_FILL
+		fill.size = holder.size
+		fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		holder.add_child(fill)
+		for edge: ColorRect in _MakeEdgeStrips(holder.size, COLOR_BLOCKED_BORDER,
+				OVERLAY_BORDER_WIDTH):
+			holder.add_child(edge)
+		# 中心斜杠（绕自身中心旋转 45°）
+		var slash := ColorRect.new()
+		slash.color = COLOR_BLOCKED_SLASH
+		slash.size = Vector2(cell_size * 0.72, BLOCKED_SLASH_WIDTH)
+		slash.pivot_offset = slash.size * 0.5
+		slash.position = (holder.size - slash.size) * 0.5
+		slash.rotation = PI * 0.25
+		slash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		holder.add_child(slash)
+		_overlay_layer.add_child(holder)
+		pool.append(holder)
+
+func _ClearOverlay(pool: Array[Control]) -> void:
 	## 清空覆盖层池
 	## 参数 pool：目标池
 	## 返回：无
-	for overlay: ColorRect in pool:
+	for overlay: Control in pool:
 		overlay.queue_free()
 	pool.clear()
+
+func _MakeEdgeStrips(strip_size: Vector2, color: Color,
+		thickness: float = OVERLAY_BORDER_WIDTH) -> Array[ColorRect]:
+	## 构建四边框色带（上/下/左/右；不挂树由调用方挂入，坐标相对宿主 (0,0)）
+	## 参数 strip_size/color/thickness：宿主尺寸、色、条宽
+	## 返回：四条 ColorRect
+	var edges: Array[ColorRect] = []
+	edges.append(_MakeStrip(Vector2(0, 0), Vector2(strip_size.x, thickness), color))
+	edges.append(_MakeStrip(Vector2(0, strip_size.y - thickness),
+			Vector2(strip_size.x, thickness), color))
+	edges.append(_MakeStrip(Vector2(0, 0), Vector2(thickness, strip_size.y), color))
+	edges.append(_MakeStrip(Vector2(strip_size.x - thickness, 0),
+			Vector2(thickness, strip_size.y), color))
+	return edges
+
+func _MakeStrip(position: Vector2, size: Vector2, color: Color) -> ColorRect:
+	## 构建独立色带（不挂树）
+	## 参数 position/size/color：几何与颜色
+	## 返回：ColorRect
+	var rect := ColorRect.new()
+	rect.position = position
+	rect.size = size
+	rect.color = color
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return rect
+
+func _ApplyAllCellTooltips() -> void:
+	## 全场地格 hover 描述重算（初建与动态地格增删后调用）
+	## 参数：无
+	## 返回：无
+	for cell: Vector2i in _cells:
+		_ApplyCellTooltip(cell)
+
+func _ApplyCellTooltip(cell: Vector2i) -> void:
+	## 地格 hover 描述配置：特殊/障碍格 PASS + tooltip_text（地格名 + description，
+	## 文案入表——UI 零硬编码，铁律①）；普通格 IGNORE 不打扰（2026-09-24 试玩反馈）
+	## 参数 cell：格坐标
+	## 返回：无
+	var visual: Control = _cells.get(cell, null)
+	if visual == null:
+		return
+	var tile: TileTypeDef = context.grid.tile_at(cell)
+	if tile == null or tile.kind == TileTypeDef.Kind.NORMAL:
+		visual.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		visual.tooltip_text = ""
+		return
+	visual.mouse_filter = Control.MOUSE_FILTER_PASS
+	visual.tooltip_text = "%s\n%s" % [tile.display_name, tile.description]
