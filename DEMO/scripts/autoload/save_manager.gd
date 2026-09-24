@@ -20,8 +20,9 @@ const SAVE_DIR: String = "user://saves"
 const SAVE_PATH: String = "user://saves/main_save.json"
 const TEMP_PATH: String = "user://saves/main_save.json.tmp"
 
-## 识别的存档结构版本（不识别则拒载走 save_corrupt）
-const SUPPORTED_SCHEMA_VERSION: int = 1
+## 识别的存档结构版本（不识别则拒载走 save_corrupt）——**单源读 SaveData
+## 常量**（批 D L8：原双份字面量已删，版本号只在 SaveData.SCHEMA_VERSION 一处）
+const SUPPORTED_SCHEMA_VERSION: int = SaveData.SCHEMA_VERSION
 
 ## 占位场景 id：公会壳（批 4 SceneManager 落地前）
 const SCENE_GUILD_SHELL: StringName = &"guild_shell"
