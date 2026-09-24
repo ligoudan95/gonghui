@@ -7,6 +7,7 @@
 script = ExtResource("1_kvhbd")
 mode = 1
 attr_id = &"willpower"
+ratio = 0.5
 
 [resource]
 script = ExtResource("2_m3w5u")
@@ -17,4 +18,4 @@ dot = SubResource("Resource_7p5ti")
 default_duration = 3
 stack_rule = &"no_stack_take_larger"
 allowed_sources = Array[StringName]([&"SKILL"])
-comment = "【占位·试玩校准】每跳 = 意志 × 0.5，持续 3 回合；跳伤不过减免轨（17 案 §3.4 已定稿）"
+comment = "【占位·试玩校准】每跳 = 施术者意志（施加时快照）× 0.5，持续 3 回合；跳伤不过减免轨（17 案 §3.4 定稿——盲审批 1-5 施方快照口径）"

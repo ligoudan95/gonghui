@@ -22,4 +22,5 @@ target_side = 1
 range = 5
 power_coefficient = 0.0
 effects = Array[ExtResource("1_35068")]([SubResource("Resource_bvaej")])
+description = "治疗友方单体（感知 ×1.5 + 10）。"
 comment = "【占位·试玩校准】参数来源：17 案 §3.4（DEMO 技能参数表）/§3.8（敌方技能表 17-C12~C16）"

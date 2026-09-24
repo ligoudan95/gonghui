@@ -10,6 +10,13 @@
 class_name BattleSetup
 extends RefCounted
 
+## 装配消费的数据域键（批 D L2：集中常量——与 GameData 域注册键一致，
+## 原散布字面量删除；改域结构时只动此处）
+const DOMAIN_TILES: StringName = &"battle/tiles"
+const DOMAIN_STATUSES: StringName = &"status/stats"
+const DOMAIN_SKILLS: StringName = &"class/skills"
+const DOMAIN_EQUIP: StringName = &"equip"
+
 ## 战斗上下文（装配产物：战场/单位/状态管理器/随机源/回合号与三个 lookup）
 class BattleContext:
 	extends RefCounted
@@ -66,9 +73,9 @@ static func build(params: BattleParams, game_data: Node) -> BattleContext:
 		context.rng = RandomNumberGenerator.new()
 		context.rng.randomize()
 	# 三个域 lookup（闭包捕获 id -> record 字典）
-	context.tile_lookup = _MakeLookup(game_data, &"battle/tiles")
-	context.status_lookup = _MakeLookup(game_data, &"status/stats")
-	context.skill_lookup = _MakeLookup(game_data, &"class/skills")
+	context.tile_lookup = _MakeLookup(game_data, DOMAIN_TILES)
+	context.status_lookup = _MakeLookup(game_data, DOMAIN_STATUSES)
+	context.skill_lookup = _MakeLookup(game_data, DOMAIN_SKILLS)
 	# 队伍与地图
 	var pack: EnemyPackDef = game_data.get_record(params.pack_id) as EnemyPackDef
 	if pack == null:
@@ -92,13 +99,16 @@ static func build(params: BattleParams, game_data: Node) -> BattleContext:
 			push_error("BattleSetup: 职业 '%s' 无法解析（%s）" % [adv.class_id, adv.unit_id])
 			continue
 		var equip: EquipDef = _FindEquipForClass(game_data, adv.class_id)
-		var unit := UnitBuilder.build_ally(adv, cls, equip)
+		var unit := UnitBuilder.build_ally(adv, cls, equip, context.cfg)
 		unit.slot_index = slot
 		unit.bind_battle(context.cfg, context.status_manager)
 		var spawn: Vector2i = params.formation[slot] if slot < params.formation.size() \
 				else map_def.player_spawns[slot]
 		unit.grid_pos = spawn
 		context.grid.place_unit(spawn, unit)
+		# 开局站位地格状态（M1 批 2 缺口补线 2026-09-24 八轮）：出生位在状态格
+		# 上即开局挂状态（current_round=0 = 回合 1 前锚点，毒沼回合 1 末即跳）
+		context.status_manager.apply_tile_standing(unit, context.grid.tile_at(spawn), 0)
 		context.units.append(unit)
 		context.allies.append(unit)
 	# 敌方装配（槽位分配：覆盖序列优先；默认 = 精英首位 + 其余洗位）
@@ -106,6 +116,9 @@ static func build(params: BattleParams, game_data: Node) -> BattleContext:
 			params.enemy_spawn_override, context.rng)
 	var slot_cursor: int = 0
 	var enemy_order: int = 0
+	# 同名敌方序号计数（2026-09-24 七轮反馈：3 只「变异鼠」在日志/信息卡
+	# 无法区分——同 enemy_id 第 2 个起显示名追加序号，首个不加）
+	var enemy_name_counts: Dictionary = {}
 	for entry: PackEntry in pack.entries:
 		var count: int = mini(context.rng.randi_range(entry.count_min, entry.count_max),
 				spawn_slots.size() - slot_cursor)
@@ -120,9 +133,16 @@ static func build(params: BattleParams, game_data: Node) -> BattleContext:
 				slot_cursor += 1
 				continue
 			var enemy := UnitBuilder.build_enemy(enemy_def, enemy_order)
+			var name_count: int = int(enemy_name_counts.get(enemy_id, 0)) + 1
+			enemy_name_counts[enemy_id] = name_count
+			if name_count > 1:
+				enemy.display_name = "%s %d" % [enemy.display_name, name_count]
 			enemy.bind_battle(context.cfg, context.status_manager)
 			enemy.grid_pos = map_def.enemy_spawns[spawn_slots[slot_cursor]]
 			context.grid.place_unit(enemy.grid_pos, enemy)
+			# 开局站位地格状态（同我方口径——敌我同权）
+			context.status_manager.apply_tile_standing(enemy,
+					context.grid.tile_at(enemy.grid_pos), 0)
 			context.units.append(enemy)
 			context.enemies.append(enemy)
 			enemy_order += 1
@@ -158,7 +178,7 @@ static func _FindEquipForClass(game_data: Node, class_id: StringName) -> EquipDe
 	## 按职业查初始装备（equip 域 class_ref 匹配；未配置返回 null + warning）
 	## 参数 game_data：GameData；class_id：职业 id
 	## 返回：EquipDef；无匹配返回 null
-	for record_id: StringName in game_data.get_domain_ids(&"equip"):
+	for record_id: StringName in game_data.get_domain_ids(DOMAIN_EQUIP):
 		var equip: EquipDef = game_data.get_record(record_id) as EquipDef
 		if equip != null and equip.class_ref == class_id:
 			return equip

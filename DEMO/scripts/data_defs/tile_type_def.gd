@@ -21,6 +21,13 @@ enum Trigger {
 	ENEMY_ENTER_ONCE,
 }
 
+## 地格视觉样式（表驱动小集合——批 A H2：地格视觉入表，UI 只按样式分支）
+enum Style {
+	PLAIN,   ## 普通平色块
+	RAISED,  ## 平台凸边（外层底色 + 内层强调色双层）
+	BLOCK,   ## 障碍岩块（底色 + 深色内块 + 强调色描边）
+}
+
 ## 地格 id（如 &"tile_grass"）
 @export var id: StringName = &""
 ## 中文名（如「草丛」）
@@ -35,6 +42,17 @@ enum Trigger {
 @export var status_id: StringName = &""
 ## 触发方式（STANDING = 站位期间常驻；ENEMY_ENTER_ONCE = 敌方踏入一次性触发）
 @export var trigger: Trigger = Trigger.STANDING
+
+## 地格底色（批 A H2：视觉表驱动——默认透明 = 未回填，V-A-tile-visual 拦截）
+@export var fill_color: Color = Color(0, 0, 0, 0)
+## 强调色（RAISED 内层色 / BLOCK 描边色；PLAIN 不消费）
+@export var accent_color: Color = Color(0, 0, 0, 0)
+## 视觉样式（PLAIN/RAISED/BLOCK——UI 渲染分支的唯一依据）
+@export var style: Style = Style.PLAIN
+
+## 玩家可读效果描述（hover tooltip 文案来源——UI 零硬编码文案，铁律①口径延伸；
+## 2026-09-24 试玩反馈：特殊/障碍地格悬停显示描述页签）
+@export var description: String = ""
 
 ## 设计备注（【占位·试玩校准】等标注与数据来源说明，Inspector 可编辑）
 @export var comment: String = ""

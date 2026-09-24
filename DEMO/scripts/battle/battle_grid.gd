@@ -8,7 +8,8 @@
 ## 地格定义经 tile_lookup 回调注入（批 2 接 GameData，测试接字典闭包）。
 ## 单位鸭子契约（不依赖 BattleUnit 类定义，批 2 实现同契约）：
 ## - side: int（0 = 我方 ALLY / 1 = 敌方 ENEMY，与 SkillDef.SkillSide 对齐）
-## - alive: bool（倒地单位不阻挡、不可停留判定按存活计）
+## - alive: bool（倒地单位不阻挡、不可停留判定按存活计——2026-09-24 用户拍板：
+##   存活单位一律互为障碍，占位判定不再区分敌我）
 ## - grid_pos: Vector2i（所在格）
 class_name BattleGrid
 extends RefCounted
@@ -102,7 +103,8 @@ func remove_unit(pos: Vector2i) -> void:
 	unit_at.erase(pos)
 
 func find_reachable(unit: Object, move_final: int) -> Array[Vector2i]:
-	## Dijkstra 可达集：障碍与敌方占据格不可进、友方可穿越不可停留、
+	## Dijkstra 可达集：障碍与存活单位占据格不可进（2026-09-24 用户拍板：
+	## 存活单位一律互为障碍，敌我对称——不可穿越且不可停留）、
 	## 定身（move_final ≤ 0）返回空；结果不含起始格、不含任何存活单位占据格
 	## 参数 unit：移动单位（鸭子契约）；move_final：移动力终值（批 2 预算后传入）
 	## 返回：可达目的地列表（按 y/x 排序，确定性输出）
@@ -125,7 +127,7 @@ func find_reachable(unit: Object, move_final: int) -> Array[Vector2i]:
 			break
 		visited[current] = true
 		for neighbor: Vector2i in _Neighbors4(current):
-			if not _IsEnterable(neighbor, unit):
+			if not _IsEnterable(neighbor):
 				continue
 			var tile: TileTypeDef = tile_at(neighbor)
 			var new_cost: int = current_cost + maxi(1, tile.move_cost)
@@ -137,6 +139,8 @@ func find_reachable(unit: Object, move_final: int) -> Array[Vector2i]:
 	for pos: Vector2i in dist:
 		if pos == unit.grid_pos:
 			continue
+		# 兜底过滤：结果不含任何存活单位占据格（主口径在 _IsEnterable 已阻断，
+		# 此处防御占位索引与占位状态不一致的边界情形）
 		var occupant: Object = unit_at.get(pos, null)
 		if occupant != null and occupant.alive:
 			continue
@@ -145,8 +149,9 @@ func find_reachable(unit: Object, move_final: int) -> Array[Vector2i]:
 	return result
 
 func find_path(unit: Object, from: Vector2i, to: Vector2i, move_final: int) -> Array[Vector2i]:
-	## Dijkstra 单目标寻路：通行规则同 find_reachable；终点须可停留（无存活占位）
-	## 参数 unit：移动单位（鸭子契约，取 side）；from/to：起终坐标；move_final：移动力终值
+	## Dijkstra 单目标寻路：通行规则同 find_reachable（存活单位互为障碍）；
+	## 终点须可停留（无存活占位）
+	## 参数 unit：移动单位（鸭子契约）；from/to：起终坐标；move_final：移动力终值
 	## 返回：路径（不含起点、含终点）；不可达/定身/终点不可停留返回空
 	if move_final <= 0 or from == to or not _InBounds(to):
 		return []
@@ -171,7 +176,7 @@ func find_path(unit: Object, from: Vector2i, to: Vector2i, move_final: int) -> A
 			break
 		visited[current] = true
 		for neighbor: Vector2i in _Neighbors4(current):
-			if not _IsEnterable(neighbor, unit):
+			if not _IsEnterable(neighbor):
 				continue
 			var tile: TileTypeDef = tile_at(neighbor)
 			var new_cost: int = current_cost + maxi(1, tile.move_cost)
@@ -265,17 +270,19 @@ func _Neighbors4(pos: Vector2i) -> Array[Vector2i]:
 			result.append(neighbor)
 	return result
 
-func _IsEnterable(pos: Vector2i, mover: Object) -> bool:
-	## 格子可进入判定：界内 + 地格可通行 + 无存活敌方占据（友方占位可穿越）
-	## 参数 pos：坐标；mover：移动单位（取 side 判敌我）
-	## 返回：true = 可进入（Dijkstra 边合法性；可停留性另由占位过滤处理）
+func _IsEnterable(pos: Vector2i) -> bool:
+	## 格子可进入判定：界内 + 地格可通行 + 无任何存活单位占据
+	## （2026-09-24 用户拍板：存活单位一律互为障碍——敌我对称，
+	## 不可穿越且不可停留；倒地单位不阻挡）
+	## 参数 pos：坐标
+	## 返回：true = 可进入（Dijkstra 边合法性）
 	if not _InBounds(pos):
 		return false
 	var tile: TileTypeDef = tile_at(pos)
 	if tile == null or not tile.walkable:
 		return false
 	var occupant: Object = unit_at.get(pos, null)
-	if occupant != null and occupant.alive and occupant.side != mover.side:
+	if occupant != null and occupant.alive:
 		return false
 	return true
 

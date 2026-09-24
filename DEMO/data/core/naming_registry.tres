@@ -437,7 +437,168 @@ domain = &"equip"
 display_name = "奇术师初始装备（布甲套）"
 rule_note = "eqp_init_<职业>：DEMO 初始装备（不可卸下）"
 
+[sub_resource type="Resource" id="Resource_B2S0"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_warrior"
+domain = &"assets"
+display_name = "战士小人"
+rule_note = "spr_<单位系>：战场 sprite 资源 id（assets 域 AssetRegistry 登记键；盲审批 2 A-2 纳入全库登记口径）"
+
+[sub_resource type="Resource" id="Resource_B2S1"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_rogue"
+domain = &"assets"
+display_name = "盗贼小人"
+rule_note = "spr_<单位系>：战场 sprite 资源 id（assets 域 AssetRegistry 登记键；盲审批 2 A-2 纳入全库登记口径）"
+
+[sub_resource type="Resource" id="Resource_B2S2"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_mage"
+domain = &"assets"
+display_name = "法师小人"
+rule_note = "spr_<单位系>：战场 sprite 资源 id（assets 域 AssetRegistry 登记键；盲审批 2 A-2 纳入全库登记口径）"
+
+[sub_resource type="Resource" id="Resource_B2S3"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_priest"
+domain = &"assets"
+display_name = "牧师小人"
+rule_note = "spr_<单位系>：战场 sprite 资源 id（assets 域 AssetRegistry 登记键；盲审批 2 A-2 纳入全库登记口径）"
+
+[sub_resource type="Resource" id="Resource_B2S4"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_ranger"
+domain = &"assets"
+display_name = "游侠小人"
+rule_note = "spr_<单位系>：战场 sprite 资源 id（assets 域 AssetRegistry 登记键；盲审批 2 A-2 纳入全库登记口径）"
+
+[sub_resource type="Resource" id="Resource_B2S5"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_arcanist"
+domain = &"assets"
+display_name = "奇术师小人"
+rule_note = "spr_<单位系>：战场 sprite 资源 id（assets 域 AssetRegistry 登记键；盲审批 2 A-2 纳入全库登记口径）"
+
+[sub_resource type="Resource" id="Resource_B2S6"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_en_mutant_rat"
+domain = &"assets"
+display_name = "变异鼠小人"
+rule_note = "spr_<单位系>：战场 sprite 资源 id（assets 域 AssetRegistry 登记键；盲审批 2 A-2 纳入全库登记口径）"
+
+[sub_resource type="Resource" id="Resource_B2S7"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_en_goblin_miner"
+domain = &"assets"
+display_name = "哥布林矿工小人"
+rule_note = "spr_<单位系>：战场 sprite 资源 id（assets 域 AssetRegistry 登记键；盲审批 2 A-2 纳入全库登记口径）"
+
+[sub_resource type="Resource" id="Resource_B2S8"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_en_elite_boss"
+domain = &"assets"
+display_name = "矿洞祸首小人"
+rule_note = "spr_<单位系>：战场 sprite 资源 id（assets 域 AssetRegistry 登记键；盲审批 2 A-2 纳入全库登记口径）"
+
+[sub_resource type="Resource" id="Resource_B2T9"]
+script = ExtResource("1_xxsy3")
+resource_id = &"tend_warrior_a"
+domain = &"class/classes"
+display_name = "战士 倾向 A"
+rule_note = "tend_<职业>_<ab>：职业倾向内嵌子资源 id（随宿主 class/classes 域登记；盲审批 2 A-2 纳入全库登记口径）"
+
+[sub_resource type="Resource" id="Resource_B2T10"]
+script = ExtResource("1_xxsy3")
+resource_id = &"tend_warrior_b"
+domain = &"class/classes"
+display_name = "战士 倾向 B"
+rule_note = "tend_<职业>_<ab>：职业倾向内嵌子资源 id（随宿主 class/classes 域登记；盲审批 2 A-2 纳入全库登记口径）"
+
+[sub_resource type="Resource" id="Resource_B2T11"]
+script = ExtResource("1_xxsy3")
+resource_id = &"tend_rogue_a"
+domain = &"class/classes"
+display_name = "盗贼 倾向 A"
+rule_note = "tend_<职业>_<ab>：职业倾向内嵌子资源 id（随宿主 class/classes 域登记；盲审批 2 A-2 纳入全库登记口径）"
+
+[sub_resource type="Resource" id="Resource_B2T12"]
+script = ExtResource("1_xxsy3")
+resource_id = &"tend_rogue_b"
+domain = &"class/classes"
+display_name = "盗贼 倾向 B"
+rule_note = "tend_<职业>_<ab>：职业倾向内嵌子资源 id（随宿主 class/classes 域登记；盲审批 2 A-2 纳入全库登记口径）"
+
+[sub_resource type="Resource" id="Resource_B2T13"]
+script = ExtResource("1_xxsy3")
+resource_id = &"tend_mage_a"
+domain = &"class/classes"
+display_name = "法师 倾向 A"
+rule_note = "tend_<职业>_<ab>：职业倾向内嵌子资源 id（随宿主 class/classes 域登记；盲审批 2 A-2 纳入全库登记口径）"
+
+[sub_resource type="Resource" id="Resource_B2T14"]
+script = ExtResource("1_xxsy3")
+resource_id = &"tend_mage_b"
+domain = &"class/classes"
+display_name = "法师 倾向 B"
+rule_note = "tend_<职业>_<ab>：职业倾向内嵌子资源 id（随宿主 class/classes 域登记；盲审批 2 A-2 纳入全库登记口径）"
+
+[sub_resource type="Resource" id="Resource_B2T15"]
+script = ExtResource("1_xxsy3")
+resource_id = &"tend_priest_a"
+domain = &"class/classes"
+display_name = "牧师 倾向 A"
+rule_note = "tend_<职业>_<ab>：职业倾向内嵌子资源 id（随宿主 class/classes 域登记；盲审批 2 A-2 纳入全库登记口径）"
+
+[sub_resource type="Resource" id="Resource_B2T16"]
+script = ExtResource("1_xxsy3")
+resource_id = &"tend_priest_b"
+domain = &"class/classes"
+display_name = "牧师 倾向 B"
+rule_note = "tend_<职业>_<ab>：职业倾向内嵌子资源 id（随宿主 class/classes 域登记；盲审批 2 A-2 纳入全库登记口径）"
+
+[sub_resource type="Resource" id="Resource_B2T17"]
+script = ExtResource("1_xxsy3")
+resource_id = &"tend_ranger_a"
+domain = &"class/classes"
+display_name = "游侠 倾向 A"
+rule_note = "tend_<职业>_<ab>：职业倾向内嵌子资源 id（随宿主 class/classes 域登记；盲审批 2 A-2 纳入全库登记口径）"
+
+[sub_resource type="Resource" id="Resource_B2T18"]
+script = ExtResource("1_xxsy3")
+resource_id = &"tend_ranger_b"
+domain = &"class/classes"
+display_name = "游侠 倾向 B"
+rule_note = "tend_<职业>_<ab>：职业倾向内嵌子资源 id（随宿主 class/classes 域登记；盲审批 2 A-2 纳入全库登记口径）"
+
+[sub_resource type="Resource" id="Resource_B2T19"]
+script = ExtResource("1_xxsy3")
+resource_id = &"tend_arcanist_a"
+domain = &"class/classes"
+display_name = "奇术师 倾向 A"
+rule_note = "tend_<职业>_<ab>：职业倾向内嵌子资源 id（随宿主 class/classes 域登记；盲审批 2 A-2 纳入全库登记口径）"
+
+[sub_resource type="Resource" id="Resource_B2T20"]
+script = ExtResource("1_xxsy3")
+resource_id = &"tend_arcanist_b"
+domain = &"class/classes"
+display_name = "奇术师 倾向 B"
+rule_note = "tend_<职业>_<ab>：职业倾向内嵌子资源 id（随宿主 class/classes 域登记；盲审批 2 A-2 纳入全库登记口径）"
+
+[sub_resource type="Resource" id="Resource_B2X0"]
+script = ExtResource("1_xxsy3")
+resource_id = &"registry"
+domain = &"assets"
+display_name = "资源路径映射表"
+rule_note = "assets 域固定资源名：registry（AssetRegistry 路径映射，全库唯一）；盲审批 2 A-9 纳入校验遍历后补登"
+
+[sub_resource type="Resource" id="Resource_B2X1"]
+script = ExtResource("1_xxsy3")
+resource_id = &"naming_registry"
+domain = &"core"
+display_name = "资源命名登记表"
+rule_note = "core 域固定资源名：naming_registry（本表自身——盲审批 2 A-2 双向比对启用后补登）"
+
 [resource]
 script = ExtResource("2_8hs6i")
-entries = Array[ExtResource("1_xxsy3")]([SubResource("Resource_7rp6k"), SubResource("Resource_oft80"), SubResource("Resource_n0ea3"), SubResource("Resource_8b336"), SubResource("Resource_hxk6g"), SubResource("Resource_l7131"), SubResource("Resource_8wgs3"), SubResource("Resource_ito87"), SubResource("Resource_mvlxc"), SubResource("Resource_bw3po"), SubResource("Resource_6s0uu"), SubResource("Resource_kpbtc"), SubResource("Resource_p5cqs"), SubResource("Resource_e25vx"), SubResource("Resource_inerj"), SubResource("Resource_pa4wo"), SubResource("Resource_coef1"), SubResource("Resource_dmwsm"), SubResource("Resource_h7b8d"), SubResource("Resource_pvxlm"), SubResource("Resource_8igpl"), SubResource("Resource_cwl1f"), SubResource("Resource_tomj8"), SubResource("Resource_67gfp"), SubResource("Resource_01rdt"), SubResource("Resource_p0axp"), SubResource("Resource_4uaip"), SubResource("Resource_dl7mi"), SubResource("Resource_d0vn1"), SubResource("Resource_wsgw6"), SubResource("Resource_oqqqu"), SubResource("Resource_x4q0o"), SubResource("Resource_0ucge"), SubResource("Resource_h3wwn"), SubResource("Resource_pk2js"), SubResource("Resource_cli47"), SubResource("Resource_w1hfh"), SubResource("Resource_gwor4"), SubResource("Resource_uyas2"), SubResource("Resource_3k27s"), SubResource("Resource_yry1n"), SubResource("Resource_j4c4f"), SubResource("Resource_b83j2"), SubResource("Resource_pubcw"), SubResource("Resource_ywjf5"), SubResource("Resource_fh5vw"), SubResource("Resource_u0rav"), SubResource("Resource_wk6it"), SubResource("Resource_xxsy3"), SubResource("Resource_8hs6i"), SubResource("Resource_xjr3h"), SubResource("Resource_kjgb4"), SubResource("Resource_l8020"), SubResource("Resource_hewr7"), SubResource("Resource_kqsjo"), SubResource("Resource_wxmxw"), SubResource("Resource_3xjaa"), SubResource("Resource_slrmy"), SubResource("Resource_27uxc"), SubResource("Resource_lbffk"), SubResource("Resource_6fscd"), SubResource("Resource_p2ky8")])
-comment = "全库资源命名登记表（用户拍板②·2026-09-23）：每条记录资源 id/域前缀/中文名/命名规则；条目随资源增删同步维护；M1 批 1 追加战斗域 14 条（共 62 条）"
+entries = Array[ExtResource("1_xxsy3")]([SubResource("Resource_7rp6k"), SubResource("Resource_oft80"), SubResource("Resource_n0ea3"), SubResource("Resource_8b336"), SubResource("Resource_hxk6g"), SubResource("Resource_l7131"), SubResource("Resource_8wgs3"), SubResource("Resource_ito87"), SubResource("Resource_mvlxc"), SubResource("Resource_bw3po"), SubResource("Resource_6s0uu"), SubResource("Resource_kpbtc"), SubResource("Resource_p5cqs"), SubResource("Resource_e25vx"), SubResource("Resource_inerj"), SubResource("Resource_pa4wo"), SubResource("Resource_coef1"), SubResource("Resource_dmwsm"), SubResource("Resource_h7b8d"), SubResource("Resource_pvxlm"), SubResource("Resource_8igpl"), SubResource("Resource_cwl1f"), SubResource("Resource_tomj8"), SubResource("Resource_67gfp"), SubResource("Resource_01rdt"), SubResource("Resource_p0axp"), SubResource("Resource_4uaip"), SubResource("Resource_dl7mi"), SubResource("Resource_d0vn1"), SubResource("Resource_wsgw6"), SubResource("Resource_oqqqu"), SubResource("Resource_x4q0o"), SubResource("Resource_0ucge"), SubResource("Resource_h3wwn"), SubResource("Resource_pk2js"), SubResource("Resource_cli47"), SubResource("Resource_w1hfh"), SubResource("Resource_gwor4"), SubResource("Resource_uyas2"), SubResource("Resource_3k27s"), SubResource("Resource_yry1n"), SubResource("Resource_j4c4f"), SubResource("Resource_b83j2"), SubResource("Resource_pubcw"), SubResource("Resource_ywjf5"), SubResource("Resource_fh5vw"), SubResource("Resource_u0rav"), SubResource("Resource_wk6it"), SubResource("Resource_xxsy3"), SubResource("Resource_8hs6i"), SubResource("Resource_xjr3h"), SubResource("Resource_kjgb4"), SubResource("Resource_l8020"), SubResource("Resource_hewr7"), SubResource("Resource_kqsjo"), SubResource("Resource_wxmxw"), SubResource("Resource_3xjaa"), SubResource("Resource_slrmy"), SubResource("Resource_27uxc"), SubResource("Resource_lbffk"), SubResource("Resource_6fscd"), SubResource("Resource_p2ky8"), SubResource("Resource_B2S0"), SubResource("Resource_B2S1"), SubResource("Resource_B2S2"), SubResource("Resource_B2S3"), SubResource("Resource_B2S4"), SubResource("Resource_B2S5"), SubResource("Resource_B2S6"), SubResource("Resource_B2S7"), SubResource("Resource_B2S8"), SubResource("Resource_B2T9"), SubResource("Resource_B2T10"), SubResource("Resource_B2T11"), SubResource("Resource_B2T12"), SubResource("Resource_B2T13"), SubResource("Resource_B2T14"), SubResource("Resource_B2T15"), SubResource("Resource_B2T16"), SubResource("Resource_B2T17"), SubResource("Resource_B2T18"), SubResource("Resource_B2T19"), SubResource("Resource_B2T20"), SubResource("Resource_B2X0"), SubResource("Resource_B2X1")])
+comment = "全库资源命名登记表（用户拍板②·2026-09-23）：每条记录资源 id/域前缀/中文名/命名规则；条目随资源增删同步维护；M1 批 1 追加战斗域 14 条；盲审批 2 A-2 追加 spr_×9 + tend_×12（含表自身与 registry 补登，共 85 条）"

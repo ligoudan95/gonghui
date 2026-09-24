@@ -33,3 +33,7 @@ var control_locks: int = 0
 var from_next_turn_only: bool = false
 ## 叠加层数（异名同类入场计数；DEMO 单层入场，字段位预留完整版多层）
 var layers: int = 1
+## DOT 跳伤施方快照（盲审批 1-5【用户拍板：施方快照】：ATTR_RATIO 类 DOT
+## 施加时定格施方换算属性值（如奇术师意志）——存数值非单位引用，施方倒地
+## 后跳伤仍有效；0 = 未设（TILE 来源/FIXED 模式/旧实例，tick 回退受方口径）
+var dot_source_snapshot: float = 0.0

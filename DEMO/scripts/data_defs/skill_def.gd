@@ -77,6 +77,9 @@ enum DamageType {
 @export var power_coefficient: float = 1.0
 ## 效果列表（SkillEffect 子资源数组：状态施加/治疗/地格生成/战斗修正）
 @export var effects: Array[SkillEffect] = []
+## 玩家可读效果描述（按钮 hover tooltip 文案来源——UI 零硬编码文案，铁律①
+## 口径延伸；2026-09-24 二轮试玩反馈：敌方技能不进玩家按钮可不回填）
+@export var description: String = ""
 ## 演出资源 id（路径经 assets 域 AssetRegistry 映射，表内不写死路径）
 @export var vfx_id: StringName = &""
 

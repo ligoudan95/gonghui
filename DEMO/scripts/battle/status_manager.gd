@@ -44,8 +44,26 @@ func setup(cfg: CoreConfig, status_lookup: Callable) -> void:
 	_acted_this_round = {}
 	_current_round = 1
 
+func apply_tile_standing(target: Object, tile: TileTypeDef, current_round: int) -> bool:
+	## 站位地格状态施加（移动落格/开局摆位接线消费——M1 批 2 缺口补线
+	## 2026-09-24 八轮：草丛/高地/毒沼此前空转，消费端就绪仅缺施加端）：
+	## 地格 kind=STATUS 且绑定状态非空 → TILE 来源直接施加（即时类形态，
+	## 回合末经站位豁免常驻在格期间、离格经 on_unit_moved 移除——敌我同权）
+	## 参数 target：站位单位；tile：所在格地格定义；current_round：当前回合号
+	## 返回：true = 已施加（非状态格/解析失败/叠层拒收返回 false）
+	if tile == null or tile.kind != TileTypeDef.Kind.STATUS:
+		return false
+	if String(tile.status_id).is_empty():
+		return false
+	var status: StatusDef = _LookupStatus(tile.status_id)
+	if status == null:
+		return false
+	return apply(target, status, StatusInstance.SourceKind.TILE, tile.id, 0,
+			current_round, false)
+
 func apply(target: Object, status: StatusDef, source_kind: int, source_id: StringName,
-		duration: int, current_round: int, target_acted_this_round: bool) -> bool:
+		duration: int, current_round: int, target_acted_this_round: bool,
+		dot_source_snapshot: float = 0.0) -> bool:
 	## 施加状态（直接入口，不走两段判定——己方增益/地格/检定带入路径）：
 	## ①同名存在 → remaining = max(旧, 新)，仅新 ≥ 旧时 first_tick_round 重起算
 	## （锚点 2，防取大却重起算的反向续时）②互斥组同组 → 后施加覆盖前者
@@ -57,11 +75,13 @@ func apply(target: Object, status: StatusDef, source_kind: int, source_id: Strin
 	## 参数 target：目标单位；status：状态定义；source_kind：StatusInstance.SourceKind；
 	## source_id：来源 id；duration：持续回合（≤0 回退 default_duration；仍 ≤0 = 即时类）；
 	## current_round：施加回合号（开局载入传 0 = 视为回合 1 前施加，锚点 1）；
-	## target_acted_this_round：目标本回合是否已行动（控制窗口判定）
+	## target_acted_this_round：目标本回合是否已行动（控制窗口判定）；
+	## dot_source_snapshot：DOT 跳伤施方快照值（盲审批 1-5：ATTR_RATIO 类
+	## 施加时定格的施方换算属性值；0 = 未设回退受方口径）
 	## 返回：true = 施加/刷新成功（false = 同类叠层超限拒收）
 	var effective: int = duration if duration > 0 else status.default_duration
 	var target_statuses: Array = _GetUnitStatuses(target)
-	# ①同名刷新（取大 + 条件重起算）
+	# ①同名刷新（取大 + 条件重起算；DOT 快照随重施加刷新）
 	for instance: StatusInstance in target_statuses:
 		if instance.status_id != status.id:
 			continue
@@ -70,6 +90,8 @@ func apply(target: Object, status: StatusDef, source_kind: int, source_id: Strin
 			instance.first_tick_round = _CalcFirstTick(effective, current_round)
 		if status.control_kind != StatusDef.ControlKind.NONE:
 			instance.control_locks = maxi(instance.control_locks, effective)
+		if dot_source_snapshot > 0.0:
+			instance.dot_source_snapshot = dot_source_snapshot
 		return true
 	# ②互斥组覆盖：同组前者移除（17 案 §3.9 同组后施加覆盖前者）
 	if not String(status.mutex_group_id).is_empty():
@@ -94,6 +116,7 @@ func apply(target: Object, status: StatusDef, source_kind: int, source_id: Strin
 	instance.duration_zero = effective <= 0
 	instance.first_tick_round = _CalcFirstTick(effective, current_round)
 	instance.layers = 1
+	instance.dot_source_snapshot = dot_source_snapshot
 	# ④控制窗口（案 11 §2.3：未行动锁本回合/已行动锁下回合；蛊惑固定下回合 P3）
 	if status.control_kind != StatusDef.ControlKind.NONE:
 		instance.control_locks = maxi(0, effective)
@@ -113,9 +136,14 @@ func try_apply_with_judgement(caster: Object, target: Object, skill: SkillDef, s
 	## （-1 掷随机 / 0 强制失败 / 1 强制成功——两段同口，测试确定性）
 	## 返回：true = 施加成功
 	var acted: bool = _acted_this_round.get(target, false)
+	# DOT 施方快照（盲审批 1-5：ATTR_RATIO 类施加时定格施方换算属性值——
+	# 17 案定稿口径「施方意志×0.5」；FIXED/TILE 来源不涉回退 0）
+	var dot_snapshot: float = 0.0
+	if status.dot != null and status.dot.mode == DotParams.Mode.ATTR_RATIO:
+		dot_snapshot = float(int(caster.attrs.get(status.dot.attr_id, 0)))
 	if caster.side == target.side:
 		return apply(target, status, StatusInstance.SourceKind.SKILL, skill.id,
-				duration, _current_round, acted)
+				duration, _current_round, acted, dot_snapshot)
 	var chance: float = BattleRules.hit_chance(caster.hit, target.dodge, skill.hit_mod, _cfg)
 	if not BattleRules.roll_hit(chance, rng, forced):
 		return false
@@ -123,7 +151,7 @@ func try_apply_with_judgement(caster: Object, target: Object, skill: SkillDef, s
 	if not BattleRules.roll_hit(resist_chance, rng, forced):
 		return false
 	return apply(target, status, StatusInstance.SourceKind.SKILL, skill.id,
-			duration, _current_round, acted)
+			duration, _current_round, acted, dot_snapshot)
 
 func end_of_round_tick(round: int, units: Array, rng: RandomNumberGenerator) -> void:
 	## 回合末结算（案 9 回合末流程收口）：①DOT 跳伤——站位地格来源（毒沼固定
@@ -146,12 +174,25 @@ func end_of_round_tick(round: int, units: Array, rng: RandomNumberGenerator) -> 
 				var status: StatusDef = _LookupStatus(instance.status_id)
 				if status == null or status.category != StatusDef.Category.DOT or status.dot == null:
 					continue
-				unit.take_damage(BattleRules.dot_tick(unit.attrs, status.dot))
-	# ②持续递减与移除
+				# 跳伤来源（盲审批 1-5 施方快照）：ATTR_RATIO 类有快照 → 施方
+				# 定格值 × ratio（17 案定稿口径）；无快照（TILE/FIXED/旧实例）
+				# → 受方属性口径回退（毒沼 FIXED 与快照无关恒走 dot_tick）
+				if instance.dot_source_snapshot > 0.0 \
+						and status.dot.mode == DotParams.Mode.ATTR_RATIO:
+					unit.take_damage(int(round(instance.dot_source_snapshot * status.dot.ratio)))
+				else:
+					unit.take_damage(BattleRules.dot_tick(unit.attrs, status.dot))
+	# ②持续递减与移除（站位地格状态豁免——M1 批 2 缺口补线 2026-09-24 八轮：
+	# remove_policy=on_leave_tile 的即时类在格期间常驻，不随回合末移除/递减，
+	# 生命周期完全由离格 on_unit_moved 管理）
 	for unit: Object in units:
 		for instance: StatusInstance in _GetUnitStatuses(unit).duplicate():
 			if instance.duration_zero:
-				_GetUnitStatuses(unit).erase(instance)
+				var standing_status: StatusDef = _LookupStatus(instance.status_id)
+				var is_standing: bool = standing_status != null \
+						and standing_status.remove_policy == REMOVE_ON_LEAVE_TILE
+				if not is_standing:
+					_GetUnitStatuses(unit).erase(instance)
 				continue
 			if round >= instance.first_tick_round:
 				instance.remaining -= 1
@@ -190,12 +231,16 @@ func get_active_control(unit: Object) -> int:
 
 func on_unit_turn_finished(unit: Object) -> void:
 	## 行动轮结束（被锁或正常行动同口径）：标记已行动 + 控制锁递减
-	## （锁定到期即解锁，持续时间照常回合末递减清零——两轨并行不冲突）
+	## （锁定到期即解锁，持续时间照常回合末递减清零——两轨并行不冲突；
+	## **from_next_turn_only 实例跳过递减**（盲审批 1-2：蛊惑恒置该标记，
+	## 施加回合目标行动轮末若照常递减会把锁 1→0，回合末清标记后锁已归零
+	## ——蛊惑从未生效；跳过施加回合的行动轮消耗，自标记清除后的首个
+	## 行动轮起正常递减）
 	## 参数 unit：结束行动轮的单位
 	## 返回：无
 	_acted_this_round[unit] = true
 	for instance: StatusInstance in _GetUnitStatuses(unit):
-		if instance.control_locks > 0:
+		if instance.control_locks > 0 and not instance.from_next_turn_only:
 			instance.control_locks -= 1
 
 func on_unit_moved(unit: Object) -> void:

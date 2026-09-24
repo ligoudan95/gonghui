@@ -28,7 +28,22 @@ const REMOVE_POLICIES: Array[StringName] = [&"on_leave_tile"]
 ## core 域 M0 固定资源白名单（id 前缀规则的例外表）
 const CORE_WHITELIST: Array[StringName] = [&"cfg_main", &"naming_registry"]
 
-## 域 -> id 前缀规范（core 域走白名单例外）
+## assets 域固定资源白名单（盲审批 2 A-9：assets 域纳入校验遍历——仅 registry 一条）
+const ASSETS_WHITELIST: Array[StringName] = [&"registry"]
+
+## 敌人职能标记合法集（盲审批 2 A-7：role_tag 值域——与 BattleUnit 消费口径对齐）
+const ENEMY_ROLE_TAGS: Array[StringName] = [&"trash", &"elite"]
+
+## 预期孤儿状态白名单（盲审批 2 A-4②：allowed_sources 含 SKILL 但零技能
+## 引用的豁免清单——【占位·完整版】检定带入技能未实现前的预留；当前全库
+## SKILL 来源状态全部有技能引用，白名单为空集）
+const SKILL_ORPHAN_WHITELIST: Array[StringName] = []
+
+## GameConfig 脚本引用（SYSTEM_KEYS 常量——enabled_systems 键域校验消费；
+## preload 脚本常量，headless 测试无 autoload 节点也可取）
+const GameConfigScript: GDScript = preload("res://scripts/autoload/game_config.gd")
+
+## 域 -> id 前缀规范（core/assets 域走白名单例外）
 const DOMAIN_PREFIXES: Dictionary[StringName, Array] = {
 	&"class/classes": [&"cls_"],
 	&"class/skills": [&"skl_"],
@@ -39,22 +54,28 @@ const DOMAIN_PREFIXES: Dictionary[StringName, Array] = {
 	&"battle/maps": [&"btm_"],
 	&"battle/tiles": [&"tile_"],
 	&"equip": [&"eqp_"],
+	&"assets": [&"registry"],
 }
 
-## 六数据域键（校验遍历范围；core 域单独处理）
+## 六数据域键（校验遍历范围；core/assets 域一并处理——盲审批 2 A-9）
 const DATA_DOMAINS: Array[StringName] = [
 	&"class/classes", &"class/skills", &"status/stats",
 	&"status/mutex_groups", &"battle/enemies", &"battle/enemy_packs",
-	&"battle/maps", &"battle/tiles", &"equip",
+	&"battle/maps", &"battle/tiles", &"equip", &"assets",
 ]
 
 static func run_all(game_data: Node) -> ValidationReport:
-	## 全库校验入口：顺序跑 14 条 M0 规则 + 6 条 V-M1-* 规则并返回报告
+	## 全库校验入口：M0/M1/批 A/批 2 规则顺序执行并返回报告
 	## 参数 game_data：已完成扫描的 GameData 实例（autoload 或手动建树）
 	## 返回：ValidationReport（零错误即通过；计数类问题为 warning）
 	var report := ValidationReport.new()
 	report.checked_count = _CountAll(game_data)
-	_CheckIdUniqueness(report, game_data)
+	# 装载问题转译（盲审批 2 A-9②：GameData 扫描层 issues（重复 id/类型域
+	# 不匹配/坏 .tres）转 error——run_validation 单独跑坏文件不再绿灯；原
+	# _CheckIdUniqueness 死规则删除：重复 id 在 GameData 层已 skip 并记
+	# issues，转译后无信息丢失）
+	for issue: String in game_data.issues:
+		report.add_error("V-M0-load", "<loader>", issue)
 	_CheckIdRequired(report, game_data)
 	_CheckIdFilename(report, game_data)
 	_CheckIdPrefix(report, game_data)
@@ -77,24 +98,24 @@ static func run_all(game_data: Node) -> ValidationReport:
 	_CheckBattleCounts(report, game_data)
 	# ---- 插队任务新增（单位占位 sprite 资源登记）----
 	_CheckRefAssetPath(report, game_data)
+	# ---- 批 A 解耦整改新增（V-A-* 三条：地格视觉表驱动 / sprite_id 入表 /
+	# 修正键合法集——2026-09-24）----
+	_CheckTileVisual(report, game_data)
+	_CheckSpriteIds(report, game_data)
+	_CheckModKeys(report, game_data)
+	# ---- 盲审批 2 新增（V-B2-* 七条 + 加严两条，2026-09-24）----
+	_CheckEquipClassRef(report, game_data)
+	_CheckNamingRegistry(report, game_data)
+	_CheckStatusSources(report, game_data)
+	_CheckOwnerClosure(report, game_data)
+	_CheckCfgDomains(report, game_data)
+	_CheckValueDomains(report, game_data)
+	_CheckTileMatrix(report, game_data)
 	return report
 
 # --------------------------------------------------------------------------
-# 基础规则（id 唯一 / 必填 / 文件名一致 / 前缀规范）
+# 基础规则（必填 / 文件名一致 / 前缀规范）
 # --------------------------------------------------------------------------
-
-static func _CheckIdUniqueness(report: ValidationReport, game_data: Node) -> void:
-	## V-M0-id-uniq：全库 id 唯一（跨域查重，以域 id 索引为遍历基准）
-	## 参数：报告 / GameData
-	## 返回：无（重复写入 report.errors）
-	var seen: Dictionary = {}
-	for domain: StringName in _AllDomains(game_data):
-		for record_id: StringName in game_data.get_domain_ids(domain):
-			if seen.has(record_id):
-				report.add_error("V-M0-id-uniq", record_id,
-						"重复 id（与 %s 冲突）" % seen[record_id])
-			else:
-				seen[record_id] = _RecordPath(game_data, record_id)
 
 static func _CheckIdRequired(report: ValidationReport, game_data: Node) -> void:
 	## V-M0-id-required：id 与 display_name 必填非空（无 display_name 的表只查 id）
@@ -123,7 +144,7 @@ static func _CheckIdFilename(report: ValidationReport, game_data: Node) -> void:
 						"文件名 '%s' 与 id 不一致" % stem)
 
 static func _CheckIdPrefix(report: ValidationReport, game_data: Node) -> void:
-	## V-M0-id-prefix：id 前缀符合域规范（core 域走白名单）
+	## V-M0-id-prefix：id 前缀符合域规范（core/assets 域走白名单——批 2 A-9）
 	## 参数：报告 / GameData
 	## 返回：无
 	for domain: StringName in _AllDomains(game_data):
@@ -132,6 +153,11 @@ static func _CheckIdPrefix(report: ValidationReport, game_data: Node) -> void:
 				if not CORE_WHITELIST.has(record_id):
 					report.add_error("V-M0-id-prefix", record_id,
 							"core 域仅允许白名单 id：%s" % str(CORE_WHITELIST))
+				continue
+			if domain == &"assets":
+				if not ASSETS_WHITELIST.has(record_id):
+					report.add_error("V-M0-id-prefix", record_id,
+							"assets 域仅允许白名单 id：%s" % str(ASSETS_WHITELIST))
 				continue
 			var prefixes: Array = DOMAIN_PREFIXES.get(domain, [])
 			var matched: bool = false
@@ -153,21 +179,21 @@ static func _CheckEnumDomains(report: ValidationReport, game_data: Node) -> void
 	## 返回：无
 	for record: Resource in _DomainRecords(game_data, &"class/skills"):
 		var skill := record as SkillDef
-		_CheckEnumRange(report, skill.id, "SkillDef.damage_type", skill.damage_type, 2)
-		_CheckEnumRange(report, skill.id, "SkillDef.target_side", skill.target_side, 2)
-		_CheckEnumRange(report, skill.id, "SkillDef.target_shape", skill.target_shape, 3)
-		_CheckEnumRange(report, skill.id, "SkillDef.side", skill.side, 1)
-		_CheckEnumRange(report, skill.id, "SkillDef.resource_type", skill.resource_type, 2)
+		_CheckEnumRange(report, skill.id, "SkillDef.damage_type", skill.damage_type, SkillDef.DamageType.size() - 1)
+		_CheckEnumRange(report, skill.id, "SkillDef.target_side", skill.target_side, SkillDef.TargetSide.size() - 1)
+		_CheckEnumRange(report, skill.id, "SkillDef.target_shape", skill.target_shape, SkillDef.TargetShape.size() - 1)
+		_CheckEnumRange(report, skill.id, "SkillDef.side", skill.side, SkillDef.SkillSide.size() - 1)
+		_CheckEnumRange(report, skill.id, "SkillDef.resource_type", skill.resource_type, SkillDef.ResourceKind.size() - 1)
 		for effect: SkillEffect in skill.effects:
-			_CheckEnumRange(report, skill.id, "SkillEffect.effect_kind", effect.effect_kind, 3)
+			_CheckEnumRange(report, skill.id, "SkillEffect.effect_kind", effect.effect_kind, SkillEffect.EffectKind.size() - 1)
 	for record: Resource in _DomainRecords(game_data, &"status/stats"):
 		var status := record as StatusDef
-		_CheckEnumRange(report, status.id, "StatusDef.category", status.category, 3)
-		_CheckEnumRange(report, status.id, "StatusDef.polarity", status.polarity, 1)
-		_CheckEnumRange(report, status.id, "StatusDef.control_kind", status.control_kind, 2)
-		_CheckEnumRange(report, status.id, "StatusDef.duration_type", status.duration_type, 2)
+		_CheckEnumRange(report, status.id, "StatusDef.category", status.category, StatusDef.Category.size() - 1)
+		_CheckEnumRange(report, status.id, "StatusDef.polarity", status.polarity, StatusDef.Polarity.size() - 1)
+		_CheckEnumRange(report, status.id, "StatusDef.control_kind", status.control_kind, StatusDef.ControlKind.size() - 1)
+		_CheckEnumRange(report, status.id, "StatusDef.duration_type", status.duration_type, StatusDef.DurationType.size() - 1)
 		if status.dot != null:
-			_CheckEnumRange(report, status.id, "DotParams.mode", status.dot.mode, 1)
+			_CheckEnumRange(report, status.id, "DotParams.mode", status.dot.mode, DotParams.Mode.size() - 1)
 		for source: StringName in status.allowed_sources:
 			if not ALLOWED_SOURCES.has(source):
 				report.add_error("V-M0-enum", status.id,
@@ -180,11 +206,20 @@ static func _CheckEnumDomains(report: ValidationReport, game_data: Node) -> void
 					"remove_policy 含未知 token '%s'" % status.remove_policy)
 	for record: Resource in _DomainRecords(game_data, &"battle/enemies"):
 		var enemy := record as EnemyDef
-		_CheckEnumRange(report, enemy.id, "EnemyDef.race_tag", enemy.race_tag, 1)
+		_CheckEnumRange(report, enemy.id, "EnemyDef.race_tag", enemy.race_tag, EnemyDef.RaceTag.size() - 1)
 	for record: Resource in _DomainRecords(game_data, &"battle/tiles"):
 		var tile := record as TileTypeDef
-		_CheckEnumRange(report, tile.id, "TileTypeDef.kind", tile.kind, 2)
-		_CheckEnumRange(report, tile.id, "TileTypeDef.trigger", tile.trigger, 1)
+		_CheckEnumRange(report, tile.id, "TileTypeDef.kind", tile.kind, TileTypeDef.Kind.size() - 1)
+		_CheckEnumRange(report, tile.id, "TileTypeDef.trigger", tile.trigger, TileTypeDef.Trigger.size() - 1)
+		_CheckEnumRange(report, tile.id, "TileTypeDef.style", tile.style, TileTypeDef.Style.size() - 1)
+	# V-A-class-attr（批 C M8）：法穿换算源表驱动字段必填且 ∈ 七属性
+	for record: Resource in _DomainRecords(game_data, &"class/classes"):
+		var cls := record as ClassDef
+		if String(cls.mag_pierce_source_attr).is_empty():
+			report.add_error("V-A-class-attr", cls.id, "mag_pierce_source_attr 为空")
+		elif not SEVEN_ATTRS.has(cls.mag_pierce_source_attr):
+			report.add_error("V-A-class-attr", cls.id,
+					"mag_pierce_source_attr '%s' 不在七属性集" % cls.mag_pierce_source_attr)
 
 static func _CheckEnumRange(report: ValidationReport, record_id: StringName,
 		field_name: String, value: int, max_value: int) -> void:
@@ -341,10 +376,12 @@ static func _CheckRefMutex(report: ValidationReport, game_data: Node) -> void:
 # --------------------------------------------------------------------------
 
 static func _CheckNumericDomains(report: ValidationReport, game_data: Node) -> void:
-	## V-M0-num-domain：资源消耗≥0、射程∈[0,5]、职业/敌人移动力∈[1,6]、
+	## V-M0-num-domain：资源消耗≥0、射程∈[0,5]、职业/敌人移动力∈[1, move_base_cap]
+	## （上限读 cfg_main.move_base_cap——批 B M2：移动力域与单位终值上限同源）、
 	## 生命/系数为正、抗性∈[0,1]、敌人属性为正
 	## 参数：报告 / GameData
 	## 返回：无
+	var move_cap: int = _MoveBaseCap(game_data)
 	for record: Resource in _DomainRecords(game_data, &"class/skills"):
 		var skill := record as SkillDef
 		if skill.resource_cost < 0:
@@ -355,17 +392,17 @@ static func _CheckNumericDomains(report: ValidationReport, game_data: Node) -> v
 					"射程 %d 越界 [0, 5]" % skill.range)
 	for record: Resource in _DomainRecords(game_data, &"class/classes"):
 		var cls := record as ClassDef
-		if cls.move_range < 1 or cls.move_range > 6:
+		if cls.move_range < 1 or cls.move_range > move_cap:
 			report.add_error("V-M0-num-domain", cls.id,
-					"移动力 %d 越界 [1, 6]" % cls.move_range)
+					"移动力 %d 越界 [1, %d]" % [cls.move_range, move_cap])
 		if cls.hp_coefficient <= 0.0:
 			report.add_error("V-M0-num-domain", cls.id,
 					"生命系数 %f 非正" % cls.hp_coefficient)
 	for record: Resource in _DomainRecords(game_data, &"battle/enemies"):
 		var enemy := record as EnemyDef
-		if enemy.move_range < 1 or enemy.move_range > 6:
+		if enemy.move_range < 1 or enemy.move_range > move_cap:
 			report.add_error("V-M0-num-domain", enemy.id,
-					"移动力 %d 越界 [1, 6]" % enemy.move_range)
+					"移动力 %d 越界 [1, %d]" % [enemy.move_range, move_cap])
 		if enemy.hp <= 0:
 			report.add_error("V-M0-num-domain", enemy.id,
 					"生命 %d 非正" % enemy.hp)
@@ -382,7 +419,8 @@ static func _CheckNumericDomains(report: ValidationReport, game_data: Node) -> v
 # --------------------------------------------------------------------------
 
 static func _CheckCounts(report: ValidationReport, game_data: Node) -> void:
-	## V-M0-count：全库计数带校验（技能 23=6+12+4+1；状态 10-15；敌 3；配置 3）——warning 级
+	## V-M0-count：全库计数带校验（warning 级）——**带值读 cfg_main content_*
+	## 组**（批 C M6：M2 加内容改表即可；cfg 缺省回退 M1 现值）
 	## 参数：报告 / GameData
 	## 返回：无
 	var skills: Array = _DomainRecords(game_data, &"class/skills")
@@ -400,23 +438,20 @@ static func _CheckCounts(report: ValidationReport, game_data: Node) -> void:
 			enemy_skills += 1
 		else:
 			class_skills += 1
-	if basic_attacks != 6:
-		report.add_warning("V-M0-count", "<skills>", "六职业普攻计数 %d != 6" % basic_attacks)
-	if class_skills != 12:
-		report.add_warning("V-M0-count", "<skills>", "职业档 1 技能计数 %d != 12" % class_skills)
-	if enemy_skills != 4:
-		report.add_warning("V-M0-count", "<skills>", "敌方技能计数 %d != 4" % enemy_skills)
-	if enemy_common != 1:
-		report.add_warning("V-M0-count", "<skills>", "敌方通用普攻计数 %d != 1" % enemy_common)
-	var status_count: int = game_data.get_domain_ids(&"status/stats").size()
-	if status_count < 10 or status_count > 15:
-		report.add_warning("V-M0-count", "<status>", "状态计数 %d 越界 [10, 15]" % status_count)
-	var enemy_count: int = game_data.get_domain_ids(&"battle/enemies").size()
-	if enemy_count != 3:
-		report.add_warning("V-M0-count", "<enemies>", "敌人计数 %d != 3" % enemy_count)
-	var pack_count: int = game_data.get_domain_ids(&"battle/enemy_packs").size()
-	if pack_count != 3:
-		report.add_warning("V-M0-count", "<packs>", "敌方队伍计数 %d != 3" % pack_count)
+	_CheckCountBand(report, game_data, "<skills>", "content_skill_attacks",
+			"六职业普攻", basic_attacks, 6)
+	_CheckCountBand(report, game_data, "<skills>", "content_class_skills",
+			"职业档 1 技能", class_skills, 12)
+	_CheckCountBand(report, game_data, "<skills>", "content_enemy_skills",
+			"敌方技能", enemy_skills, 4)
+	_CheckCountBand(report, game_data, "<skills>", "content_enemy_common",
+			"敌方通用普攻", enemy_common, 1)
+	_CheckCountBand(report, game_data, "<status>", "content_status",
+			"状态", game_data.get_domain_ids(&"status/stats").size(), 10)
+	_CheckCountBand(report, game_data, "<enemies>", "content_enemies",
+			"敌人", game_data.get_domain_ids(&"battle/enemies").size(), 3)
+	_CheckCountBand(report, game_data, "<packs>", "content_packs",
+			"敌方队伍", game_data.get_domain_ids(&"battle/enemy_packs").size(), 3)
 
 # --------------------------------------------------------------------------
 # M1 批 1 战斗域规则（V-M1-* 六条）
@@ -511,7 +546,9 @@ static func _CheckRefSkillTile(report: ValidationReport, game_data: Node) -> voi
 
 static func _CheckRefPackMap(report: ValidationReport, game_data: Node) -> void:
 	## V-M1-ref-pack-map：敌方队伍 battle_map_ref 非空强制（error）且必须可解析
-	## （M0 预留口加严：空 = error；地图域 M1 批 1 落地）
+	## （M0 预留口加严：空 = error；地图域 M1 批 1 落地）；**批 2 A-3 再加严**：
+	## 条目 count_max 总和 ≤ 引用地图 enemy_spawns 数（超容 battle_setup 会
+	## 静默截断吞兵——error 拦截在数据侧）
 	## 参数：报告 / GameData
 	## 返回：无
 	for record: Resource in _DomainRecords(game_data, &"battle/enemy_packs"):
@@ -524,20 +561,55 @@ static func _CheckRefPackMap(report: ValidationReport, game_data: Node) -> void:
 		if map_def == null:
 			report.add_error("V-M1-ref-pack-map", pack.id,
 					"战场地图引用 '%s' 不存在" % pack.battle_map_ref)
+			continue
+		var max_total: int = 0
+		for entry: PackEntry in pack.entries:
+			max_total += entry.count_max
+		if max_total > map_def.enemy_spawns.size():
+			report.add_error("V-M1-ref-pack-map", pack.id,
+					"条目 count_max 总和 %d 超地图敌方出生位 %d（运行时会静默截断吞兵）" % [
+						max_total, map_def.enemy_spawns.size(),
+					])
 
 static func _CheckBattleCounts(report: ValidationReport, game_data: Node) -> void:
-	## V-M1-count：战斗域计数带校验（地图 2 / 地格 6 / 装备 6）——warning 级
+	## V-M1-count：战斗域计数带校验（warning 级）——带值读 cfg_main content_*
+	## 组（批 C M6；cfg 缺省回退 M1 现值）
 	## 参数：报告 / GameData
 	## 返回：无
-	var map_count: int = game_data.get_domain_ids(&"battle/maps").size()
-	if map_count != 2:
-		report.add_warning("V-M1-count", "<maps>", "战场地图计数 %d != 2" % map_count)
-	var tile_count: int = game_data.get_domain_ids(&"battle/tiles").size()
-	if tile_count != 6:
-		report.add_warning("V-M1-count", "<tiles>", "地格类型计数 %d != 6" % tile_count)
-	var equip_count: int = game_data.get_domain_ids(&"equip").size()
-	if equip_count != 6:
-		report.add_warning("V-M1-count", "<equip>", "初始装备计数 %d != 6" % equip_count)
+	_CheckCountBand(report, game_data, "<maps>", "content_maps",
+			"战场地图", game_data.get_domain_ids(&"battle/maps").size(), 2, "V-M1-count")
+	_CheckCountBand(report, game_data, "<tiles>", "content_tiles",
+			"地格类型", game_data.get_domain_ids(&"battle/tiles").size(), 6, "V-M1-count")
+	_CheckCountBand(report, game_data, "<equip>", "content_equip",
+			"初始装备", game_data.get_domain_ids(&"equip").size(), 6, "V-M1-count")
+
+static func _CheckCountBand(report: ValidationReport, game_data: Node, scope: String,
+		field_prefix: String, label: String, count: int, fallback: int, code: String = "V-M0-count") -> void:
+	## 计数带检查（cfg content_* 字段组读取——min/max 同值 = 恒定断言；
+	## cfg 缺省回退 [fallback, fallback] 与 M1 现值一致）
+	## 参数 report/game_data/scope/field_prefix/label/count/fallback：
+	## 报告 / GameData / 作用域标签 / cfg 字段前缀 / 条目名 / 实际计数 / 回退定值
+	## 返回：无
+	var band: Vector2i = _CountBand(game_data, field_prefix, fallback)
+	if count < band.x or count > band.y:
+		report.add_warning(code, scope,
+				"%s计数 %d 越界 [%d, %d]" % [label, count, band.x, band.y])
+
+static func _CountBand(game_data: Node, field_prefix: String, fallback: int) -> Vector2i:
+	## 取 cfg_main 的计数带（<prefix>_min/<prefix>_max；值 ≤0 视为未设回退）
+	## 参数 game_data：GameData；field_prefix：cfg 字段前缀；fallback：回退定值
+	## 返回：Vector2i(min, max)
+	var cfg: CoreConfig = game_data.get_record(&"cfg_main") as CoreConfig
+	var band_min: int = fallback
+	var band_max: int = fallback
+	if cfg != null:
+		var cfg_min: int = int(cfg.get(field_prefix + "_min"))
+		var cfg_max: int = int(cfg.get(field_prefix + "_max"))
+		if cfg_min > 0:
+			band_min = cfg_min
+		if cfg_max > 0:
+			band_max = cfg_max
+	return Vector2i(band_min, band_max)
 
 static func _CheckRefAssetPath(report: ValidationReport, game_data: Node) -> void:
 	## V-M1-ref-asset：AssetRegistry 非空条目的 path 必须 res:// 开头且文件存在
@@ -563,8 +635,317 @@ static func _CheckRefAssetPath(report: ValidationReport, game_data: Node) -> voi
 						"path '%s' 文件不存在" % path)
 
 # --------------------------------------------------------------------------
+# 批 A 解耦整改规则（V-A-* 三条）
+# --------------------------------------------------------------------------
+
+static func _CheckTileVisual(report: ValidationReport, game_data: Node) -> void:
+	## V-A-tile-visual：地格视觉表驱动字段必填（批 A H2）——fill_color 非默认
+	## 透明（alpha > 0）；style 为 RAISED/BLOCK 时 accent_color 必填
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"battle/tiles"):
+		var tile := record as TileTypeDef
+		if tile.fill_color.a <= 0.0:
+			report.add_error("V-A-tile-visual", tile.id, "fill_color 未回填（alpha ≤ 0）")
+		if tile.style != TileTypeDef.Style.PLAIN and tile.accent_color.a <= 0.0:
+			report.add_error("V-A-tile-visual", tile.id,
+					"style=%d 需要 accent_color 但未回填（alpha ≤ 0）" % tile.style)
+
+static func _CheckSpriteIds(report: ValidationReport, game_data: Node) -> void:
+	## V-A-sprite-id：职业/敌人表 sprite_id 非空且在 AssetRegistry 有登记
+	## （批 A H3：sprite id 入表，路径仍走 AssetRegistry）
+	## 参数：报告 / GameData
+	## 返回：无
+	var targets: Array = [_DomainRecords(game_data, &"class/classes"),
+			_DomainRecords(game_data, &"battle/enemies")]
+	for records: Array in targets:
+		for record: Resource in records:
+			var sprite_id: StringName = record.get("sprite_id")
+			if String(sprite_id).is_empty():
+				report.add_error("V-A-sprite-id", record.get("id"),
+						"sprite_id 为空（批 A H3 起强制回填）")
+				continue
+			if game_data.get_asset_path(sprite_id).is_empty():
+				report.add_error("V-A-sprite-id", record.get("id"),
+						"sprite_id '%s' 未在 AssetRegistry 登记" % sprite_id)
+
+static func _CheckModKeys(report: ValidationReport, game_data: Node) -> void:
+	## V-A-mod-keys：修正键合法集校验（批 A H4）——StatusDef.modifiers 键 ∈
+	## ModKeys.status_keys()（拼错键 = get_stat_mod 静默返 0，校验侧拦截）；
+	## SkillEffect COMBAT_MOD 的 key ∈ ModKeys.combat_mod_keys()
+	## 参数：报告 / GameData
+	## 返回：无
+	var legal_status_keys: Array[StringName] = ModKeys.status_keys()
+	for record: Resource in _DomainRecords(game_data, &"status/stats"):
+		var status := record as StatusDef
+		for mod_key: StringName in status.modifiers:
+			if not legal_status_keys.has(mod_key):
+				report.add_error("V-A-mod-keys", status.id,
+						"modifiers 键 '%s' 不在 ModKeys 合法集（拼错或未登记）" % mod_key)
+	var legal_combat_keys: Array[StringName] = ModKeys.combat_mod_keys()
+	for record: Resource in _DomainRecords(game_data, &"class/skills"):
+		var skill := record as SkillDef
+		for effect: SkillEffect in skill.effects:
+			if effect.effect_kind != SkillEffect.EffectKind.COMBAT_MOD:
+				continue
+			if not legal_combat_keys.has(effect.key):
+				report.add_error("V-A-mod-keys", skill.id,
+						"COMBAT_MOD 键 '%s' 不在 ModKeys 合法集" % effect.key)
+
+# --------------------------------------------------------------------------
+# 盲审批 2 校验补强（V-B2-* 七条——2026-09-24）
+# --------------------------------------------------------------------------
+
+static func _CheckEquipClassRef(report: ValidationReport, game_data: Node) -> void:
+	## V-B2-eq-class（A-1）：装备 class_ref 存在且为 ClassDef（error）+ 每职业
+	## 至多一条初始装备引用（唯一性 error）——原断链仅运行时静默按零装备装配
+	## 参数：报告 / GameData
+	## 返回：无
+	var class_ref_counts: Dictionary = {}
+	for record: Resource in _DomainRecords(game_data, &"equip"):
+		var equip := record as EquipDef
+		var owner: Resource = game_data.get_record(equip.class_ref)
+		if owner == null or not owner is ClassDef:
+			report.add_error("V-B2-eq-class", equip.id,
+					"class_ref '%s' 不存在或非职业表" % equip.class_ref)
+			continue
+		class_ref_counts[equip.class_ref] = int(class_ref_counts.get(equip.class_ref, 0)) + 1
+	for class_id: StringName in class_ref_counts:
+		if int(class_ref_counts[class_id]) > 1:
+			report.add_error("V-B2-eq-class", class_id,
+					"职业有 %d 条初始装备引用（至多一条）" % int(class_ref_counts[class_id]))
+
+static func _CheckNamingRegistry(report: ValidationReport, game_data: Node) -> void:
+	## V-B2-naming（A-2）：登记表双向比对——①全库顶层资源 id 必须有登记条目
+	## 且 domain 与实际所在域一致；②条目查重；③spr_ 条目须在 AssetRegistry
+	## mapping；④tend_ 条目须存在于某职业表 tendencies；⑤其余前缀条目须为
+	## 已知顶层 id（多登记拦截）
+	## 参数：报告 / GameData
+	## 返回：无
+	var registry: NamingRegistry = game_data.get_record(&"naming_registry") as NamingRegistry
+	if registry == null:
+		report.add_error("V-B2-naming", &"naming_registry", "登记表资源缺失")
+		return
+	var asset_registry: AssetRegistry = game_data.get_record(&"registry") as AssetRegistry
+	var tend_ids: Array[StringName] = []
+	for record: Resource in _DomainRecords(game_data, &"class/classes"):
+		var cls := record as ClassDef
+		for tendency: TendencyDef in cls.tendencies:
+			tend_ids.append(tendency.id)
+	# 顶层 id -> 实际域映射
+	var id_domains: Dictionary = {}
+	for domain: StringName in _AllDomains(game_data):
+		for record_id: StringName in game_data.get_domain_ids(domain):
+			id_domains[record_id] = domain
+	var registered: Dictionary = {}
+	for entry: NamingEntry in registry.entries:
+		if registered.has(entry.resource_id):
+			report.add_error("V-B2-naming", entry.resource_id, "登记条目重复")
+			continue
+		registered[entry.resource_id] = true
+		var rid: String = String(entry.resource_id)
+		if rid.begins_with("spr_"):
+			if asset_registry == null or not asset_registry.mapping.has(entry.resource_id):
+				report.add_error("V-B2-naming", entry.resource_id,
+						"spr_ 登记未在 AssetRegistry mapping 中")
+		elif rid.begins_with("tend_"):
+			if not tend_ids.has(entry.resource_id):
+				report.add_error("V-B2-naming", entry.resource_id,
+						"tend_ 登记不存在于任何职业表 tendencies")
+		elif id_domains.has(entry.resource_id):
+			if id_domains[entry.resource_id] != entry.domain:
+				report.add_error("V-B2-naming", entry.resource_id,
+						"登记域 '%s' 与实际所在域 '%s' 错配" % [
+							entry.domain, id_domains[entry.resource_id],
+						])
+		else:
+			report.add_error("V-B2-naming", entry.resource_id,
+					"登记了不存在的资源（多登记/未知 id）")
+	for record_id: StringName in id_domains:
+		if not registered.has(record_id):
+			report.add_error("V-B2-naming", record_id, "资源未登记命名表（漏登记）")
+
+static func _CheckStatusSources(report: ValidationReport, game_data: Node) -> void:
+	## V-B2-status-src（A-4）：①技能 STATUS_APPLY 引用的状态 allowed_sources
+	## 必含 SKILL（error）；②allowed_sources 含 SKILL 的状态零技能引用 →
+	## warning（意外孤儿；SKILL_ORPHAN_WHITELIST 豁免——【占位·完整版】预留，
+	## 当前空集：全库 SKILL 来源状态均被技能引用）
+	## 参数：报告 / GameData
+	## 返回：无
+	var skill_referenced: Dictionary = {}
+	for record: Resource in _DomainRecords(game_data, &"class/skills"):
+		var skill := record as SkillDef
+		for effect: SkillEffect in skill.effects:
+			if effect.effect_kind != SkillEffect.EffectKind.STATUS_APPLY:
+				continue
+			var status: StatusDef = game_data.get_record(effect.status_id) as StatusDef
+			if status == null:
+				continue
+			skill_referenced[status.id] = true
+			if not status.allowed_sources.has(&"SKILL"):
+				report.add_error("V-B2-status-src", status.id,
+						"被技能 '%s' 引用但 allowed_sources 不含 SKILL" % skill.id)
+	for record: Resource in _DomainRecords(game_data, &"status/stats"):
+		var status := record as StatusDef
+		if not status.allowed_sources.has(&"SKILL"):
+			continue
+		if not skill_referenced.has(status.id) and not SKILL_ORPHAN_WHITELIST.has(status.id):
+			report.add_warning("V-B2-status-src", status.id,
+					"allowed_sources 含 SKILL 但零技能引用（意外孤儿）")
+
+static func _CheckOwnerClosure(report: ValidationReport, game_data: Node) -> void:
+	## V-B2-owner（A-5）：①普攻 owner == 引用职业（error）；②owner 为敌人的
+	## 技能须被其 skill_ids/common 回含（error）；③owner 为职业的 tier=0 技能
+	## 未被任何职业 base_attack 引用 → warning（运行时不可达普攻）
+	## 参数：报告 / GameData
+	## 返回：无
+	var base_attack_ids: Dictionary = {}
+	for record: Resource in _DomainRecords(game_data, &"class/classes"):
+		var cls := record as ClassDef
+		base_attack_ids[cls.base_attack_skill_id] = cls.id
+		var attack: SkillDef = game_data.get_record(cls.base_attack_skill_id) as SkillDef
+		if attack != null and attack.owner_id != cls.id:
+			report.add_error("V-B2-owner", attack.id,
+					"普攻 owner '%s' != 引用职业 '%s'" % [attack.owner_id, cls.id])
+	for record: Resource in _DomainRecords(game_data, &"class/skills"):
+		var skill := record as SkillDef
+		if String(skill.owner_id).is_empty():
+			continue
+		var owner: Resource = game_data.get_record(skill.owner_id)
+		if owner is EnemyDef:
+			var enemy := owner as EnemyDef
+			if not enemy.skill_ids.has(skill.id) \
+					and enemy.common_attack_skill_id != skill.id:
+				report.add_error("V-B2-owner", skill.id,
+						"owner 为敌人 '%s' 但其技能清单未回含本技能" % enemy.id)
+		elif owner is ClassDef and skill.tier == 0 and not base_attack_ids.has(skill.id):
+			report.add_warning("V-B2-owner", skill.id,
+					"owner 为职业的 tier=0 技能未被任何职业普攻位引用（运行时不可达）")
+
+static func _CheckCfgDomains(report: ValidationReport, game_data: Node) -> void:
+	## V-M0-cfg-domain（A-6）：总控配置值域——除数 > 0（防 NaN）、钳制带有序
+	## 且 ∈ [0,1]、难度五档键集恰合、系统启用清单键域合法且全覆盖、公式/计数
+	## 参数基本值域（批 B/M 系字段：正数 / 率值 (0,1] / 带序）
+	## 参数：报告 / GameData
+	## 返回：无
+	var cfg: CoreConfig = game_data.get_record(&"cfg_main") as CoreConfig
+	if cfg == null:
+		report.add_error("V-M0-cfg-domain", &"cfg_main", "总控配置缺失")
+		return
+	for divisor_name: String in ["attr_modifier_divisor", "crit_success_drop_divisor",
+			"luck_floor_z_divisor"]:
+		if int(cfg.get(divisor_name)) <= 0:
+			report.add_error("V-M0-cfg-domain", &"cfg_main",
+					"%s ≤ 0（除零 NaN 风险）" % divisor_name)
+	if cfg.hit_clamp_min < 0.0 or cfg.hit_clamp_max > 1.0 or cfg.hit_clamp_min > cfg.hit_clamp_max:
+		report.add_error("V-M0-cfg-domain", &"cfg_main",
+				"命中钳制带 [%f, %f] 非法" % [cfg.hit_clamp_min, cfg.hit_clamp_max])
+	var tiers: Array = ["极易", "容易", "普通", "困难", "极难"]
+	if cfg.difficulty_tiers.size() != tiers.size():
+		report.add_error("V-M0-cfg-domain", &"cfg_main",
+				"难度档数 %d != 5" % cfg.difficulty_tiers.size())
+	for tier: String in tiers:
+		if not cfg.difficulty_tiers.has(tier):
+			report.add_error("V-M0-cfg-domain", &"cfg_main", "难度档缺失 '%s'" % tier)
+	var system_keys: Array[StringName] = GameConfigScript.SYSTEM_KEYS
+	for sys_key: StringName in cfg.enabled_systems:
+		if not system_keys.has(sys_key):
+			report.add_error("V-M0-cfg-domain", &"cfg_main",
+					"enabled_systems 含未知系统键 '%s'" % sys_key)
+	for sys_key: StringName in system_keys:
+		if not cfg.enabled_systems.has(sys_key):
+			report.add_error("V-M0-cfg-domain", &"cfg_main",
+					"enabled_systems 缺少系统键 '%s'（须全覆盖）" % sys_key)
+	# 批 B/M 公式参数基本值域
+	for positive_name: String in ["hp_base", "hp_con_mult", "pool_base", "pool_mult",
+			"move_base_cap", "agility_move_bonus_line", "ai_roar_ally_count_line",
+			"recruit_band_min", "recruit_band_max"]:
+		if int(cfg.get(positive_name)) <= 0:
+			report.add_error("V-M0-cfg-domain", &"cfg_main",
+					"%s ≤ 0" % positive_name)
+	if cfg.recruit_band_min > cfg.recruit_band_max:
+		report.add_error("V-M0-cfg-domain", &"cfg_main", "招募带 min > max")
+	for rate_name: String in ["hit_base", "dodge_base", "attr_hit_weight",
+			"attr_dodge_weight", "status_resist_base", "status_resist_weight",
+			"resist_weight", "crit_base", "crit_luck_weight", "crit_agility_weight"]:
+		var rate_value: float = float(cfg.get(rate_name))
+		if rate_value <= 0.0 or rate_value > 1.0:
+			report.add_error("V-M0-cfg-domain", &"cfg_main",
+					"%s = %f 越界 (0, 1]" % [rate_name, rate_value])
+	if cfg.crit_mult_base < 1.0:
+		report.add_error("V-M0-cfg-domain", &"cfg_main",
+				"crit_mult_base %f < 1.0" % cfg.crit_mult_base)
+	for band_name: String in ["content_skill_attacks", "content_class_skills",
+			"content_enemy_skills", "content_enemy_common", "content_status",
+			"content_enemies", "content_packs", "content_maps", "content_tiles",
+			"content_equip"]:
+		var band_min: int = int(cfg.get(band_name + "_min"))
+		var band_max: int = int(cfg.get(band_name + "_max"))
+		if band_min < 0 or band_min > band_max:
+			report.add_error("V-M0-cfg-domain", &"cfg_main",
+					"%s 计数带 [%d, %d] 非法" % [band_name, band_min, band_max])
+
+static func _CheckValueDomains(report: ValidationReport, game_data: Node) -> void:
+	## V-B2-value-domain（A-7）：值域盲位——职业 attr_ranges 每键下限 ≤ 上限；
+	## 敌人 role_tag ∈ 合法集；状态 default_duration ≥ 0
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"class/classes"):
+		var cls := record as ClassDef
+		for attr_id: StringName in cls.attr_ranges:
+			var bounds: Vector2i = cls.attr_ranges[attr_id]
+			if bounds.x > bounds.y:
+				report.add_error("V-B2-value-domain", cls.id,
+						"属性 '%s' 区间下限 %d > 上限 %d" % [attr_id, bounds.x, bounds.y])
+	for record: Resource in _DomainRecords(game_data, &"battle/enemies"):
+		var enemy := record as EnemyDef
+		if not ENEMY_ROLE_TAGS.has(enemy.role_tag):
+			report.add_error("V-B2-value-domain", enemy.id,
+					"role_tag '%s' 不在合法集 %s" % [enemy.role_tag, str(ENEMY_ROLE_TAGS)])
+	for record: Resource in _DomainRecords(game_data, &"status/stats"):
+		var status := record as StatusDef
+		if status.default_duration < 0:
+			report.add_error("V-B2-value-domain", status.id,
+					"default_duration %d 为负" % status.default_duration)
+
+static func _CheckTileMatrix(report: ValidationReport, game_data: Node) -> void:
+	## V-B2-tile-matrix（A-8）：地格三元联动矩阵——NORMAL/OBSTACLE 必空
+	## status_id、STATUS+STANDING 必带、STATUS+ENEMY_ENTER_ONCE 允许空
+	## （纯伤害陷阱口径）；TILE_SPAWN 技能效果 dot_attr_id ∈ 七属性
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"battle/tiles"):
+		var tile := record as TileTypeDef
+		var has_status: bool = not String(tile.status_id).is_empty()
+		match tile.kind:
+			TileTypeDef.Kind.NORMAL, TileTypeDef.Kind.OBSTACLE:
+				if has_status:
+					report.add_error("V-B2-tile-matrix", tile.id,
+							"kind=%d 不应绑定 status_id '%s'" % [tile.kind, tile.status_id])
+			TileTypeDef.Kind.STATUS:
+				if tile.trigger == TileTypeDef.Trigger.STANDING and not has_status:
+					report.add_error("V-B2-tile-matrix", tile.id,
+							"STATUS+STANDING 必须绑定 status_id")
+	for record: Resource in _DomainRecords(game_data, &"class/skills"):
+		var skill := record as SkillDef
+		for effect: SkillEffect in skill.effects:
+			if effect.effect_kind != SkillEffect.EffectKind.TILE_SPAWN:
+				continue
+			if not SEVEN_ATTRS.has(effect.dot_attr_id):
+				report.add_error("V-B2-tile-matrix", skill.id,
+						"TILE_SPAWN dot_attr_id '%s' 不在七属性集" % effect.dot_attr_id)
+
+# --------------------------------------------------------------------------
 # 辅助
 # --------------------------------------------------------------------------
+
+static func _MoveBaseCap(game_data: Node) -> int:
+	## 移动力基准段上限（读 cfg_main.move_base_cap——批 B M2 与单位终值同源；
+	## 缺省回退 6 与 cfg 表值一致）
+	## 参数：GameData
+	## 返回：上限值
+	var cfg: CoreConfig = game_data.get_record(&"cfg_main") as CoreConfig
+	return cfg.move_base_cap if cfg != null and cfg.move_base_cap > 0 else 6
 
 static func _AllDomains(game_data: Node) -> Array[StringName]:
 	## 全部数据域键（六数据域 + core）

@@ -31,9 +31,11 @@ attr_ranges = Dictionary[StringName, Vector2i]({
 &"willpower": Vector2i(9, 11)
 })
 resource_type = 1
+mag_pierce_source_attr = &"intelligence"
 resource_source_attr = &"agility"
 hp_coefficient = 4.0
 move_range = 5
 base_attack_skill_id = &"skl_atk_rogue"
 tendencies = Array[ExtResource("2_tbajb")]([SubResource("Resource_okqgb"), SubResource("Resource_g1cyw")])
+sprite_id = &"spr_cls_rogue"
 comment = "【占位·试玩校准】属性区间/资源换算/生命系数/移动来源：17 案 §3.1/§3.2（17-C2/17-C8）+ 案 10 §2.1/§2.4"

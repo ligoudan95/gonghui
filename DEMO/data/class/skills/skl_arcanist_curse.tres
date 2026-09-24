@@ -22,4 +22,5 @@ attr_weights = Dictionary[StringName, float]({
 })
 power_coefficient = 0.0
 effects = Array[ExtResource("1_1kjfs")]([SubResource("Resource_m6qb0")])
+description = "诅咒敌方单体 3 回合，回合末按施术者意志承受毒伤。"
 comment = "【占位·试玩校准】参数来源：17 案 §3.4（DEMO 技能参数表）/§3.8（敌方技能表 17-C12~C16）"

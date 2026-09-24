@@ -66,11 +66,26 @@ static func roll_hit(chance: float, rng: RandomNumberGenerator, forced: int = -1
 		return true
 	return rng.randf() < chance
 
+## 暴击率基础值兜底（= cfg_main.crit_base）
+const CRIT_BASE_FALLBACK: float = 0.05
+## 暴击幸运权重兜底（= cfg_main.crit_luck_weight）
+const CRIT_LUCK_WEIGHT_FALLBACK: float = 0.02
+## 暴击敏捷权重兜底（= cfg_main.crit_agility_weight）
+const CRIT_AGILITY_WEIGHT_FALLBACK: float = 0.01
+
 static func crit_rate(luck: int, agility: int, bonus_pct: float, cfg: CoreConfig) -> float:
-	## 本次攻击暴击率 = 5% + 幸运调整值×2% + 敏捷调整值×1% + 技能本次加成（§3.2/§3.4 背刺行）
+	## 本次攻击暴击率 = crit_base + 幸运调整值×crit_luck_weight + 敏捷调整值×
+	## crit_agility_weight + 技能本次加成（§3.2/§3.4 背刺行）——**单源实现**
+	## （批 B M1：DerivedStats.calc_crit_rate 双份已删，全部调用方走本函数；
+	## 参数经 cfg_main 注入，无技能加成传 bonus_pct=0.0）
 	## 参数 luck/agility：施放者幸运/敏捷；bonus_pct：技能 COMBAT_MOD 暴击加成（如 0.10）；cfg：总控配置
 	## 返回：暴击率（未钳制——设计未定暴击钳制带）
-	return 0.05 + attr_modifier(luck, cfg) * 0.02 + attr_modifier(agility, cfg) * 0.01 + bonus_pct
+	var base: float = cfg.crit_base if cfg != null else CRIT_BASE_FALLBACK
+	var luck_weight: float = cfg.crit_luck_weight if cfg != null else CRIT_LUCK_WEIGHT_FALLBACK
+	var agility_weight: float = cfg.crit_agility_weight if cfg != null \
+			else CRIT_AGILITY_WEIGHT_FALLBACK
+	return base + attr_modifier(luck, cfg) * luck_weight \
+			+ attr_modifier(agility, cfg) * agility_weight + bonus_pct
 
 static func expected_damage(raw: float, hit: float, crit: float, crit_mult: float) -> float:
 	## 期望伤害 = raw × 命中率 × (1 + 暴击率 × (暴击倍率 − 1))（§3.8 验算式）

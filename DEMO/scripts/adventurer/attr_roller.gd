@@ -26,7 +26,10 @@ static func roll_recruit(cls: ClassDef, rng: RandomNumberGenerator,
 	## 招募候选掷值：每属性 [区间下限, 区间上限] 均匀掷值；七属性总和越界整组重掷
 	## 直至入带 [band_min, band_max]（17-C17；不作单项修剪）；循环上限 MAX_REROLL
 	## 保护——超限返回末次掷值（带外）并 push_warning
-	## 参数 cls：职业表；rng：随机源；band_min/band_max：总和钳制带（默认 70/80）
+	## 参数 cls：职业表；rng：随机源；band_min/band_max：总和钳制带——**默认值与
+	## cfg_main.recruit_band_min/recruit_band_max 同源声明**（批 B M4：参数已入表，
+	## 产品调用点（M4 招募流程）落地时须传 cfg 值；默认保留 70/80 保签名可注入
+	## 的测试友好性）
 	## 返回：{StringName 属性 id: int 掷值}
 	var result: Dictionary[StringName, int] = {}
 	var attempts: int = 0

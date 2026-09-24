@@ -22,11 +22,12 @@ func test_domain_counts() -> void:
 	assert_int(_game_data.get_domain(&"battle/maps").size()).is_equal(2)
 	assert_int(_game_data.get_domain(&"equip").size()).is_equal(6)
 	var report: ValidationReport = DataValidator.run_all(_game_data)
-	assert_int(report.checked_count).is_equal(63)
+	assert_int(report.checked_count).is_equal(64)
 
 func test_tile_bindings() -> void:
 	## 地格绑定：草丛/高地/毒沼绑定对应状态（allowed_sources 含 TILE）；
-	## 陷阱无状态绑定 + ENEMY_ENTER_ONCE；障碍不可通行
+	## 陷阱无状态绑定 + ENEMY_ENTER_ONCE；障碍不可通行；全表 description 非空
+	## （hover tooltip 文案入表——2026-09-24 试玩反馈，UI 零硬编码文案）
 	var grass: TileTypeDef = _game_data.get_record(&"tile_grass")
 	assert_str(String(grass.status_id)).is_equal("BUFF_tile_grass")
 	var highground: TileTypeDef = _game_data.get_record(&"tile_highground")
@@ -39,6 +40,12 @@ func test_tile_bindings() -> void:
 	var obstacle: TileTypeDef = _game_data.get_record(&"tile_obstacle")
 	assert_bool(obstacle.walkable).is_false()
 	assert_bool(_game_data.get_record(&"tile_normal").walkable).is_true()
+	for tile_id: StringName in [&"tile_normal", &"tile_obstacle", &"tile_grass",
+			&"tile_highground", &"tile_poison_swamp", &"tile_trap"]:
+		var tile: TileTypeDef = _game_data.get_record(tile_id)
+		assert_str(tile.description) \
+				.override_failure_message("地格 %s 缺 description（tooltip 文案入表）" % tile_id) \
+				.is_not_empty()
 
 func test_map_structure() -> void:
 	## 地图结构：8×8/10×10 尺寸与行数、出生位 4+4、出生位全可通行
@@ -87,7 +94,7 @@ func test_equip_values() -> void:
 func test_naming_registry_extended() -> void:
 	## 命名登记表：62 条（48 + 14），新资源全部登记且含域前缀规则注
 	var registry: NamingRegistry = _game_data.get_record(&"naming_registry")
-	assert_int(registry.entries.size()).is_equal(62)
+	assert_int(registry.entries.size()).is_equal(85)
 	var registered: Dictionary = {}
 	for entry: NamingEntry in registry.entries:
 		registered[entry.resource_id] = entry
@@ -99,8 +106,208 @@ func test_naming_registry_extended() -> void:
 		assert_bool(registered.has(resource_id)) \
 				.override_failure_message("资源 '%s' 未登记命名表" % resource_id).is_true()
 
+func test_tile_visual_fields_backfilled() -> void:
+	## 地格视觉表驱动断言（批 A H2）：6 张表 fill_color/style 回填且与
+	## 原硬编码视觉值一致（现值搬家零变化）；RAISED/BLOCK 格 accent 回填
+	var expects: Dictionary = {
+		&"tile_normal": [Color(0.32, 0.36, 0.29, 1), TileTypeDef.Style.PLAIN],
+		&"tile_obstacle": [Color(0.2, 0.19, 0.17, 1), TileTypeDef.Style.BLOCK],
+		&"tile_grass": [Color(0.14, 0.56, 0.2, 1), TileTypeDef.Style.PLAIN],
+		&"tile_highground": [Color(0.88, 0.78, 0.3, 1), TileTypeDef.Style.RAISED],
+		&"tile_poison_swamp": [Color(0.42, 0.13, 0.5, 1), TileTypeDef.Style.PLAIN],
+		&"tile_trap": [Color(0.32, 0.36, 0.29, 1), TileTypeDef.Style.PLAIN],
+	}
+	for tile_id: StringName in expects:
+		var tile: TileTypeDef = _game_data.get_record(tile_id)
+		assert_bool(tile.fill_color.is_equal_approx(expects[tile_id][0])) \
+				.override_failure_message("%s fill_color 与回填基线不符" % tile_id).is_true()
+		assert_int(tile.style).is_equal(expects[tile_id][1])
+		if tile.style != TileTypeDef.Style.PLAIN:
+			assert_bool(tile.accent_color.a > 0.0) \
+					.override_failure_message("%s 缺 accent_color" % tile_id).is_true()
+
+func test_sprite_ids_backfilled_and_registered() -> void:
+	## sprite_id 入表断言（批 A H3）：6 职业 + 3 敌人表回填且 AssetRegistry
+	## 有登记（读取链数据侧——UI 渲染经 GameData 查表消费同值）
+	var sprite_ids: Array[StringName] = []
+	for record: Resource in _game_data.get_domain(&"class/classes"):
+		var cls := record as ClassDef
+		assert_bool(String(cls.sprite_id).is_empty()) \
+				.override_failure_message("%s 缺 sprite_id" % cls.id).is_false()
+		sprite_ids.append(cls.sprite_id)
+	for record: Resource in _game_data.get_domain(&"battle/enemies"):
+		var enemy := record as EnemyDef
+		assert_bool(String(enemy.sprite_id).is_empty()) \
+				.override_failure_message("%s 缺 sprite_id" % enemy.id).is_false()
+		sprite_ids.append(enemy.sprite_id)
+	assert_int(sprite_ids.size()).is_equal(9)
+	for sprite_id: StringName in sprite_ids:
+		assert_bool(_game_data.get_asset_path(sprite_id).is_empty()) \
+				.override_failure_message("sprite '%s' 未在 AssetRegistry 登记" % sprite_id).is_false()
+
+func test_broken_mod_key_caught() -> void:
+	## V-A-mod-keys 注入（批 A H4）：状态表 modifiers 拼错键 → 报错 → 恢复归零；
+	## 技能 COMBAT_MOD 键拼错同样拦截
+	var grass: StatusDef = _game_data.get_record(&"BUFF_tile_grass")
+	# 修正键常量类型化取值（存取前快照恢复）
+	var original_modifiers: Dictionary = grass.modifiers.duplicate()
+	grass.modifiers[&"doge"] = 0.15
+	var report: ValidationReport = DataValidator.run_all(_game_data)
+	grass.modifiers = original_modifiers
+	var matched: bool = false
+	for entry: String in report.errors:
+		if entry.begins_with("V-A-mod-keys") and entry.contains("doge"):
+			matched = true
+	assert_bool(matched).is_true()
+	assert_int(DataValidator.run_all(_game_data).errors.size()).is_equal(0)
+
+func test_content_count_band_cfg_takes_effect() -> void:
+	## 计数带参数化生效（批 C M6：cfg content_* 组驱动校验带——改带值校验
+	## 行为即时变化，恢复归位）：状态计数带收到 9（当前 11）→ 出警告；
+	## 放宽到 99 → 无该警告
+	var cfg: CoreConfig = _game_data.get_record(&"cfg_main") as CoreConfig
+	var original_max: int = cfg.content_status_max
+	cfg.content_status_max = 9
+	var tight: ValidationReport = DataValidator.run_all(_game_data)
+	var tight_warned: bool = false
+	for entry: String in tight.warnings:
+		if entry.contains("状态计数") and entry.contains("越界"):
+			tight_warned = true
+	assert_bool(tight_warned).is_true()
+	cfg.content_status_max = 99
+	var loose: ValidationReport = DataValidator.run_all(_game_data)
+	cfg.content_status_max = original_max
+	for entry: String in loose.warnings:
+		assert_bool(entry.contains("状态计数") and entry.contains("越界")) \
+				.override_failure_message("放宽后不应再有状态计数警告").is_false()
+
+func test_broken_equip_class_ref_caught() -> void:
+	## V-B2-eq-class 注入（盲审批 2 A-1）：装备 class_ref 改不存在 id → 报错 →
+	## 恢复归零；同职业双装备引用 → 唯一性报错 → 恢复
+	var equip: EquipDef = _game_data.get_record(&"eqp_init_warrior")
+	var original: StringName = equip.class_ref
+	equip.class_ref = &"cls_nope"
+	var broken: ValidationReport = DataValidator.run_all(_game_data)
+	equip.class_ref = original
+	var matched: bool = false
+	for entry: String in broken.errors:
+		if entry.begins_with("V-B2-eq-class") and entry.contains("eqp_init_warrior"):
+			matched = true
+	assert_bool(matched).is_true()
+	# 唯一性：把法师装备的 class_ref 改成战士（职业双引用）
+	var mage_equip: EquipDef = _game_data.get_record(&"eqp_init_mage")
+	var mage_original: StringName = mage_equip.class_ref
+	mage_equip.class_ref = &"cls_warrior"
+	var duplicated: ValidationReport = DataValidator.run_all(_game_data)
+	mage_equip.class_ref = mage_original
+	var dup_matched: bool = false
+	for entry: String in duplicated.errors:
+		if entry.begins_with("V-B2-eq-class") and entry.contains("cls_warrior"):
+			dup_matched = true
+	assert_bool(dup_matched).is_true()
+	assert_int(DataValidator.run_all(_game_data).errors.size()).is_equal(0)
+
+func test_pack_capacity_overflow_caught() -> void:
+	## V-M1-ref-pack-map 加严注入（盲审批 2 A-3）：条目 count_max 总和超地图
+	## 敌方出生位 → 报错（运行时静默截断吞兵在数据侧拦截）→ 恢复归零
+	var pack: EnemyPackDef = _game_data.get_record(&"enc_m1_random_pack")
+	var original: int = pack.entries[0].count_max
+	pack.entries[0].count_max = 5
+	var overflow: ValidationReport = DataValidator.run_all(_game_data)
+	pack.entries[0].count_max = original
+	var matched: bool = false
+	for entry: String in overflow.errors:
+		if entry.begins_with("V-M1-ref-pack-map") and entry.contains("enc_m1_random_pack"):
+			matched = true
+	assert_bool(matched).is_true()
+	assert_int(DataValidator.run_all(_game_data).errors.size()).is_equal(0)
+
+func test_status_source_linkage_caught() -> void:
+	## V-B2-status-src 注入（盲审批 2 A-4）：技能引用的状态 allowed_sources 不含
+	## SKILL → error；零技能引用的 SKILL 状态 → warning 孤儿
+	var slow: StatusDef = _game_data.get_record(&"DEBUFF_slow")
+	var original: Array[StringName] = slow.allowed_sources.duplicate()
+	slow.allowed_sources = [&"TILE"]
+	var mismatch: ValidationReport = DataValidator.run_all(_game_data)
+	slow.allowed_sources = original
+	var matched: bool = false
+	for entry: String in mismatch.errors:
+		if entry.begins_with("V-B2-status-src") and entry.contains("DEBUFF_slow"):
+			matched = true
+	assert_bool(matched).is_true()
+	# 孤儿 warning：把诅咒技的效果类型改 HEAL 使 curse 失去技能引用（最小注入）
+	var curse_skill: SkillDef = _game_data.get_record(&"skl_arcanist_curse")
+	var original_kind: int = curse_skill.effects[0].effect_kind
+	curse_skill.effects[0].effect_kind = SkillEffect.EffectKind.HEAL
+	var orphan: ValidationReport = DataValidator.run_all(_game_data)
+	curse_skill.effects[0].effect_kind = original_kind
+	var orphan_matched: bool = false
+	for entry: String in orphan.warnings:
+		if entry.begins_with("V-B2-status-src") and entry.contains("DEBUFF_curse"):
+			orphan_matched = true
+	assert_bool(orphan_matched).is_true()
+	assert_int(DataValidator.run_all(_game_data).errors.size()).is_equal(0)
+
+func test_owner_closure_caught() -> void:
+	## V-B2-owner 注入（盲审批 2 A-5）：普攻 owner 改错职业 → error → 恢复归零
+	var attack: SkillDef = _game_data.get_record(&"skl_atk_warrior")
+	var original_owner: StringName = attack.owner_id
+	attack.owner_id = &"cls_mage"
+	var wrong: ValidationReport = DataValidator.run_all(_game_data)
+	attack.owner_id = original_owner
+	var matched: bool = false
+	for entry: String in wrong.errors:
+		if entry.begins_with("V-B2-owner") and entry.contains("skl_atk_warrior"):
+			matched = true
+	assert_bool(matched).is_true()
+	assert_int(DataValidator.run_all(_game_data).errors.size()).is_equal(0)
+
+func test_cfg_domain_guard_caught() -> void:
+	## V-M0-cfg-domain 注入（盲审批 2 A-6）：除数置 0 / 钳制带倒序 → 报错 →
+	## 恢复归零
+	var cfg: CoreConfig = _game_data.get_record(&"cfg_main")
+	var original_divisor: int = cfg.attr_modifier_divisor
+	var original_min: float = cfg.hit_clamp_min
+	var original_max: float = cfg.hit_clamp_max
+	cfg.attr_modifier_divisor = 0
+	cfg.hit_clamp_min = 0.9
+	cfg.hit_clamp_max = 0.1
+	var broken: ValidationReport = DataValidator.run_all(_game_data)
+	cfg.attr_modifier_divisor = original_divisor
+	cfg.hit_clamp_min = original_min
+	cfg.hit_clamp_max = original_max
+	var divisor_matched: bool = false
+	var clamp_matched: bool = false
+	for entry: String in broken.errors:
+		if entry.begins_with("V-M0-cfg-domain"):
+			if entry.contains("attr_modifier_divisor"):
+				divisor_matched = true
+			if entry.contains("钳制带"):
+				clamp_matched = true
+	assert_bool(divisor_matched).is_true()
+	assert_bool(clamp_matched).is_true()
+	assert_int(DataValidator.run_all(_game_data).errors.size()).is_equal(0)
+
+func test_naming_registry_bidirectional_caught() -> void:
+	## V-B2-naming 注入（盲审批 2 A-2 顺带）：登记条目改错域 → 域错配报错 →
+	## 恢复归零（双向比对）
+	var registry: NamingRegistry = _game_data.get_record(&"naming_registry")
+	for entry: NamingEntry in registry.entries:
+		if entry.resource_id == &"tile_grass":
+			var original_domain: StringName = entry.domain
+			entry.domain = &"equip"
+			var mismatch: ValidationReport = DataValidator.run_all(_game_data)
+			entry.domain = original_domain
+			var matched: bool = false
+			for record: String in mismatch.errors:
+				if record.begins_with("V-B2-naming") and record.contains("tile_grass"):
+					matched = true
+			assert_bool(matched).is_true()
+			break
+	assert_int(DataValidator.run_all(_game_data).errors.size()).is_equal(0)
+
 func test_validator_clean() -> void:
-	## 全库校验零错误零警告（63 条；V-M1-* 计数带全命中）
+	## 全库校验零错误零警告（64 条——批 2 A-9 assets 域计入；V-M1-*/V-B2-* 全命中）
 	var report: ValidationReport = DataValidator.run_all(_game_data)
 	assert_int(report.errors.size()).is_equal(0)
 	assert_int(report.warnings.size()).is_equal(0)

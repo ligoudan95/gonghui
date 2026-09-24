@@ -8,10 +8,13 @@
 class_name UnitBuilder
 extends RefCounted
 
-static func build_ally(adv: AdventurerData, cls: ClassDef, eqp: EquipDef) -> BattleUnit:
-	## 装配我方单位：HP = 20+体×5+系数×(等级−1)；双资源池 = 10+换算源属性×3
-	## （同源双轨——非本系资源仅供面板完整性显示，§3.2）；武器/护甲来自装备表
-	## ## 参数 adv：冒险者出战数据；cls：职业表；eqp：装备表（可为 null——无装备装配）
+static func build_ally(adv: AdventurerData, cls: ClassDef, eqp: EquipDef,
+		cfg: CoreConfig = null) -> BattleUnit:
+	## 装配我方单位：HP = hp_base+体×hp_con_mult+系数×(等级−1)；双资源池 =
+	## pool_base+换算源属性×pool_mult（同源双轨——非本系资源仅供面板完整性显示，
+	## §3.2；批 B M1 参数经 cfg_main 注入，缺省回退兜底）
+	## 参数 adv：冒险者出战数据；cls：职业表；eqp：装备表（可为 null——无装备装配）；
+	## cfg：总控配置（批 B 起传入，公式参数读表）
 	## 返回：BattleUnit（side=ALLY；slot_index/绑定由 BattleSetup 回填）
 	var unit := BattleUnit.new()
 	unit.unit_id = adv.unit_id
@@ -20,18 +23,20 @@ static func build_ally(adv: AdventurerData, cls: ClassDef, eqp: EquipDef) -> Bat
 	unit.class_id = adv.class_id
 	unit.level = adv.level
 	unit.attrs = adv.attrs.duplicate()
-	unit.max_hp = DerivedStats.calc_hp(int(adv.attrs.get(&"constitution", 10)), cls, adv.level)
+	unit.max_hp = DerivedStats.calc_hp(int(adv.attrs.get(&"constitution", 10)), cls, adv.level, cfg)
 	unit.current_hp = unit.max_hp
 	var source_value: int = int(adv.attrs.get(cls.resource_source_attr, 10))
-	unit.max_mana = DerivedStats.calc_mana(source_value)
+	unit.max_mana = DerivedStats.calc_mana(source_value, cfg)
 	unit.current_mana = unit.max_mana
-	unit.max_stamina = DerivedStats.calc_stamina(source_value)
+	unit.max_stamina = DerivedStats.calc_stamina(source_value, cfg)
 	unit.current_stamina = unit.max_stamina
 	if eqp != null:
 		unit.weapon_bonus = eqp.weapon_bonus
 		unit.armor_equip = eqp.armor_value
 	unit.base_move_range = cls.move_range
 	unit.base_attack_id = cls.base_attack_skill_id
+	# 法穿换算源表驱动（批 C M8：ClassDef.mag_pierce_source_attr）
+	unit.mag_pierce_source_attr = cls.mag_pierce_source_attr
 	unit.resource_kind = SkillDef.ResourceKind.MANA \
 			if cls.resource_type == ClassDef.ResourceType.MANA else SkillDef.ResourceKind.STAMINA
 	var skills: Array[StringName] = [cls.base_attack_skill_id]
@@ -77,9 +82,14 @@ static func build_enemy(enemy: EnemyDef, slot: int) -> BattleUnit:
 	return unit
 
 static func _RaceTagOf(race_tag: int) -> StringName:
-	## 敌表种族枚举 -> StringName 标记（种族克制消费口径）
+	## 敌表种族枚举 -> StringName 标记（种族克制消费口径——盲审批 1-4：
+	## UNDEAD 映射补全，亡灵克制链路（圣光惩击 ×1.5）自此可达）
 	## 参数 race_tag：EnemyDef.RaceTag 枚举值
-	## 返回：&"beast"/&"humanoid"
-	if race_tag == EnemyDef.RaceTag.BEAST:
-		return &"beast"
-	return &"humanoid"
+	## 返回：&"beast"/&"humanoid"/&"undead"
+	match race_tag:
+		EnemyDef.RaceTag.BEAST:
+			return &"beast"
+		EnemyDef.RaceTag.UNDEAD:
+			return &"undead"
+		_:
+			return &"humanoid"

@@ -40,9 +40,9 @@ func test_calc_dodge() -> void:
 	assert_float(DerivedStats.calc_dodge(9, _cfg)).is_equal_approx(0.03, 0.0001)
 
 func test_calc_hit() -> void:
-	## 命中基准 = 80% + 感调×2%：感 15（+2）→ 84%；感 10（0）→ 80%
-	assert_float(DerivedStats.calc_hit(15, _cfg)).is_equal_approx(0.84, 0.0001)
-	assert_float(DerivedStats.calc_hit(10, _cfg)).is_equal_approx(0.80, 0.0001)
+	## 命中基准 = 85%（cfg.hit_base，2026-09-24 校准）+ 感调×2%：感 15（+2）→ 89%；感 10（0）→ 85%
+	assert_float(DerivedStats.calc_hit(15, _cfg)).is_equal_approx(0.89, 0.0001)
+	assert_float(DerivedStats.calc_hit(10, _cfg)).is_equal_approx(0.85, 0.0001)
 
 func test_calc_status_resist_take_higher() -> void:
 	## 异常状态抗性双源取高（17-C20）：max(体调, 意调)×3% + 5%
@@ -64,11 +64,18 @@ func test_calc_phys_pierce() -> void:
 	assert_int(DerivedStats.calc_phys_pierce(16, _cfg)).is_equal(3)
 	assert_int(DerivedStats.calc_phys_pierce(4, _cfg)).is_equal(0)
 
-func test_calc_mag_pierce_arcanist_exception() -> void:
-	## 法术穿甲 = 智调×1；奇术师特例 = 意调×1（§3.2 #17）；钳 ≥0
+func test_calc_mag_pierce_table_driven() -> void:
+	## 法术穿甲表驱动（批 C M8：换算源经 ClassDef.mag_pierce_source_attr 表
+	## 承载——原 cls_arcanist 代码特例删除；签名第一参 = 换算源属性值）：
+	## 法师走智力（智 16 → 3）；奇术师表换算源 = 意志（意 16 → 3）；
+	## 低属性钳 0
+	var mage: ClassDef = load("res://data/class/classes/cls_mage.tres") as ClassDef
+	var arcanist: ClassDef = load("res://data/class/classes/cls_arcanist.tres") as ClassDef
+	assert_str(String(mage.mag_pierce_source_attr)).is_equal("intelligence")
+	assert_str(String(arcanist.mag_pierce_source_attr)).is_equal("willpower")
 	assert_int(DerivedStats.calc_mag_pierce(16, 10, &"cls_mage", _cfg)).is_equal(3)
-	assert_int(DerivedStats.calc_mag_pierce(10, 16, &"cls_arcanist", _cfg)).is_equal(3)
-	assert_int(DerivedStats.calc_mag_pierce(10, 16, &"cls_priest", _cfg)).is_equal(0)
+	assert_int(DerivedStats.calc_mag_pierce(16, 10, &"cls_arcanist", _cfg)).is_equal(3)
+	assert_int(DerivedStats.calc_mag_pierce(10, 16, &"cls_arcanist", _cfg)).is_equal(0)
 	assert_int(DerivedStats.calc_mag_pierce(4, 4, &"cls_mage", _cfg)).is_equal(0)
 
 func test_calc_resist_clamped() -> void:
@@ -84,8 +91,31 @@ func test_calc_armor_dual_track() -> void:
 	assert_int(DerivedStats.calc_mag_armor(2, 15, _cfg)).is_equal(4)
 	assert_int(DerivedStats.calc_phys_armor(0, 2, _cfg)).is_equal(0)
 
-func test_calc_crit_rate_and_base_mult() -> void:
-	## 暴击率 = 5% + 幸调×2% + 敏调×1%：幸 14 敏 16 → 12%；幸 10 敏 10 → 5%
-	assert_float(DerivedStats.calc_crit_rate(14, 16, _cfg)).is_equal_approx(0.12, 0.0001)
-	assert_float(DerivedStats.calc_crit_rate(10, 10, _cfg)).is_equal_approx(0.05, 0.0001)
-	assert_float(DerivedStats.CRIT_MULT_BASE).is_equal(1.5)
+func test_calc_crit_rate_single_source() -> void:
+	## 暴击率单源（批 B M1：DerivedStats.calc_crit_rate 双份已删，全部走
+	## BattleRules.crit_rate——无技能加成传 0.0）：5% + 幸调×2% + 敏调×1%
+	## ——幸 14 敏 16 → 12%；幸 10 敏 10 → 5%；带加成 0.10 → 22%
+	assert_float(BattleRules.crit_rate(14, 16, 0.0, _cfg)).is_equal_approx(0.12, 0.0001)
+	assert_float(BattleRules.crit_rate(10, 10, 0.0, _cfg)).is_equal_approx(0.05, 0.0001)
+	assert_float(BattleRules.crit_rate(14, 16, 0.10, _cfg)).is_equal_approx(0.22, 0.0001)
+	assert_float(_cfg.crit_mult_base).is_equal(1.5)
+
+func test_cfg_parameters_take_effect() -> void:
+	## 「改表即生效」冒烟（批 B M1：公式参数入 cfg_main——改内存 cfg 值公式
+	## 输出即时变化，恢复后归位）：hp_base 20→10 → calc_hp −10；
+	## pool_mult 3→2 → 资源池缩比；crit_base 0.05→0.10 → 暴击率 +5pp
+	var hp_original: int = _cfg.hp_base
+	var pool_original: int = _cfg.pool_mult
+	var crit_original: float = _cfg.crit_base
+	var cls: ClassDef = load("res://data/class/classes/cls_warrior.tres") as ClassDef
+	_cfg.hp_base = 10
+	assert_int(DerivedStats.calc_hp(14, cls, 1, _cfg)).is_equal(80)
+	_cfg.pool_mult = 2
+	assert_int(DerivedStats.calc_mana(16, _cfg)).is_equal(42)
+	_cfg.crit_base = 0.10
+	assert_float(BattleRules.crit_rate(10, 10, 0.0, _cfg)).is_equal_approx(0.10, 0.0001)
+	_cfg.hp_base = hp_original
+	_cfg.pool_mult = pool_original
+	_cfg.crit_base = crit_original
+	assert_int(DerivedStats.calc_hp(14, cls, 1, _cfg)).is_equal(90)
+	assert_int(DerivedStats.calc_mana(16, _cfg)).is_equal(58)

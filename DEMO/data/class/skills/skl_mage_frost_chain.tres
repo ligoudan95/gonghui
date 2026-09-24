@@ -28,4 +28,5 @@ attr_weights = Dictionary[StringName, float]({
 damage_type = 1
 power_coefficient = 0.6
 effects = Array[ExtResource("1_tddy3")]([SubResource("Resource_v0dgw"), SubResource("Resource_3uni0")])
+description = "对单体造成 60% 面板的法术伤害，命中后附加定身 1 回合、迟缓 2 回合。"
 comment = "【占位·试玩校准】参数来源：17 案 §3.4（DEMO 技能参数表）/§3.8（敌方技能表 17-C12~C16）"

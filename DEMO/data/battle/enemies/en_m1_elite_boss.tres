@@ -24,4 +24,6 @@ resist_pct = 0.05
 move_range = 4
 resource_pool = 32
 skill_ids = Array[StringName]([&"skl_enemy_relentless", &"skl_enemy_intimidating_roar"])
+sprite_id = &"spr_en_elite_boss"
+common_attack_skill_id = &"skl_atk_enemy_common"
 comment = "【占位·试玩校准】区间中值来源 17 案 §3.8（杂兵武器加值区间 2-3 取上值 3，见完成报告偏差注）；护甲物理/法术双轨同值（§3.8 表注）"

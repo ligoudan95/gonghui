@@ -37,8 +37,11 @@ enum EffectKind {
 # ---- TILE_SPAWN 参数组（地格生成）----
 ## 生成的地格类型 id（案 9 战场地格：毒沼/陷阱等，陷阱=纯伤害地格 DEMO 降级口径）
 @export var tile_type_id: StringName = &""
-## 地格伤害表达式（占位：批 2 与案 9 口径落细）
-@export var damage_expr: String = ""
+## 地格伤害换算源属性 id（盲审批 2 A-8：原 damage_expr 字符串公式拆结构化
+## 字段——铁律①公式形态代码化；如游侠陷阱 = 敏捷）
+@export var dot_attr_id: StringName = &""
+## 地格伤害换算系数（伤害预结算 = round(源属性 × 本值)）
+@export var dot_coefficient: float = 0.0
 
 # ---- COMBAT_MOD 参数组（战斗修正）----
 ## 修正键（如 &"hit_bonus"、&"dodge_bonus" 等战斗上下文键）

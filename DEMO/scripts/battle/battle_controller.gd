@@ -21,7 +21,8 @@ enum BattleState {
 	BATTLE_END,
 }
 
-## 回合数护栏（超出按战败收束并 push_warning——防异常局面死循环）
+## 回合数护栏（超出按战败收束并 push_warning——防异常局面死循环）。
+## 工程护栏非玩法参数（批 B M3 架构师裁定：不入 cfg 表，留代码）
 const MAX_ROUNDS: int = 50
 
 ## 战斗开始（装配完成后发出一次）
@@ -38,6 +39,9 @@ signal skill_executed(caster, result)
 signal status_changed(unit: BattleUnit, status_id: StringName)
 ## 单位倒地（参数 = 倒地单位）
 signal unit_downed(unit: BattleUnit)
+## 陷阱触发（参数 = 踏入单位 / 预结算伤害——盲审批 1-3：动态地格运行时
+## 触发链的日志/UI 可观测口）
+signal trap_triggered(unit: BattleUnit, damage: int)
 ## 战斗终局（参数 = BattleResult；call_deferred 发出）
 signal battle_ended(result)
 
@@ -95,11 +99,12 @@ func start_battle(context: BattleSetup.BattleContext) -> void:
 	_run()
 
 func request_move(dest: Vector2i) -> bool:
-	## 玩家指令：当前我方单位移动至可达格（已行动后不可再移动；成功且已
+	## 玩家指令：当前我方单位移动至可达格（已行动或**已移动**后不可再移
+	## ——盲审批 1-7：原只挡 has_acted，未行动前可反复整程移动；成功且已
 	## 行动过则自动结束行动轮）
 	## 参数 dest：目的地
 	## 返回：true = 受理执行
-	if not _can_command() or current_unit.has_acted:
+	if not _can_command() or current_unit.has_acted or current_unit.has_moved:
 		return false
 	var reachable: Array[Vector2i] = _context.grid.find_reachable(current_unit,
 			current_unit.move_final())
@@ -257,7 +262,7 @@ func _run_enemy_turn(unit: BattleUnit) -> void:
 # --------------------------------------------------------------------------
 
 func _move_unit(unit: BattleUnit, dest: Vector2i) -> void:
-	## 单位移动：格子占位索引同步 + 标记 + 信号
+	## 单位移动：格子占位索引同步 + 标记 + 站位地格状态换格 + 信号
 	## 参数 unit：单位；dest：目的地
 	## 返回：无
 	var from_pos: Vector2i = unit.grid_pos
@@ -265,6 +270,28 @@ func _move_unit(unit: BattleUnit, dest: Vector2i) -> void:
 	unit.grid_pos = dest
 	_context.grid.place_unit(dest, unit)
 	unit.has_moved = true
+	# 站位地格状态换格（M1 批 2 缺口补线 2026-09-24 八轮）：离格移除旧站位
+	# 状态 → 新格状态施加（草丛闪避/高地面板/毒沼 DOT——敌我同权）；
+	# 蛊惑随机移动走本口天然覆盖
+	_context.status_manager.on_unit_moved(unit)
+	var dest_tile: TileTypeDef = _context.grid.tile_at(dest)
+	if _context.status_manager.apply_tile_standing(unit, dest_tile, _context.round_no):
+		status_changed.emit(unit, dest_tile.status_id)
+	# 陷阱触发（盲审批 1-3：ENEMY_ENTER_ONCE 动态地格踏入链——预结算伤害
+	# 直扣免判定免减免 D7；仅敌对踏入触发（我方陷阱敌方踩、敌方陷阱我方踩），
+	# 我方踩自家陷阱消耗与否不触发只留格（对位语义）；开局摆位不经本口不触发）
+	var trap_data: Dictionary = _context.grid.dynamic_tile_at(dest)
+	if not trap_data.is_empty() and dest_tile != null \
+			and dest_tile.trigger == TileTypeDef.Trigger.ENEMY_ENTER_ONCE:
+		var trap_source: BattleUnit = _context.find_unit(trap_data.get(&"source_id", &""))
+		if trap_source != null and trap_source.side != unit.side:
+			_context.grid.consume_dynamic_tile(dest)
+			var trap_damage: int = int(trap_data.get(&"damage", 0))
+			unit.take_damage(trap_damage)
+			trap_triggered.emit(unit, trap_damage)
+			if not unit.alive:
+				_mark_downed(unit.unit_id)
+			_check_battle_end()
 	unit_moved.emit(unit, from_pos, dest)
 
 func _execute_skill(unit: BattleUnit, skill_id: StringName, target_cell: Vector2i):

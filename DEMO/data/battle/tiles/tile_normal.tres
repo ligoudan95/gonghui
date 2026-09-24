@@ -6,4 +6,7 @@
 script = ExtResource("1_xbg66")
 id = &"tile_normal"
 display_name = "普通地面"
+fill_color = Color(0.32, 0.36, 0.29, 1)
+style = 0
+description = "无特殊效果。"
 comment = "【占位·试玩校准】普通地面（默认地格）；来源：17 案 §3.9 地格效果"

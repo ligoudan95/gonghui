@@ -15,11 +15,11 @@
 class_name BattleUnit
 extends RefCounted
 
-## 敏捷移动加成门槛（≥16 时移动力 +1，17-C8）
-const AGILITY_MOVE_BONUS_LINE: int = 16
-## 移动力基准段上限（职业移动力 + 敏捷加成合计封顶；状态修正不封顶——17-C8 口径，
-## 上限作用于「职业 + 敏捷」段，疾步等状态修正在其后叠加）
-const MOVE_BASE_CAP: int = 6
+## 敏捷移动加成门槛兜底（= cfg_main.agility_move_bonus_line，17-C8；批 B M2）
+const AGILITY_MOVE_BONUS_LINE_FALLBACK: int = 16
+## 移动力基准段上限兜底（= cfg_main.move_base_cap——上限作用于「职业 + 敏捷」
+## 段，疾步等状态修正在其后叠加不封顶，17-C8 口径；批 B M2）
+const MOVE_BASE_CAP_FALLBACK: int = 6
 
 ## 单位实例 id（我方 = 冒险者 unit_id；敌方 = "<enemy_id>_<序号>" 唯一化）
 var unit_id: StringName = &""
@@ -29,6 +29,9 @@ var display_name: String = ""
 var side: int = 0
 ## 职业 id（我方；敌方位为空——法术穿甲按智力派生）
 var class_id: StringName = &""
+## 法术穿甲换算源属性 id（批 C M8 表驱动：build_ally 从 ClassDef 回填——
+## 五职业智力/奇术师意志；空 = 智力回退（敌方与旧单位兼容））
+var mag_pierce_source_attr: StringName = &""
 ## 敌人定义 id（敌方；我方位为空）
 var enemy_id: StringName = &""
 ## 槽位序（我方 = 队伍序 / 敌方 = 配置序——同速打破平的次级排序键）
@@ -125,7 +128,7 @@ func is_controllable() -> bool:
 func get_derived(key: StringName) -> float:
 	## 二级属性合并读取：DerivedStats 基础值 + StatusManager 同键修正 Σ
 	## （状态修正键映射：phys_armor←armor_physical / mag_armor←armor_magical，
-	## 其余键同名——M0 状态数据侧键名口径）
+	## 其余键同名——M0 状态数据侧键名口径；键常量集中见 ModKeys——批 A H4）
 	## 参数 key：派生键（hit/dodge/status_resist/phys_pierce/mag_pierce/
 	## phys_resist/mag_resist/phys_armor/mag_armor/move_range/speed）
 	## 返回：合并值（float；点数类由调用方取整消费）
@@ -137,16 +140,20 @@ func move_final() -> int:
 	## （17-C8：上限 6 作用于职业+敏捷段；疾步 +2 / 减速 −2 等状态修正其后叠加）
 	## 参数：无
 	## 返回：移动力终值（≥0；0 = 定身级不可移动）
+	var cap: int = _cfg.move_base_cap if _cfg != null and _cfg.move_base_cap > 0 \
+			else MOVE_BASE_CAP_FALLBACK
+	var bonus_line: int = _cfg.agility_move_bonus_line if _cfg != null \
+			and _cfg.agility_move_bonus_line > 0 else AGILITY_MOVE_BONUS_LINE_FALLBACK
 	var agility: int = int(attrs.get(&"agility", 0))
-	var base: int = mini(MOVE_BASE_CAP, base_move_range + (1 if agility >= AGILITY_MOVE_BONUS_LINE else 0))
-	return maxi(0, base + roundi(_StatusMod(&"move_range")))
+	var base: int = mini(cap, base_move_range + (1 if agility >= bonus_line else 0))
+	return maxi(0, base + roundi(_StatusMod(ModKeys.MOVE_RANGE)))
 
 func speed_for_order() -> int:
 	## 行动排序速度 = 敏捷原始值 + Σ速度排序专用修正（17-C19：速度 ±N 仅作用
 	## 行动排序、不连带闪避/暴击等敏捷派生）
 	## 参数：无
 	## 返回：排序速度
-	return int(attrs.get(&"agility", 0)) + roundi(_StatusMod(&"speed"))
+	return int(attrs.get(&"agility", 0)) + roundi(_StatusMod(ModKeys.SPEED))
 
 func has_resource(kind: int, amount: int) -> bool:
 	## 资源余量检查（kind = SkillDef.ResourceKind；敌方技能走精力轨）
@@ -220,8 +227,12 @@ func _DerivedBase(key: StringName) -> float:
 		&"phys_pierce":
 			return float(DerivedStats.calc_phys_pierce(int(attrs.get(&"strength", 10)), _cfg))
 		&"mag_pierce":
-			return float(DerivedStats.calc_mag_pierce(int(attrs.get(&"intelligence", 10)),
-					int(attrs.get(&"willpower", 10)), class_id, _cfg))
+			# 换算源经表驱动（批 C M8：ClassDef.mag_pierce_source_attr——
+			# build_ally 回填；空回退智力与敌方口径一致）
+			var source_attr: StringName = mag_pierce_source_attr \
+					if not String(mag_pierce_source_attr).is_empty() else &"intelligence"
+			return float(DerivedStats.calc_mag_pierce(
+					int(attrs.get(source_attr, 10)), 0, class_id, _cfg))
 		&"phys_resist":
 			if flat_defense and fixed_resist >= 0.0:
 				return fixed_resist
@@ -244,13 +255,14 @@ func _DerivedBase(key: StringName) -> float:
 			return 0.0
 
 func _StatusKeyOf(derived_key: StringName) -> StringName:
-	## 派生键 -> 状态修正键映射（M0 状态数据侧键名：护甲双轨带 armor_ 前缀）
+	## 派生键 -> 状态修正键映射（M0 状态数据侧键名：护甲双轨带 armor_ 前缀；
+	## 键常量集中见 ModKeys——批 A H4）
 	## 参数 derived_key：派生键
 	## 返回：状态修正键
 	if derived_key == &"phys_armor":
-		return &"armor_physical"
+		return ModKeys.ARMOR_PHYSICAL
 	if derived_key == &"mag_armor":
-		return &"armor_magical"
+		return ModKeys.ARMOR_MAGICAL
 	return derived_key
 
 func _StatusMod(mod_key: StringName) -> float:

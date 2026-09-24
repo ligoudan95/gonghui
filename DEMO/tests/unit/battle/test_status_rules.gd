@@ -310,6 +310,49 @@ func test_bewitch_locks_only_next_round() -> void:
 	_manager.end_of_round_tick(2, [unit], _rng)
 	assert_int(_IdsOf(unit).size()).is_equal(0)
 
+func test_bewitch_lock_survives_apply_round_turn() -> void:
+	## 蛊惑锁施加回合时序（盲审批 1-2：施放者先手 + 目标同回合后续行动——
+	## 目标施加回合行动轮结束不得消耗锁（from_next_turn_only 跳过递减），
+	## 回合末清标记后下回合仍锁定生效；旧代码此处锁 1→0 蛊惑从未生效——
+	## 既有用例缺施加回合行动轮这一步，正是 S1 指出的盲区时序）
+	var unit := FakeUnit.new()
+	assert_bool(_manager.apply(unit, _statuses[&"DEBUFF_bewitch"],
+			StatusInstance.SourceKind.SKILL, &"skl_arcanist_bewitch", 1, 1, false)).is_true()
+	# 施加回合目标行动轮照常走完（旧代码在此把 control_locks 1→0）
+	_manager.on_unit_turn_finished(unit)
+	# 回合末：清 from_next 标记（持续 1 回合不递减——first_tick=2）
+	_manager.end_of_round_tick(1, [unit], _rng)
+	# 下回合：蛊惑仍生效（旧代码此处为 NONE——锁已被施加回合行动轮耗尽）
+	assert_int(_manager.get_active_control(unit)).is_equal(StatusDef.ControlKind.BEWITCH)
+	# 锁定行动轮结束消耗锁；回合末持续递减移除
+	_manager.on_unit_turn_finished(unit)
+	assert_int(_manager.get_active_control(unit)).is_equal(StatusDef.ControlKind.NONE)
+	_manager.end_of_round_tick(2, [unit], _rng)
+	assert_int(_IdsOf(unit).size()).is_equal(0)
+
+func test_curse_dot_uses_caster_snapshot() -> void:
+	## 诅咒 DOT 施方快照（盲审批 1-5【用户拍板：施方快照】）：奇术师意志 16
+	## 施加 → 8/跳 ×3 = 24（旧受方口径 4-6/跳）；施方不在场（模拟倒地）仍按
+	## 快照跳——17 案定稿口径「施方意志×0.5」
+	var caster := FakeUnit.new()
+	caster.side = 0
+	caster.attrs = {&"willpower": 16}
+	var target := FakeUnit.new()
+	target.side = 1
+	target.attrs = {&"willpower": 6}
+	var skill := SkillDef.new()
+	skill.id = &"skl_arcanist_curse"
+	assert_bool(_manager.try_apply_with_judgement(caster, target, skill,
+			_statuses[&"DEBUFF_curse"], 3, _rng, 1)).is_true()
+	# 回合 2/3/4 末各一跳（first_tick=2；units 只含受方——施方离场快照仍生效）
+	_manager.end_of_round_tick(2, [target], _rng)
+	_manager.end_of_round_tick(3, [target], _rng)
+	_manager.end_of_round_tick(4, [target], _rng)
+	assert_int(target.damage_log.size()).is_equal(3)
+	for entry: int in target.damage_log:
+		assert_int(entry).is_equal(8)
+	assert_int(target.hp).is_equal(100 - 24)
+
 func test_poison_dot_bypasses_mitigation() -> void:
 	## 站位地格 DOT 免减免：毒沼固定 6 直扣（单位护甲/抗性字段不参与——直取 damage_log）
 	var unit := FakeUnit.new()

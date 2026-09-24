@@ -8,4 +8,7 @@ id = &"tile_grass"
 display_name = "草丛"
 kind = 2
 status_id = &"BUFF_tile_grass"
+fill_color = Color(0.14, 0.56, 0.2, 1)
+style = 0
+description = "站位期间闪避 +15%，离格后失效。"
 comment = "【占位·试玩校准】草丛：站格闪避 +15%（17 案 §3.9）；来源：17 案 §3.9 地格效果"

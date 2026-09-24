@@ -184,8 +184,31 @@ func test_derived_merge_with_status() -> void:
 	_status_manager.apply(warrior, _statuses[&"BUFF_shield_wall"],
 			StatusInstance.SourceKind.SKILL, &"skl_warrior_shield_wall", 2, 1, false)
 	assert_int(warrior.phys_armor).is_equal(11)
-	assert_float(warrior.hit).is_equal_approx(0.78, 0.0001)
+	assert_float(warrior.hit).is_equal_approx(0.83, 0.0001)
 	assert_float(warrior.dodge).is_equal_approx(0.05, 0.0001)
+
+func test_mag_pierce_source_from_class_table() -> void:
+	## 法穿换算源表驱动行为链（批 C M8）：build_ally 从 ClassDef 回填源属性
+	## （奇术师意志/法师智力）→ bind 后 mag_pierce 按表源派生（意 16 → 3）
+	var arcanist := UnitBuilder.build_ally(
+			_MakeAdv(&"a", &"cls_arcanist", {&"intelligence": 7, &"willpower": 16}),
+			load(CLS_DIR + "cls_arcanist.tres") as ClassDef, null)
+	assert_str(String(arcanist.mag_pierce_source_attr)).is_equal("willpower")
+	arcanist.bind_battle(_cfg, _status_manager)
+	assert_int(arcanist.mag_pierce).is_equal(3)
+	var mage := UnitBuilder.build_ally(
+			_MakeAdv(&"m", &"cls_mage", {&"intelligence": 16, &"willpower": 7}),
+			load(CLS_DIR + "cls_mage.tres") as ClassDef, null)
+	assert_str(String(mage.mag_pierce_source_attr)).is_equal("intelligence")
+	mage.bind_battle(_cfg, _status_manager)
+	assert_int(mage.mag_pierce).is_equal(3)
+
+func test_race_tag_undead_mapping() -> void:
+	## 种族映射三值（盲审批 1-4：UNDEAD 补全——亡灵克制链路（圣光惩击 ×1.5）
+	## 自此可达，未来加亡灵敌建表零改码）
+	assert_str(String(UnitBuilder._RaceTagOf(EnemyDef.RaceTag.BEAST))).is_equal("beast")
+	assert_str(String(UnitBuilder._RaceTagOf(EnemyDef.RaceTag.HUMANOID))).is_equal("humanoid")
+	assert_str(String(UnitBuilder._RaceTagOf(EnemyDef.RaceTag.UNDEAD))).is_equal("undead")
 
 func test_speed_for_order() -> void:
 	## 排序速度 = 敏捷原始值（速度 ±N 排序修正 DEMO 池无数据——回归敏捷值）

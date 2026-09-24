@@ -9,10 +9,12 @@
 class_name EnemyDef
 extends Resource
 
-## 种族系标签（野兽系 / 人形系，用于种族克制与文案口径）
+## 种族系标签（野兽系 / 人形系 / 亡灵系，用于种族克制与文案口径——
+## 盲审批 1-4：UNDEAD 补全种族克制链路，未来加亡灵敌建表零改码）
 enum RaceTag {
 	BEAST,
 	HUMANOID,
+	UNDEAD,
 }
 
 ## 敌人 id
@@ -40,9 +42,12 @@ enum RaceTag {
 ## 主动技能 id 列表（class/skills 域，skl_ 前缀敌方技能）
 @export var skill_ids: Array[StringName] = []
 ## 通用普攻技能 id（skl_atk_enemy_common，17-C16 承接行）
-@export var common_attack_skill_id: StringName = &"skl_atk_enemy_common"
+@export var common_attack_skill_id: StringName = &""
 ## AI 档位（行为复杂度标记，批 3+ 战斗 AI 消费）
 @export var ai_level: int = 1
+## 战场 sprite 资源 id（批 A H3：入表——路径经 assets 域 AssetRegistry 映射；
+## V-A-sprite-id 校验非空且有登记）
+@export var sprite_id: StringName = &""
 ## 掉落表引用 id（经济域资源引用，批 2 落表）
 @export var drop_ref: StringName = &""
 ## 头像资源 id（路径经 assets 域 AssetRegistry 映射）

@@ -19,4 +19,5 @@ resource_cost = 10
 range = 5
 power_coefficient = 0.0
 effects = Array[ExtResource("1_v21y7")]([SubResource("Resource_ngqk6")])
+description = "尝试控制敌方单体 1 回合（其随机行动，受异常抗性判定）。"
 comment = "【占位·试玩校准】参数来源：17 案 §3.4（DEMO 技能参数表）/§3.8（敌方技能表 17-C12~C16）"

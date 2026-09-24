@@ -1,5 +1,6 @@
 ## BattleGrid 单元测试（M1 批 1）
-## 覆盖：Dijkstra 可达集（友方可穿越不可停留/敌方阻断/障碍阻断/定身空集）、
+## 覆盖：Dijkstra 可达集（存活单位互为障碍——敌我对称不可穿越不可停留，
+## 2026-09-24 用户拍板口径/障碍阻断/定身空集）、
 ## 曼哈顿射程、3×3 切比雪夫光环、视线遮挡（障碍阻断/单位不阻断/相邻恒通）、
 ## 动态陷阱（动态优先/触发即消失）——地图与地格用 data/ 真实表。
 ## 8×8 图布置参照 gen_m1_battle_data：障碍 y2:(2)(7) y3:(1)(3) y4:(2)(6) y5:(1)(7)、
@@ -78,20 +79,27 @@ func test_dijkstra_reachable_respects_move_budget() -> void:
 	assert_bool(reachable.has(Vector2i(2, 4))).is_false()
 
 func test_dijkstra_enemy_blocks() -> void:
-	## 敌方占据阻断：(3,5) 放敌方 → 移动 2 内 (3,4) 不可达（绕行需 3 步）、(3,5) 不可入
+	## 敌方占据阻断：(3,5) 放敌方 → 移动 2 内 (3,4) 不可达（绕行需 4 步）、(3,5) 不可入
 	var unit := _MakeUnit(0, Vector2i(3, 6))
 	_MakeUnit(1, Vector2i(3, 5))
 	var reachable: Array[Vector2i] = _grid.find_reachable(unit, 2)
 	assert_bool(reachable.has(Vector2i(3, 4))).is_false()
 	assert_bool(reachable.has(Vector2i(3, 5))).is_false()
 
-func test_dijkstra_ally_pass_through_not_stop() -> void:
-	## 友方可穿越不可停留：(3,5) 放友方 → (3,4) 可达（穿越）、(3,5) 不在目的地集
+func test_dijkstra_ally_blocks_symmetric() -> void:
+	## 友方占位同样阻断（2026-09-24 用户拍板：存活单位互为障碍——敌我对称）：
+	## (3,5) 放友方 → 移动 2 内 (3,4) 不可达（绕行需 4 步）、(3,5) 不可入不可停
 	var unit := _MakeUnit(0, Vector2i(3, 6))
 	_MakeUnit(0, Vector2i(3, 5))
 	var reachable: Array[Vector2i] = _grid.find_reachable(unit, 2)
-	assert_bool(reachable.has(Vector2i(3, 4))).is_true()
+	assert_bool(reachable.has(Vector2i(3, 4))).is_false()
 	assert_bool(reachable.has(Vector2i(3, 5))).is_false()
+	# 敌方视角被友方挡同样成立（对称性）：敌方 (3,4) 移动 2 内不可入 (3,5)、
+	# 不可穿达 (3,6)
+	var enemy := _MakeUnit(1, Vector2i(3, 4))
+	var enemy_reachable: Array[Vector2i] = _grid.find_reachable(enemy, 2)
+	assert_bool(enemy_reachable.has(Vector2i(3, 5))).is_false()
+	assert_bool(enemy_reachable.has(Vector2i(3, 6))).is_false()
 
 func test_dijkstra_rooted_returns_empty() -> void:
 	## 定身（move_final ≤ 0）：可达集为空

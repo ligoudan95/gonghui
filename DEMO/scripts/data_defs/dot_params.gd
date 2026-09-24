@@ -19,5 +19,5 @@ enum Mode {
 @export var fixed: int = 0
 ## 比率换算源属性 id（mode = ATTR_RATIO 时生效）
 @export var attr_id: StringName = &""
-## 属性换算比率（如 0.5 = 主导属性 × 0.5）
-@export var ratio: float = 0.5
+## 属性换算比率（如 0.5 = 主导属性 × 0.5；批 C M7：schema 默认中性 0.0，真值由 .tres 显式承载）
+@export var ratio: float = 0.0

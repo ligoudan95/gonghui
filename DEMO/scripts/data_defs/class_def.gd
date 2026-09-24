@@ -29,12 +29,18 @@ enum ResourceType {
 @export var resource_type: ResourceType = ResourceType.MANA
 ## 资源换算源属性 id（资源量由该属性换算，案 17 §3.2）
 @export var resource_source_attr: StringName = &""
+## 法术穿甲换算源属性 id（批 C M8 表驱动：五职业智力、奇术师意志特例——
+## §3.2 #17；V-A-class-attr 校验必填且 ∈ 七属性）
+@export var mag_pierce_source_attr: StringName = &""
 ## 职业生命系数（生命上限 = 基础值 × 本系数，案 5/案 17 §3.11 #3）
 @export var hp_coefficient: float = 1.0
 ## 战场移动范围（格）
 @export var move_range: int = 1
 ## 内置普攻技能 id（skl_atk_ 前缀，案 10 §3；出生自带不占技能点）
 @export var base_attack_skill_id: StringName = &""
+## 战场 sprite 资源 id（批 A H3：入表——路径经 assets 域 AssetRegistry 映射，
+## 表内不写死路径；V-A-sprite-id 校验非空且有登记）
+@export var sprite_id: StringName = &""
 ## 可选倾向分支列表（TendencyDef 子资源数组）
 @export var tendencies: Array[TendencyDef] = []
 

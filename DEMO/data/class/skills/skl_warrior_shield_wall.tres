@@ -20,4 +20,5 @@ target_side = 2
 range = 0
 power_coefficient = 0.0
 effects = Array[ExtResource("1_0gyt3")]([SubResource("Resource_wr0l5")])
+description = "获得盾墙状态 2 回合（物理护甲 +4）。"
 comment = "【占位·试玩校准】参数来源：17 案 §3.4（DEMO 技能参数表）/§3.8（敌方技能表 17-C12~C16）"

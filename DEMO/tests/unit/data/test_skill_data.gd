@@ -97,6 +97,16 @@ func test_key_skill_values() -> void:
 	assert_int(trap.effects[0].effect_kind).is_equal(SkillEffect.EffectKind.TILE_SPAWN)
 	assert_str(String(trap.effects[0].tile_type_id)).is_equal("tile_trap")
 
+func test_ally_skill_descriptions_filled() -> void:
+	## 我方技能 description 全回填（按钮 hover tooltip 文案入表——2026-09-24
+	## 二轮试玩反馈，铁律①零硬编码文案）；敌方技能不进玩家按钮不强制
+	for skill: SkillDef in _skills():
+		if skill.side != SkillDef.SkillSide.ALLY:
+			continue
+		assert_str(skill.description) \
+				.override_failure_message("我方技能 %s 缺 description（tooltip 文案入表）" % skill.id) \
+				.is_not_empty()
+
 func test_enemy_skills_side() -> void:
 	## 敌方技能（owner 为敌人或通用普攻）side 必须 ENEMY（含 skl_atk_enemy_common）
 	var enemy_skill_ids: Array[StringName] = [

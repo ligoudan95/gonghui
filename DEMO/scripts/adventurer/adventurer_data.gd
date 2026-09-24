@@ -34,7 +34,11 @@ static func create_debug(unit_id: StringName, class_id: StringName, attrs: Dicti
 	adv.class_id = class_id
 	adv.attrs = attrs
 	adv.pre_unlocked = true
-	adv.display_name = String(unit_id)
+	# 显示名取职业表中文名（2026-09-24 七轮反馈：单位名中文化——敌方链路
+	# 直读敌表本就中文，我方此前透传英文 unit_id 是断点；查无回退现状）
+	var cls: ClassDef = game_data.get_record(class_id) as ClassDef
+	adv.display_name = cls.display_name if cls != null and not cls.display_name.is_empty() \
+			else String(unit_id)
 	var skills: Array[StringName] = []
 	for skill_id: StringName in game_data.get_domain_ids(&"class/skills"):
 		var skill: SkillDef = game_data.get_record(skill_id) as SkillDef

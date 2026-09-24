@@ -14,7 +14,16 @@ extends RefCounted
 ## 移动/攻击「无目标」哨兵（地图坐标 ≥0，-1 安全）
 const NO_CELL: Vector2i = Vector2i(-1, -1)
 ## 怒吼义务的 3×3 我方数量门槛（案 9 §2.5 / 17-C16 P1）
-const ROAR_ALLY_COUNT_LINE: int = 2
+## 怒吼义务门槛兜底（= cfg_main.ai_roar_ally_count_line——批 B M3：AI 行为
+## 可调参数入表；3×3 内我方数 ≥ 门槛精英才考虑怒吼）
+const ROAR_ALLY_COUNT_LINE_FALLBACK: int = 2
+
+static func _RoarAllyCountLine(cfg: CoreConfig) -> int:
+	## 怒吼义务门槛读取（cfg 注入优先，缺省回退兜底——与表值一致声明锚定）
+	## 参数 cfg：注入配置
+	## 返回：门槛值
+	return cfg.ai_roar_ally_count_line if cfg != null and cfg.ai_roar_ally_count_line > 0 \
+			else ROAR_ALLY_COUNT_LINE_FALLBACK
 
 ## 单回合决策产物
 class AIAction:
@@ -99,7 +108,7 @@ static func _ChooseSkill(self_unit: Object, grid: BattleGrid, candidates: Array,
 	if self_unit.role_tag == &"elite":
 		if roar_id != &"" and not self_unit.ai_context.get(&"roar_used", false):
 			var roar_skill: SkillDef = skill_lookup.call(roar_id) as SkillDef
-			if _AlliesInAura3x3(self_unit, candidates, grid) >= ROAR_ALLY_COUNT_LINE:
+			if _AlliesInAura3x3(self_unit, candidates, grid) >= _RoarAllyCountLine(cfg):
 				# 首次满足：精力足 → 必用（决策即置 roar_used 关闭义务——每场一次）；
 				# 不足 → 义务作废（不顺延）——两态均关闭义务
 				self_unit.ai_context[&"roar_used"] = true
@@ -171,18 +180,9 @@ static func _ExpectedDamage(self_unit: Object, skill: SkillDef, target: Object,
 	var mitigated: int = BattleRules.mitigate(raw, resist, armor, pierce, cfg)
 	var chance: float = BattleRules.hit_chance(self_unit.hit, target.dodge, skill.hit_mod, cfg)
 	var crit: float = BattleRules.crit_rate(int(self_unit.attrs.get(&"luck", 0)),
-			int(self_unit.attrs.get(&"agility", 0)), _CritBonus(skill), cfg)
-	return BattleRules.expected_damage(mitigated, chance, crit, DerivedStats.CRIT_MULT_BASE)
-
-static func _CritBonus(skill: SkillDef) -> float:
-	## 技能 COMBAT_MOD 暴击加成求和（如敌方下流偷袭 +10%）
-	## 参数 skill：技能表
-	## 返回：Σ加成（无匹配 0.0）
-	var total: float = 0.0
-	for effect: SkillEffect in skill.effects:
-		if effect.effect_kind == SkillEffect.EffectKind.COMBAT_MOD and effect.key == &"crit_bonus":
-			total += effect.value
-	return total
+			int(self_unit.attrs.get(&"agility", 0)),
+			SkillExecutor.collect_combat_mod(skill, SkillExecutor.KEY_CRIT_BONUS), cfg)
+	return BattleRules.expected_damage(mitigated, chance, crit, cfg.crit_mult_base)
 
 static func _AlliesInAura3x3(self_unit: Object, candidates: Array, grid: BattleGrid) -> int:
 	## 自中心 3×3（切比雪夫 ≤1）内存活我方数（怒吼义务门槛）

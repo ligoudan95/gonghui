@@ -211,6 +211,110 @@ func test_power_strike_hits_and_damages() -> void:
 	assert_int(rat.damage_taken[0]).is_equal(25)
 	assert_int(warrior.resource_stamina).is_equal(92)
 
+func test_highground_tile_standing_multiplies_panel() -> void:
+	## 高地站位 ×1.2（2026-09-24 八轮·M1 批 2 缺口补线）：apply_tile_standing
+	## 站上高地 → 毛面板乘算层生效（普攻 (16+4)×1.0 = 20 → ×1.2 = 24.0）
+	var warrior := _MakeWarrior(Vector2i(3, 6))
+	assert_bool(_manager.apply_tile_standing(warrior,
+			_tiles[&"tile_highground"] as TileTypeDef, 1)).is_true()
+	var rat := _MakeTrash(Vector2i(3, 5))
+	var result: SkillExecutor.ExecutionResult = _executor.execute(warrior,
+			_LoadSkill(&"skl_atk_warrior"), rat.grid_pos, _Ctx(1, 0))
+	assert_bool(result.success).is_true()
+	assert_float(result.raw_damage).is_equal_approx(24.0, 0.01)
+
+func test_heal_rejects_enemy_target() -> void:
+	## 治疗技阵营校验（盲审批 1-1：ALLY 技不可作用于敌方——原 ALLY 分支
+	## 缺阵营校验，治疗可直接打给敌人）：点敌格失败 invalid_target、资源未扣
+	var priest := _MakePriest(Vector2i(3, 6))
+	var rat := _MakeTrash(Vector2i(3, 5))
+	var result: SkillExecutor.ExecutionResult = _executor.execute(priest,
+			_LoadSkill(&"skl_priest_heal"), rat.grid_pos, _Ctx(1, 1))
+	assert_bool(result.success).is_false()
+	assert_str(String(result.error)).is_equal("invalid_target")
+	assert_str(String(result.trace[&"fail_reason"])).is_equal("invalid_target")
+	assert_int(priest.resource_mana).is_equal(100)
+
+func test_los_required_single_source() -> void:
+	## 视线口径单源（批 C M5）：SkillExecutor.los_required 为唯一语义——
+	## 射程 1 免视线、射程 >1 需视线（执行器前置校验与 UI 范围渲染/点选
+	## 拦截同函数）
+	assert_bool(SkillExecutor.los_required(_LoadSkill(&"skl_atk_warrior"))).is_false()
+	assert_bool(SkillExecutor.los_required(_LoadSkill(&"skl_warrior_power_strike"))).is_false()
+	assert_bool(SkillExecutor.los_required(_LoadSkill(&"skl_mage_fireball"))).is_true()
+	assert_bool(SkillExecutor.los_required(null)).is_false()
+
+func test_race_mult_single_source() -> void:
+	## 种族克制乘算单源契约（批 A H1：UI 与执行链同函数，无键回 1.0——
+	## 修正原执行侧「技能没带种族键时乘 0」脆弱语义）：
+	## 惩击对亡灵 ×1.5 / 非亡灵 ×1.0；无种族键技（火球）打亡灵 ×1.0
+	var smite: SkillDef = _LoadSkill(&"skl_priest_smite")
+	assert_float(SkillExecutor.collect_race_mult(smite, &"undead")).is_equal_approx(1.5, 0.001)
+	assert_float(SkillExecutor.collect_race_mult(smite, &"beast")).is_equal_approx(1.0, 0.001)
+	assert_float(SkillExecutor.collect_race_mult(smite, &"")).is_equal_approx(1.0, 0.001)
+	var fireball: SkillDef = _LoadSkill(&"skl_mage_fireball")
+	assert_float(SkillExecutor.collect_race_mult(fireball, &"undead")).is_equal_approx(1.0, 0.001)
+	# 执行链消费同一函数：亡灵目标惩击毛面板 = 基准 ×1.5（20.4 × 1.5 = 30.6）
+	var priest := _MakePriest(Vector2i(3, 6))
+	var undead := _MakeTrash(Vector2i(3, 5))
+	undead.race_tag = &"undead"
+	var result: SkillExecutor.ExecutionResult = _executor.execute(priest, smite,
+			undead.grid_pos, _Ctx(1, 0))
+	assert_bool(result.success).is_true()
+	assert_float(result.raw_damage).is_equal_approx(30.6, 0.01)
+	assert_float(float(result.trace[&"damage_chain"][&"race_mult"])).is_equal_approx(1.5, 0.001)
+
+func test_trace_contract_hit_and_damage_chain() -> void:
+	## trace 契约（2026-09-24 五轮反馈·战斗日志）：命中技执行后含标识键与
+	## 命中链/伤害链全键，值与既有断言路径同源（raw 24.96 / final 25——
+	## 不改变现有结算行为，纯增量字段）
+	var warrior := _MakeWarrior(Vector2i(3, 6))
+	var rat := _MakeTrash(Vector2i(3, 5))
+	var result: SkillExecutor.ExecutionResult = _executor.execute(warrior,
+			_LoadSkill(&"skl_warrior_power_strike"), rat.grid_pos, _Ctx(1, 0))
+	assert_bool(result.success).is_true()
+	assert_str(String(result.trace[&"skill"])).is_equal("skl_warrior_power_strike")
+	assert_str(String(result.trace[&"caster"])).is_equal("warrior")
+	assert_str(String(result.trace[&"target"])).is_equal("rat")
+	var hit_chain: Dictionary = result.trace[&"hit_chain"]
+	for key: StringName in [&"base", &"mod", &"dodge", &"final", &"passed"]:
+		assert_bool(hit_chain.has(key)) \
+				.override_failure_message("hit_chain 缺键 %s" % key).is_true()
+	assert_bool(hit_chain[&"passed"]).is_true()
+	var damage_chain: Dictionary = result.trace[&"damage_chain"]
+	for key: StringName in [&"raw", &"panel_mult", &"race_mult", &"resist", &"armor",
+			&"pierce", &"mitigated", &"crit_chance", &"crit", &"final"]:
+		assert_bool(damage_chain.has(key)) \
+				.override_failure_message("damage_chain 缺键 %s" % key).is_true()
+	assert_float(float(damage_chain[&"raw"])).is_equal_approx(24.96, 0.01)
+	assert_int(int(damage_chain[&"final"])).is_equal(25)
+	assert_bool(damage_chain[&"crit"]).is_false()
+
+func test_trace_contract_fail_reason() -> void:
+	## trace 失败契约：前置校验失败时 fail_reason 记录失败码（与 error 同源）
+	var warrior := _MakeWarrior(Vector2i(3, 6))
+	var rat := _MakeTrash(Vector2i(3, 4))
+	var result: SkillExecutor.ExecutionResult = _executor.execute(warrior,
+			_LoadSkill(&"skl_warrior_power_strike"), rat.grid_pos, _Ctx(1, 1))
+	assert_bool(result.success).is_false()
+	assert_str(String(result.trace[&"fail_reason"])).is_equal("out_of_range")
+	assert_bool(result.trace.has(&"hit_chain")).is_false()
+
+func test_trace_contract_status_chain() -> void:
+	## trace 状态链契约：命中复合技（寒冰锁链）statuses 数组逐条含
+	## id/duration/applied 键
+	var mage := _MakeMage(Vector2i(3, 6))
+	var rat := _MakeTrash(Vector2i(3, 4))
+	var result: SkillExecutor.ExecutionResult = _executor.execute(mage,
+			_LoadSkill(&"skl_mage_frost_chain"), rat.grid_pos, _Ctx(1, 0))
+	assert_bool(result.success).is_true()
+	var statuses: Array = result.trace[&"statuses"]
+	assert_int(statuses.size()).is_equal(2)
+	for entry: Dictionary in statuses:
+		for key: StringName in [&"id", &"duration", &"applied"]:
+			assert_bool(entry.has(key)) \
+					.override_failure_message("statuses 条目缺键 %s" % key).is_true()
+
 func test_power_strike_crit_multiplies() -> void:
 	## 暴击：减免后 25 × 1.5 = 37.5 → round 38（暴击掷 forced_crit=1）
 	var warrior := _MakeWarrior(Vector2i(3, 6))
@@ -219,6 +323,19 @@ func test_power_strike_crit_multiplies() -> void:
 			_LoadSkill(&"skl_warrior_power_strike"), rat.grid_pos, _Ctx(1, 1))
 	assert_bool(result.crit).is_true()
 	assert_int(result.damage).is_equal(38)
+
+func test_crit_mult_base_cfg_takes_effect() -> void:
+	## 「改表即生效」冒烟（批 B M1：暴击倍率入 cfg_main.crit_mult_base——
+	## 改 2.0 后暴击伤害翻倍 38→50，恢复归位）
+	var original_mult: float = _cfg.crit_mult_base
+	var warrior := _MakeWarrior(Vector2i(3, 6))
+	var rat := _MakeTrash(Vector2i(3, 5))
+	_cfg.crit_mult_base = 2.0
+	var boosted: SkillExecutor.ExecutionResult = _executor.execute(warrior,
+			_LoadSkill(&"skl_warrior_power_strike"), rat.grid_pos, _Ctx(1, 1))
+	_cfg.crit_mult_base = original_mult
+	assert_bool(boosted.crit).is_true()
+	assert_int(boosted.damage).is_equal(50)
 
 func test_miss_consumes_resource_but_no_status() -> void:
 	## 未中：伤害 0、无施加、资源照扣（寒冰锁链：法力 10）

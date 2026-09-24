@@ -30,9 +30,11 @@ attr_ranges = Dictionary[StringName, Vector2i]({
 &"strength": Vector2i(9, 11),
 &"willpower": Vector2i(12, 14)
 })
+mag_pierce_source_attr = &"intelligence"
 resource_source_attr = &"perception"
 hp_coefficient = 5.0
 move_range = 4
 base_attack_skill_id = &"skl_atk_priest"
 tendencies = Array[ExtResource("2_sbckd")]([SubResource("Resource_6go03"), SubResource("Resource_fcttu")])
+sprite_id = &"spr_cls_priest"
 comment = "【占位·试玩校准】属性区间/资源换算/生命系数/移动来源：17 案 §3.1/§3.2（17-C2/17-C8）+ 案 10 §2.1/§2.4"

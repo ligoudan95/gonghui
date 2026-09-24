@@ -113,6 +113,42 @@ func test_seed_reproducibility() -> void:
 		assert_int(first.enemies[index].grid_pos.x).is_equal(second.enemies[index].grid_pos.x)
 		assert_int(first.enemies[index].grid_pos.y).is_equal(second.enemies[index].grid_pos.y)
 
+func test_create_debug_display_name_chinese() -> void:
+	## create_debug 显示名中文化（2026-09-24 七轮反馈）：六职业取职业表
+	## display_name（cls_warrior → 战士……）；查无职业表回退 unit_id 原文
+	var expects: Dictionary = {
+		&"cls_warrior": "战士", &"cls_rogue": "盗贼", &"cls_mage": "法师",
+		&"cls_priest": "牧师", &"cls_ranger": "游侠", &"cls_arcanist": "奇术师",
+	}
+	for class_id: StringName in expects:
+		var adv: AdventurerData = AdventurerData.create_debug(class_id, class_id, {}, _game_data)
+		assert_str(adv.display_name) \
+				.override_failure_message("职业 %s 显示名未中文化" % class_id) \
+				.is_equal(expects[class_id])
+	var fallback: AdventurerData = AdventurerData.create_debug(&"mystery", &"cls_nope",
+			{}, _game_data)
+	assert_str(fallback.display_name).is_equal("mystery")
+
+func test_enemy_display_name_suffix_rule() -> void:
+	## 同名敌方序号规则（2026-09-24 七轮反馈）：按 enemy_id 分组，组内首个
+	## 显示敌表中文名无后缀、其余「中文名 N」按装配序递增；显示名绝不为
+	## 英文 id（构建链中文化断点防回归）
+	var context := BattleSetup.build(_MakeParams(&"enc_m1_random_pack", 20260923), _game_data)
+	var counts: Dictionary = {}
+	for enemy: BattleUnit in context.enemies:
+		var base: String = (_game_data.get_record(enemy.enemy_id) as EnemyDef).display_name
+		var expected_count: int = int(counts.get(enemy.enemy_id, 0)) + 1
+		counts[enemy.enemy_id] = expected_count
+		var expected_name: String = base if expected_count == 1 else "%s %d" % [base, expected_count]
+		assert_str(enemy.display_name) \
+				.override_failure_message("敌方 %s 显示名序号规则不符" % enemy.unit_id) \
+				.is_equal(expected_name)
+		assert_bool(enemy.display_name.begins_with("en_")).is_false()
+	# 我方四职业显示名全部中文（经 create_debug → build_ally 透传链）
+	for ally: BattleUnit in context.allies:
+		assert_bool(ally.display_name.begins_with("warrior")) \
+				.override_failure_message("我方 %s 仍显示英文 unit_id" % ally.unit_id).is_false()
+
 func test_ally_skills_and_formation() -> void:
 	## 我方技能清单（M1 调试口径：普攻 + 档 1 全部 2 技）与 formation 覆盖
 	var params := _MakeParams(&"enc_m1_random_pack", 1)

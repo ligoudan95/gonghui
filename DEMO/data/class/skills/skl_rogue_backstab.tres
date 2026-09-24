@@ -24,4 +24,5 @@ attr_weights = Dictionary[StringName, float]({
 damage_type = 0
 power_coefficient = 1.6
 effects = Array[ExtResource("1_6c2mh")]([SubResource("Resource_h6261")])
+description = "对单体造成 160% 面板的物理伤害，本次暴击率 +10%。"
 comment = "【占位·试玩校准】参数来源：17 案 §3.4（DEMO 技能参数表）/§3.8（敌方技能表 17-C12~C16）"
