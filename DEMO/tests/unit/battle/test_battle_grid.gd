@@ -164,3 +164,30 @@ func test_dynamic_trap_priority_and_consume() -> void:
 	assert_str(String(data[&"source_id"])).is_equal("r1")
 	assert_str(String(_grid.tile_id_at(Vector2i(1, 1)))).is_equal("tile_normal")
 	assert_int(_grid.consume_dynamic_tile(Vector2i(1, 1)).size()).is_equal(0)
+
+func test_manhattan_static_single_source() -> void:
+	## 曼哈顿静态单源（批 4 C 组 M3）：原 4 份复刻（grid/controller/AI/executor
+	## 内联）收敛后的统一口径——同点 0 / 轴对齐 / 对角 / 负象限
+	assert_int(BattleGrid.manhattan(Vector2i(3, 4), Vector2i(3, 4))).is_equal(0)
+	assert_int(BattleGrid.manhattan(Vector2i(3, 4), Vector2i(7, 4))).is_equal(4)
+	assert_int(BattleGrid.manhattan(Vector2i(0, 0), Vector2i(3, 5))).is_equal(8)
+	assert_int(BattleGrid.manhattan(Vector2i(5, 2), Vector2i(1, 0))).is_equal(6)
+
+func test_legend_missing_dot_reports_issue() -> void:
+	## legend 缺 '.' 图例项（A-7）：setup 记 setup_issue 不再静默回退
+	## tile_normal——破损显式可见（返回 false）
+	var map_def := BattleMapDef.new()
+	map_def.id = &"btm_test_no_dot"
+	map_def.size = Vector2i(2, 1)
+	map_def.rows = ["AB"]
+	map_def.legend = {"A": &"tile_normal", "B": &"tile_obstacle"}
+	var grid := BattleGrid.new()
+	var ok: bool = grid.setup(map_def, func(tile_id: StringName) -> Resource:
+		return _tiles.get(tile_id, null))
+	assert_bool(ok).is_false()
+	assert_int(grid.setup_issues.size()).is_greater(0)
+	var has_dot_issue: bool = false
+	for issue: String in grid.setup_issues:
+		if issue.contains("'.'" ):
+			has_dot_issue = true
+	assert_bool(has_dot_issue).override_failure_message("缺 '.' 图例未报 setup_issue").is_true()

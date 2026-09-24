@@ -13,6 +13,19 @@ const GAME_CONFIG_SCRIPT: String = "res://scripts/autoload/game_config.gd"
 const CFG_MAIN_PATH: String = "res://data/core/cfg_main.tres"
 
 ## 套件级 GameConfig 实例（before 建树、after 摘除）
+
+func _game_data() -> CoreConfig:
+	## 总控配置直读（R4-08：数值参数经 GameData.get_record(CFG_MAIN_ID)）
+	## 参数：无
+	## 返回：CoreConfig（树上有 GameData autoload 用之；否则手动实例）
+	var game_data: Node = get_tree().root.get_node_or_null("GameData")
+	if game_data != null:
+		return game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
+	var manual: Node = load("res://scripts/autoload/game_data.gd").new()
+	manual.initialize_data()
+	var cfg: CoreConfig = manual.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
+	manual.free()
+	return cfg
 var _game_config: Node
 
 func before() -> void:
@@ -35,23 +48,23 @@ func test_demo_mode() -> void:
 
 func test_vision_radius() -> void:
 	## 探索视野半径 R=3（案 17 §3.10/§3.11 #17）
-	assert_int(int(_game_config.get_param(&"vision_radius"))).is_equal(3)
+	assert_int(_game_data().vision_radius).is_equal(3)
 
 func test_secret_door_trigger_radius() -> void:
 	## 暗门检定触发半径=2（案 17 §3.10/§3.11 #17）
-	assert_int(int(_game_config.get_param(&"secret_door_trigger_radius"))).is_equal(2)
+	assert_int(_game_data().secret_door_trigger_radius).is_equal(2)
 
 func test_difficulty_tiers() -> void:
 	## 难度五档判定线 5/8/11/14/17（案 17 §3.3）
-	assert_int(_game_config.get_difficulty_tier(&"极易")).is_equal(5)
-	assert_int(_game_config.get_difficulty_tier(&"容易")).is_equal(8)
-	assert_int(_game_config.get_difficulty_tier(&"普通")).is_equal(11)
-	assert_int(_game_config.get_difficulty_tier(&"困难")).is_equal(14)
-	assert_int(_game_config.get_difficulty_tier(&"极难")).is_equal(17)
+	assert_int(_game_data().difficulty_tiers["极易"]).is_equal(5)
+	assert_int(_game_data().difficulty_tiers["容易"]).is_equal(8)
+	assert_int(_game_data().difficulty_tiers["普通"]).is_equal(11)
+	assert_int(_game_data().difficulty_tiers["困难"]).is_equal(14)
+	assert_int(_game_data().difficulty_tiers["极难"]).is_equal(17)
 
 func test_crit_success_line_min() -> void:
 	## 大成功判定线下限=16（案 17 §3.3）
-	assert_int(int(_game_config.get_param(&"crit_success_line_min"))).is_equal(16)
+	assert_int(_game_data().crit_success_line_min).is_equal(16)
 
 func test_system_enabled_flags() -> void:
 	## 系统启用标志：battle 真 / stress 假（案 16 启用清单）

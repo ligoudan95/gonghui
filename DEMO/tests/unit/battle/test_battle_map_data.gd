@@ -165,7 +165,7 @@ func test_content_count_band_cfg_takes_effect() -> void:
 	## 计数带参数化生效（批 C M6：cfg content_* 组驱动校验带——改带值校验
 	## 行为即时变化，恢复归位）：状态计数带收到 9（当前 11）→ 出警告；
 	## 放宽到 99 → 无该警告
-	var cfg: CoreConfig = _game_data.get_record(&"cfg_main") as CoreConfig
+	var cfg: CoreConfig = _game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
 	var original_max: int = cfg.content_status_max
 	cfg.content_status_max = 9
 	var tight: ValidationReport = DataValidator.run_all(_game_data)
@@ -265,7 +265,7 @@ func test_owner_closure_caught() -> void:
 func test_cfg_domain_guard_caught() -> void:
 	## V-M0-cfg-domain 注入（盲审批 2 A-6）：除数置 0 / 钳制带倒序 → 报错 →
 	## 恢复归零
-	var cfg: CoreConfig = _game_data.get_record(&"cfg_main")
+	var cfg: CoreConfig = _game_data.get_record(CoreConfig.CFG_MAIN_ID)
 	var original_divisor: int = cfg.attr_modifier_divisor
 	var original_min: float = cfg.hit_clamp_min
 	var original_max: float = cfg.hit_clamp_max

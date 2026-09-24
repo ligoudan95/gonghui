@@ -47,6 +47,9 @@ enum Style {
 @export var fill_color: Color = Color(0, 0, 0, 0)
 ## 强调色（RAISED 内层色 / BLOCK 描边色；PLAIN 不消费）
 @export var accent_color: Color = Color(0, 0, 0, 0)
+## 动态地格标记色（S1-4 入表：ENEMY_ENTER_ONCE 陷阱落入战场的橙点标记色——
+## UI 零硬编码口径延伸；默认透明 = 未回填，V-A-tile-visual 拦截）
+@export var mark_color: Color = Color(0, 0, 0, 0)
 ## 视觉样式（PLAIN/RAISED/BLOCK——UI 渲染分支的唯一依据）
 @export var style: Style = Style.PLAIN
 

@@ -33,12 +33,28 @@ extends RefCounted
 
 ## 种族克制乘算 COMBAT_MOD 键（值 = 乘算系数；目标 race_tag = undead 才生效）
 const KEY_RACE_UNDEAD_MULT: StringName = ModKeys.RACE_UNDEAD_MULT
-## 种族标记：亡灵（种族克制消费的目标标记）
-const RACE_UNDEAD: StringName = &"undead"
 ## 本次暴击加成 COMBAT_MOD 键
 const KEY_CRIT_BONUS: StringName = ModKeys.CRIT_BONUS
 ## 面板乘算修正键（高地 ×1.2——StatusDef.modifiers 键，经 get_stat_mod 求和）
 const KEY_PANEL_MULT: StringName = ModKeys.DAMAGE_PANEL_MULT
+## 施加状态条目管道分隔符（批 4 C 组 M2：applied_statuses 的 "单位id|状态id"
+## 编解码契约单源——生产（本类两处拼接）与消费（BattleController 解析）共用）
+const STATUS_ENTRY_PIPE: String = "|"
+# ---- 失败码常量（A-5 单源：本类生产、BattleLog 键、测试断言共引）----
+## 施放者已倒地（S3-01）
+const ERROR_CASTER_DOWNED: StringName = &"caster_downed"
+## 射程外
+const ERROR_OUT_OF_RANGE: StringName = &"out_of_range"
+## 视线阻断
+const ERROR_NO_LINE_OF_SIGHT: StringName = &"no_line_of_sight"
+## 资源不足
+const ERROR_NO_RESOURCE: StringName = &"no_resource"
+## 目标非法
+const ERROR_INVALID_TARGET: StringName = &"invalid_target"
+## 目标已倒地
+const ERROR_TARGET_DOWNED: StringName = &"target_downed"
+## 目标格不可放置（S3-09 陷阱）
+const ERROR_BLOCKED_CELL: StringName = &"blocked_cell"
 
 ## 单源收集公开口（批 A H1：执行链与 battle_screen._ExpectedDamageOn 共用同一
 ## 函数——此前 UI 侧 race_mult 从 1.0 起加 Σ 与执行侧 Σ 直接覆盖口径分叉，
@@ -51,6 +67,45 @@ static func los_required(skill: SkillDef) -> bool:
 	## 返回：true = 射程 > 1 需视线
 	return skill != null and skill.range > 1
 
+static func effective_range(skill: SkillDef) -> int:
+	## 攻击/选格有效射程（单源——批 4 C 组 M6）：max(1, skill.range)——射程 0
+	## 自身施法技在攻击位计算/范围显示时按 1 格口径（蛊惑随机攻击的目标池
+	## 半径与技能范围红显共用，原两处复刻收敛）
+	## 参数 skill：技能定义
+	## 返回：有效射程（≥1）
+	return maxi(1, skill.range if skill != null else 1)
+
+static func range_cells_of(skill: SkillDef, origin: Vector2i,
+		grid: BattleGrid) -> Array[Vector2i]:
+	## 技能选格范围（单源——S4-8）：AURA_3X3 走切比雪夫 3×3（自中心光环）、
+	## 其余走曼哈顿 effective_range——UI 范围红显与执行度量共用同一口径，
+	## 未来我方光环技零改码即正确显示
+	## 参数 skill：技能定义；origin：施放者格；grid：战场（界内裁剪）
+	## 返回：范围格集（按 y/x 排序）
+	if skill == null or grid == null:
+		return []
+	if skill.target_shape == SkillDef.TargetShape.AURA_3X3:
+		return grid.cells_aura_3x3(origin)
+	if skill.target_side == SkillDef.TargetSide.SELF:
+		# R1-6：SELF 施法技红显仅施放者格（自身技无选格语义——原按有效射程
+		# 展开邻格误导可点）
+		return [origin]
+	return grid.cells_in_range(origin, effective_range(skill))
+
+static func make_status_entry(unit_id: StringName, status_id: StringName) -> StringName:
+	## 施加状态条目编码（批 4 C 组 M2 管道符契约单源）："单位id|状态id"
+	## ——生产端（攻击链/怒吼链）与消费端（BattleController 解析发信号）共用
+	## 参数 unit_id：目标单位 id；status_id：状态 id
+	## 返回：编码条目
+	return StringName("%s%s%s" % [unit_id, STATUS_ENTRY_PIPE, status_id])
+
+static func parse_status_entry(entry: StringName) -> PackedStringArray:
+	## 施加状态条目解码（M2 契约单源）：按管道符拆两段——段数 != 2 视为
+	## 非法条目（调用方跳过）
+	## 参数 entry：编码条目
+	## 返回：[单位id, 状态id]；非法返回空/短数组
+	return String(entry).split(STATUS_ENTRY_PIPE)
+
 static func collect_combat_mod(skill: SkillDef, key: StringName) -> float:
 	## 求和技能 COMBAT_MOD 效果中同 key 的修正值（如 crit_bonus +0.10）
 	## 参数 skill：技能；key：修正键（ModKeys.COMBAT_MOD 域）
@@ -61,14 +116,20 @@ static func collect_combat_mod(skill: SkillDef, key: StringName) -> float:
 			total += effect.value
 	return total
 
+## 种族克制映射（A-3 收口：种族 token -> COMBAT_MOD 克制键——新增种族
+## 只加一行；消费遍历查表，不再 per 种族硬编码分支）
+const RACE_MULT_KEYS: Dictionary = {
+	UnitTags.RACE_UNDEAD: ModKeys.RACE_UNDEAD_MULT,
+}
+
 static func collect_race_mult(skill: SkillDef, target_race_tag: StringName) -> float:
-	## 种族克制乘算（单源）：目标为亡灵 = Σ技能种族键系数（无键回 1.0——
-	## 修正键缺失 = 不克制，非乘 0）；非亡灵目标恒 1.0
+	## 种族克制乘算（单源 + A-3 查表）：目标种族在克制映射中 = Σ技能对应键
+	## 系数（无键回 1.0——修正键缺失 = 不克制，非乘 0）；未登记种族恒 1.0
 	## 参数 skill：技能；target_race_tag：目标种族标记
 	## 返回：乘算系数
-	if target_race_tag != RACE_UNDEAD:
+	if not RACE_MULT_KEYS.has(target_race_tag):
 		return 1.0
-	var total: float = collect_combat_mod(skill, KEY_RACE_UNDEAD_MULT)
+	var total: float = collect_combat_mod(skill, RACE_MULT_KEYS[target_race_tag])
 	return total if total > 0.0 else 1.0
 
 static func panel_mult_of(caster: Object, status_manager: StatusManager) -> float:
@@ -121,7 +182,8 @@ class ExecutionResult:
 	var trace: Dictionary = {}
 
 func execute(caster: Object, skill: SkillDef, target_cell: Vector2i, ctx: Dictionary) -> ExecutionResult:
-	## 技能执行主入口（流程见类头注释；AURA_3X3 走怒吼特化分支）
+	## 技能执行主入口（流程见类头注释；AURA_3X3 走怒吼特化分支——S2-1/S3-02
+	## 整改：怒吼与常规技同走资源校验与扣减，仅免射程/视线/目标解析）
 	## 参数 caster：施放单位；skill：技能定义；target_cell：目标格；ctx：执行上下文
 	## 返回：ExecutionResult（success=false 时带失败码，资源未扣）
 	var result := ExecutionResult.new()
@@ -134,43 +196,76 @@ func execute(caster: Object, skill: SkillDef, target_cell: Vector2i, ctx: Dictio
 	var status_lookup: Callable = ctx.get(&"status_lookup") as Callable
 	var forced: int = ctx.get(&"forced", -1)
 	var forced_crit: int = ctx.get(&"forced_crit", -1)
-	# ①前置校验 + 怒吼特化（AURA_3X3 自中心 3×3，免射程/视线检查）
-	if skill.target_shape == SkillDef.TargetShape.AURA_3X3:
+	# ①前置校验：施放者存活（S3-01：踩陷阱致死后残留攻击链拦截——
+	# 死人不放技能，含蛊惑/AI/玩家全路径）
+	if not caster.alive:
+		result.error = ERROR_CASTER_DOWNED
+		result.trace[&"fail_reason"] = result.error
+		return result
+	# ①前置校验 + 怒吼特化标记（AURA_3X3 自中心 3×3，免射程/视线/目标解析——
+	# 资源校验/扣减不豁免，S2-1/S3-02）
+	var is_aura: bool = skill.target_shape == SkillDef.TargetShape.AURA_3X3
+	var target: Object = null
+	if not is_aura:
+		var distance: int = BattleGrid.manhattan(caster.grid_pos, target_cell)
+		if distance > effective_range(skill):
+			result.error = ERROR_OUT_OF_RANGE
+			result.trace[&"fail_reason"] = result.error
+			return result
+		if los_required(skill) and not grid.has_line_of_sight(caster.grid_pos, target_cell):
+			result.error = ERROR_NO_LINE_OF_SIGHT
+			result.trace[&"fail_reason"] = result.error
+			return result
+		# ①前置校验：目标解析（单体敌/友/自身；治疗仅未倒地；CELL 指定格无单位目标）
+		target = _ResolveTarget(caster, skill, target_cell, grid, result)
+		if result.error != &"":
+			return result
+		# ①前置校验：陷阱目标格可放置（S3-09 + R2-5 + R1-7——须可通行、无存活
+		# 单位占位、无既有动态地格（R2-5 同格拒绝布设）、非状态地格（R1-7
+		# 草丛/高地/毒沼不可覆布））
+		if _HasTileSpawn(skill):
+			var spawn_tile: TileTypeDef = grid.tile_at(target_cell)
+			var occupant: Object = grid.get_unit_at(target_cell)
+			if spawn_tile == null or not spawn_tile.walkable \
+					or (occupant != null and occupant.alive) \
+					or not grid.dynamic_tile_at(target_cell).is_empty() \
+					or spawn_tile.kind == TileTypeDef.Kind.STATUS:
+				result.error = ERROR_BLOCKED_CELL
+				result.trace[&"fail_reason"] = result.error
+				return result
+	# ①前置校验：资源充足（不足即失败，未扣减——怒吼同口径，S2-1/S3-02）
+	if skill.resource_type != SkillDef.ResourceKind.NONE \
+			and not caster.has_resource(skill.resource_type, skill.resource_cost):
+		result.error = ERROR_NO_RESOURCE
+		result.trace[&"fail_reason"] = result.error
+		return result
+	# ②扣资源（校验全过才扣；攻击未中/施加失败均不返还——怒吼同扣，S2-1/S3-02）
+	if skill.resource_type != SkillDef.ResourceKind.NONE:
+		caster.consume_resource(skill.resource_type, skill.resource_cost)
+	# ③怒吼特化分支（S2-1/S3-02：移到资源扣减之后执行）
+	if is_aura:
 		_ExecuteAura(caster, skill, grid, status_manager, rng, forced, status_lookup, result)
 		result.success = true
 		return result
-	var distance: int = absi(caster.grid_pos.x - target_cell.x) + absi(caster.grid_pos.y - target_cell.y)
-	if distance > skill.range:
-		result.error = &"out_of_range"
-		result.trace[&"fail_reason"] = result.error
-		return result
-	if los_required(skill) and not grid.has_line_of_sight(caster.grid_pos, target_cell):
-		result.error = &"no_line_of_sight"
-		result.trace[&"fail_reason"] = result.error
-		return result
-	# ①前置校验：目标解析（单体敌/友/自身；治疗仅未倒地；CELL 指定格无单位目标）
-	var target: Object = _ResolveTarget(caster, skill, target_cell, grid, result)
-	if result.error != &"":
-		return result
-	# ①前置校验：资源充足（不足即失败，未扣减）
-	if skill.resource_type != SkillDef.ResourceKind.NONE \
-			and not caster.has_resource(skill.resource_type, skill.resource_cost):
-		result.error = &"no_resource"
-		result.trace[&"fail_reason"] = result.error
-		return result
-	# ②扣资源（校验全过才扣；攻击未中/施加失败均不返还）
-	if skill.resource_type != SkillDef.ResourceKind.NONE:
-		caster.consume_resource(skill.resource_type, skill.resource_cost)
-	# ③攻击段（damage_type ≠ NONE；DEMO 的 CELL 指定格技无伤害段）
+	# ④攻击段（damage_type ≠ NONE；DEMO 的 CELL 指定格技无伤害段）
 	var attack_ok: bool = true
 	if skill.damage_type != SkillDef.DamageType.NONE and target != null:
 		attack_ok = _ExecuteAttack(caster, target, skill, cfg, status_manager, rng,
 				forced, forced_crit, result)
-	# ④效果遍历（STATUS_APPLY 仅攻击命中后处理；HEAL 免判定；TILE_SPAWN 预结算）
+	# ⑤效果遍历（STATUS_APPLY 仅攻击命中后处理；HEAL 免判定；TILE_SPAWN 预结算）
 	_ExecuteEffects(caster, skill, target, target_cell, attack_ok, grid, status_manager,
 			rng, forced, status_lookup, result)
 	result.success = true
 	return result
+
+static func _HasTileSpawn(skill: SkillDef) -> bool:
+	## 技能是否携带 TILE_SPAWN 效果（S3-09 陷阱目标格前置校验的门条件）
+	## 参数 skill：技能定义
+	## 返回：true = 含地格生成效果
+	for effect: SkillEffect in skill.effects:
+		if effect.effect_kind == SkillEffect.EffectKind.TILE_SPAWN:
+			return true
+	return false
 
 func _ResolveTarget(caster: Object, skill: SkillDef, target_cell: Vector2i,
 		grid: BattleGrid, result: ExecutionResult) -> Object:
@@ -187,15 +282,15 @@ func _ResolveTarget(caster: Object, skill: SkillDef, target_cell: Vector2i,
 		SkillDef.TargetSide.ALLY:
 			var ally: Object = grid.get_unit_at(target_cell)
 			if ally == null:
-				result.error = &"invalid_target"
+				result.error = ERROR_INVALID_TARGET
 				result.trace[&"fail_reason"] = result.error
 			elif not ally.alive:
-				result.error = &"target_downed"
+				result.error = ERROR_TARGET_DOWNED
 				result.trace[&"fail_reason"] = result.error
 			elif ally.side != caster.side:
 				# 阵营校验（盲审批 1-1：ALLY 技不可作用于敌方——治疗技点敌格
 				# 此前直接放行，与 ENEMY 分支的镜像校验对齐）
-				result.error = &"invalid_target"
+				result.error = ERROR_INVALID_TARGET
 				result.trace[&"fail_reason"] = result.error
 			if ally == null or not ally.alive or ally.side != caster.side:
 				return null
@@ -203,7 +298,7 @@ func _ResolveTarget(caster: Object, skill: SkillDef, target_cell: Vector2i,
 		_:
 			var enemy: Object = grid.get_unit_at(target_cell)
 			if enemy == null or not enemy.alive or enemy.side == caster.side:
-				result.error = &"invalid_target"
+				result.error = ERROR_INVALID_TARGET
 				result.trace[&"fail_reason"] = result.error
 				return null
 			return enemy
@@ -236,33 +331,23 @@ func _ExecuteAttack(caster: Object, target: Object, skill: SkillDef, cfg: CoreCo
 	var panel_mult: float = panel_mult_of(caster, status_manager)
 	result.raw_damage = BattleRules.raw_panel_damage(caster.attrs, caster.weapon_bonus,
 			skill, panel_mult, race_mult)
-	# 减免轨：按伤害类型选抗性/护甲/穿甲对
-	var resist: float = 0.0
-	var armor: int = 0
-	var pierce: int = 0
-	if skill.damage_type == SkillDef.DamageType.PHYSICAL:
-		resist = target.phys_resist
-		armor = target.phys_armor
-		pierce = caster.phys_pierce
-	else:
-		resist = target.mag_resist
-		armor = target.mag_armor
-		pierce = caster.mag_pierce
-	var damage: int = BattleRules.mitigate(result.raw_damage, resist, armor, pierce, cfg)
+	# 减免轨（选对单源——批 4 H2：物理/法术轨经 BattleRules.mitigate_by_damage_type）
+	var damage: int = BattleRules.mitigate_by_damage_type(result.raw_damage,
+			skill.damage_type, caster, target, cfg)
 	var mitigated_value: int = damage
 	# 暴击掷 ×1.5（减免后值乘算取整）
-	var crit_chance: float = BattleRules.crit_rate(int(caster.attrs.get(&"luck", 0)),
-			int(caster.attrs.get(&"agility", 0)), crit_bonus, cfg)
+	var crit_chance: float = BattleRules.crit_rate(int(caster.attrs.get(AttrKeys.LUCK, AttrKeys.DEFAULT_ATTR_VALUE)),
+			int(caster.attrs.get(AttrKeys.AGILITY, AttrKeys.DEFAULT_ATTR_VALUE)), crit_bonus, cfg)
 	if BattleRules.roll_hit(crit_chance, rng, forced_crit):
 		result.crit = true
-		damage = int(round(damage * cfg.crit_mult_base))
+		damage = int(round(damage * BattleRules.crit_mult_base_of(cfg)))
 	result.trace[&"damage_chain"] = {
 		&"raw": result.raw_damage,
 		&"panel_mult": panel_mult,
 		&"race_mult": race_mult,
-		&"resist": resist,
-		&"armor": armor,
-		&"pierce": pierce,
+		&"resist": BattleRules.resist_of(skill.damage_type, target),
+		&"armor": BattleRules.armor_of(skill.damage_type, target),
+		&"pierce": BattleRules.pierce_of(skill.damage_type, caster),
 		&"mitigated": mitigated_value,
 		&"crit_chance": crit_chance,
 		&"crit": result.crit,
@@ -301,13 +386,16 @@ func _ExecuteEffects(caster: Object, skill: SkillDef, target: Object, target_cel
 						status, effect.duration, rng, forced)
 				if not result.trace.has(&"statuses"):
 					result.trace[&"statuses"] = []
+				# S2-2：施加失败原因入 trace（miss/resisted/stack_limit/
+				# source_not_allowed——日志/UI 反馈「资源白扣」的可见性）
 				(result.trace[&"statuses"] as Array).append({
 					&"id": status.id,
 					&"duration": effect.duration,
 					&"applied": applied,
+					&"reason": status_manager.last_reject_reason() if not applied else &"",
 				})
 				if applied:
-					result.applied_statuses.append(StringName("%s|%s" % [target.id, status.id]))
+					result.applied_statuses.append(make_status_entry(target.id, status.id))
 			SkillEffect.EffectKind.HEAL:
 				if target == null:
 					push_error("SkillExecutor: HEAL 效果无目标单位（%s）" % skill.id)
@@ -357,15 +445,17 @@ func _ExecuteAura(caster: Object, skill: SkillDef, grid: BattleGrid,
 				&"id": status.id,
 				&"duration": effect.duration,
 				&"applied": aura_applied,
+				&"reason": status_manager.last_reject_reason() if not aura_applied else &"",
 				&"target": unit.id,
 			})
 			if aura_applied:
-				result.applied_statuses.append(StringName("%s|%s" % [unit.id, status.id]))
+				result.applied_statuses.append(make_status_entry(unit.id, status.id))
 
 func _ResolveTrapDamage(effect: SkillEffect, caster: Object) -> int:
 	## 陷阱伤害预结算 = round(施放者 dot_attr_id 属性值 × dot_coefficient)
 	## （盲审批 2 A-8：原 damage_expr 字符串公式已拆结构化字段——纯搬家）
 	## 参数 effect：TILE_SPAWN 效果参数组；caster：施放单位
 	## 返回：预结算伤害
-	var attr_value: int = int(caster.attrs.get(effect.dot_attr_id, 0))
+	var attr_value: int = int(caster.attrs.get(effect.dot_attr_id,
+			AttrKeys.DEFAULT_ATTR_VALUE))
 	return int(round(attr_value * effect.dot_coefficient))

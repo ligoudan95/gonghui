@@ -56,13 +56,23 @@ class BattleContext:
 				return unit
 		return null
 
+	func display_name_of(unit_id: StringName) -> String:
+		## 单位 id → 显示名（单源——批 4 C 组 M4：查无/display_name 为空回退
+		## id 原文口径收敛一处；战斗日志、结算面板等 UI 消费点统一走此口）
+		## 参数 unit_id：单位实例 id
+		## 返回：显示名（回退 id 原文）
+		var unit: BattleUnit = find_unit(unit_id)
+		if unit != null and not unit.display_name.is_empty():
+			return unit.display_name
+		return String(unit_id)
+
 static func build(params: BattleParams, game_data: Node) -> BattleContext:
 	## 装配主入口：地图 → 双方单位 → 开局载入状态 → BattleContext
 	## 参数 params：开局参数包；game_data：GameData（autoload 本体或手动实例）
 	## 返回：BattleContext（装配失败 push_error 并返回 null）
 	var context := BattleContext.new()
 	context.params = params
-	context.cfg = game_data.get_record(&"cfg_main") as CoreConfig
+	context.cfg = game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
 	if context.cfg == null:
 		push_error("BattleSetup: cfg_main 无法解析")
 		return null
@@ -85,13 +95,25 @@ static func build(params: BattleParams, game_data: Node) -> BattleContext:
 	if map_def == null:
 		push_error("BattleSetup: 战场地图 '%s' 无法解析" % pack.battle_map_ref)
 		return null
+	# 我方超编前置校验（S3-04：超出地图出生位数时拒绝装配——此前越界
+	# 下标静默吞人，战斗以缺员开局）
+	if params.party.size() > map_def.player_spawns.size():
+		push_error("BattleSetup: 我方出战 %d 人超出地图 '%s' 出生位 %d 个——拒绝装配" % [
+			params.party.size(), map_def.id, map_def.player_spawns.size()])
+		return null
 	context.grid = BattleGrid.new()
 	if not context.grid.setup(map_def, context.tile_lookup):
-		push_error("BattleSetup: 地图 '%s' 解析存在问题（见 setup_issues）" % map_def.id)
+		# R2-11：地图解析失败（非法字符/行列不符/legend 缺项）拒绝装配——
+		# 与超编同口径 return null（原只 push_error 继续空转）
+		push_error("BattleSetup: 地图 '%s' 解析存在问题（见 setup_issues）——拒绝装配" % map_def.id)
+		return null
 	# 状态管理器
 	context.status_manager = StatusManager.new()
 	context.status_manager.setup(context.cfg, context.status_lookup)
-	# 我方装配（player_spawns 顺排 / formation 覆盖）
+	# 我方装配（player_spawns 顺排 / formation 覆盖）；R2-8：空出战名单拒绝
+	if params.party.is_empty():
+		push_error("BattleSetup: 我方出战名单为空——拒绝装配")
+		return null
 	for slot: int in params.party.size():
 		var adv: AdventurerData = params.party[slot]
 		var cls: ClassDef = game_data.get_record(adv.class_id) as ClassDef
@@ -102,8 +124,7 @@ static func build(params: BattleParams, game_data: Node) -> BattleContext:
 		var unit := UnitBuilder.build_ally(adv, cls, equip, context.cfg)
 		unit.slot_index = slot
 		unit.bind_battle(context.cfg, context.status_manager)
-		var spawn: Vector2i = params.formation[slot] if slot < params.formation.size() \
-				else map_def.player_spawns[slot]
+		var spawn: Vector2i = _ResolveSpawn(context, map_def, params.formation, slot)
 		unit.grid_pos = spawn
 		context.grid.place_unit(spawn, unit)
 		# 开局站位地格状态（M1 批 2 缺口补线 2026-09-24 八轮）：出生位在状态格
@@ -162,7 +183,62 @@ static func build(params: BattleParams, game_data: Node) -> BattleContext:
 	# M2 挂点提示（M1 默认空不消费）
 	if not params.terrain_override.is_empty():
 		push_warning("BattleSetup: terrain_override 非空——M2 场景联调挂点，M1 未实现")
+	# 战斗开始前资源预校验（盲审批 3 D-1）：技能/效果引用提前暴露，不等到
+	# 执行中才 push_error 空转（AURA 怒吼的 STATUS_APPLY 同链覆盖）
+	for issue: String in validate_skill_resources(context):
+		push_error("BattleSetup: %s" % issue)
 	return context
+
+static func _ResolveSpawn(context: BattleContext, map_def: BattleMapDef,
+		formation: Array[Vector2i], slot: int) -> Vector2i:
+	## 我方出生位解析（R2-3）：formation 覆盖优先——条目须界内 + 可通行 + 无
+	## 存活占位，非法 push_error 回退 player_spawns 顺排（破损阵型不硬崩）
+	## 参数 context：战场已建；map_def：地图表；formation：队形覆盖；slot：队伍序
+	## 返回：生效出生格
+	var fallback: Vector2i = map_def.player_spawns[slot]
+	if slot >= formation.size():
+		return fallback
+	var cell: Vector2i = formation[slot]
+	var tile: TileTypeDef = context.grid.tile_at(cell)
+	var occupant: Object = context.grid.get_unit_at(cell)
+	if cell.x < 0 or cell.x >= context.grid.size.x or cell.y < 0 or cell.y >= context.grid.size.y:
+		push_error("BattleSetup: formation[%d] (%d,%d) 越界——回退顺排位" % [slot, cell.x, cell.y])
+		return fallback
+	if tile == null or not tile.walkable:
+		push_error("BattleSetup: formation[%d] (%d,%d) 不可通行——回退顺排位" % [slot, cell.x, cell.y])
+		return fallback
+	if occupant != null and occupant.alive:
+		push_error("BattleSetup: formation[%d] (%d,%d) 已有单位占位——回退顺排位" % [slot, cell.x, cell.y])
+		return fallback
+	return cell
+
+static func validate_skill_resources(context: BattleContext) -> Array[String]:
+	## 战斗开始前技能资源预校验（盲审批 3 D-1——AURA 资源校验提前）：全部参战
+	## 单位技能清单逐技经 skill_lookup 解析，STATUS_APPLY 引用状态 /
+	## TILE_SPAWN 引用地格逐条经对应 lookup 解析（AURA_3X3 怒吼的施加链同
+	## STATUS_APPLY 覆盖，不再等执行中才 push_error 空转）
+	## 参数 context：已装配的战斗上下文
+	## 返回：问题清单（空 = 零问题；build 侧逐条 push_error）
+	var issues: Array[String] = []
+	for unit: BattleUnit in context.units:
+		for skill_id: StringName in unit.skill_ids:
+			var skill: SkillDef = context.skill_lookup.call(skill_id) as SkillDef
+			if skill == null:
+				issues.append("技能 '%s' 无法解析（单位 '%s'）" % [skill_id, unit.unit_id])
+				continue
+			for effect: SkillEffect in skill.effects:
+				match effect.effect_kind:
+					SkillEffect.EffectKind.STATUS_APPLY:
+						var status: StatusDef = context.status_lookup.call(effect.status_id) as StatusDef
+						if status == null:
+							issues.append("技能 '%s' 引用状态 '%s' 无法解析" % [skill_id, effect.status_id])
+					SkillEffect.EffectKind.TILE_SPAWN:
+						var tile: TileTypeDef = context.tile_lookup.call(effect.tile_type_id) as TileTypeDef
+						if tile == null:
+							issues.append("技能 '%s' 引用地格 '%s' 无法解析" % [skill_id, effect.tile_type_id])
+					_:
+						continue
+	return issues
 
 static func _MakeLookup(game_data: Node, domain: StringName) -> Callable:
 	## 域 lookup 闭包（id -> Resource 字典捕获；懒建一次）
@@ -194,9 +270,12 @@ static func _AllocateSpawnSlots(pack: EnemyPackDef, spawn_count: int,
 	if not override.is_empty():
 		var result: Array[int] = []
 		for slot: int in override:
-			if slot >= 0 and slot < spawn_count:
+			# R2-4：越界剔除 + 重复槽去重（原重复位致多敌叠格）
+			if slot >= 0 and slot < spawn_count and not result.has(slot):
 				result.append(slot)
-		return result
+		if not result.is_empty():
+			return result
+		push_warning("BattleSetup: enemy_spawn_override 全部无效（越界/去重后空）——按默认分配")
 	var slots: Array[int] = []
 	var has_elite: bool = false
 	for entry: PackEntry in pack.entries:

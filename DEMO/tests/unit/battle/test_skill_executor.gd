@@ -446,13 +446,14 @@ func test_trap_spawn_presolved_damage() -> void:
 	var ranger := _MakeUnit(&"ranger", 0, Vector2i(3, 6))
 	ranger.attrs = {&"agility": 16, &"perception": 13}
 	ranger.weapon_bonus = 3
+	# R1-7：陷阱不可布于状态地格——目标格用普通地 (3,5)（原 (3,4) 为草丛）
 	var result: SkillExecutor.ExecutionResult = _executor.execute(ranger,
-			_LoadSkill(&"skl_ranger_set_trap"), Vector2i(3, 4), _Ctx(1, 1))
+			_LoadSkill(&"skl_ranger_set_trap"), Vector2i(3, 5), _Ctx(1, 1))
 	assert_bool(result.success).is_true()
 	assert_int(result.spawned_tile.x).is_equal(3)
-	assert_int(result.spawned_tile.y).is_equal(4)
+	assert_int(result.spawned_tile.y).is_equal(5)
 	assert_int(result.spawned_tile_damage).is_equal(16)
-	var trap_data: Dictionary = _grid.dynamic_tile_at(Vector2i(3, 4))
+	var trap_data: Dictionary = _grid.dynamic_tile_at(Vector2i(3, 5))
 	assert_str(String(trap_data[&"tile_id"])).is_equal("tile_trap")
 	assert_int(trap_data[&"damage"]).is_equal(16)
 
@@ -539,3 +540,160 @@ func test_roar_aura_applies_per_cell() -> void:
 	assert_int(_manager.get_statuses(ally_far).size()).is_equal(0)
 	assert_int(_manager.get_statuses(minion).size()).is_equal(0)
 	assert_int(_manager.get_statuses(boss).size()).is_equal(0)
+
+func test_status_entry_pipe_contract_roundtrip() -> void:
+	## 施加状态条目管道契约（批 4 C 组 M2 单源）：make/parse 往返一致——
+	## 生产端（攻击链/怒吼链）与消费端（BattleController 解析）同源同值；
+	## 非法条目（无分隔符）解析返回段数 != 2 由调用方跳过
+	var entry: StringName = SkillExecutor.make_status_entry(&"warrior", &"BUFF_tile_grass")
+	assert_str(String(entry)).is_equal("warrior|BUFF_tile_grass")
+	var parts: PackedStringArray = SkillExecutor.parse_status_entry(entry)
+	assert_int(parts.size()).is_equal(2)
+	assert_str(parts[0]).is_equal("warrior")
+	assert_str(parts[1]).is_equal("BUFF_tile_grass")
+	assert_int(SkillExecutor.parse_status_entry(&"no_pipe_here").size()).is_equal(1)
+
+func test_effective_range_clamps_to_one() -> void:
+	## 攻击/选格有效射程（批 4 C 组 M6 单源）：射程 0 自身技按 1 格口径；
+	## 近战 1 / 远程 5 原值；null 技能回退 1
+	var self_cast := SkillDef.new()
+	self_cast.range = 0
+	var melee := SkillDef.new()
+	melee.range = 1
+	var ranged := SkillDef.new()
+	ranged.range = 5
+	assert_int(SkillExecutor.effective_range(self_cast)).is_equal(1)
+	assert_int(SkillExecutor.effective_range(melee)).is_equal(1)
+	assert_int(SkillExecutor.effective_range(ranged)).is_equal(5)
+	assert_int(SkillExecutor.effective_range(null)).is_equal(1)
+
+func test_roar_costs_resource_and_fails_when_short() -> void:
+	## 怒吼资源口径（S2-1/S3-02）：AURA 同常规技走资源校验与扣减——精力足则
+	## 扣 12 且施加生效；精力不足 → no_resource 失败且零施加（资源与效果
+	## 均不动）；既有逐格施加链路见 test_roar_aura_applies_per_cell
+	var boss := _MakeUnit(&"boss", 1, Vector2i(4, 3))
+	boss.attrs = {&"strength": 11}
+	boss.resource_stamina = 20
+	var ally_a := _MakeUnit(&"ally_a", 0, Vector2i(4, 2))
+	var roar: SkillDef = _LoadSkill(&"skl_enemy_intimidating_roar")
+	var result: SkillExecutor.ExecutionResult = _executor.execute(boss, roar,
+			boss.grid_pos, _Ctx(1, 1))
+	assert_bool(result.success).is_true()
+	assert_int(boss.resource_stamina).is_equal(8)
+	assert_int(result.applied_statuses.size()).is_equal(1)
+	# 精力不足：失败码 no_resource、不扣、零施加
+	boss.resource_stamina = 5
+	var short: SkillExecutor.ExecutionResult = _executor.execute(boss, roar,
+			boss.grid_pos, _Ctx(1, 1))
+	assert_bool(short.success).is_false()
+	assert_str(String(short.error)).is_equal("no_resource")
+	assert_int(boss.resource_stamina).is_equal(5)
+	assert_int(short.applied_statuses.size()).is_equal(0)
+	assert_int(_manager.get_statuses(ally_a).size()).is_equal(1)
+
+func test_caster_downed_rejected_before_anything() -> void:
+	## 施放者存活前置校验（S3-01）：caster 不存活 → caster_downed 失败码，
+	## 资源不扣、目标无伤——尸体攻击链全拦截
+	var caster := _MakeWarrior(Vector2i(3, 5))
+	var target := _MakeUnit(&"target", 1, Vector2i(3, 6))
+	caster.alive = false
+	var result: SkillExecutor.ExecutionResult = _executor.execute(caster,
+			_LoadSkill(&"skl_atk_warrior"), target.grid_pos, _Ctx(1, 1))
+	assert_bool(result.success).is_false()
+	assert_str(String(result.error)).is_equal("caster_downed")
+	assert_int(target.hp).is_equal(100)
+
+func test_self_skill_accepts_neighbor_cell() -> void:
+	## SELF 技有效射程（S2-4）：射程 0 自身施法技点邻格（距离 1）按
+	## effective_range 口径放行——UI 范围红显与执行器判定恒一致
+	var warrior := _MakeWarrior(Vector2i(3, 5))
+	var result: SkillExecutor.ExecutionResult = _executor.execute(warrior,
+			_LoadSkill(&"skl_warrior_shield_wall"), Vector2i(3, 6), _Ctx(1, 1))
+	assert_bool(result.success).is_true()
+	assert_int(_manager.get_statuses(warrior).size()).is_equal(1)
+	assert_str(String(_manager.get_statuses(warrior)[0].status_id)) \
+			.is_equal("BUFF_shield_wall")
+
+func test_tile_spawn_blocked_cell_rejected() -> void:
+	## 陷阱目标格前置校验（S3-09）：障碍格/存活单位占位格拒绝放置
+	## （blocked_cell 失败码、资源不扣）；空地正常（既有用例覆盖）
+	var ranger := _MakeUnit(&"ranger", 0, Vector2i(3, 5))
+	ranger.attrs = {&"agility": 16}
+	# 障碍格 (2,2) 拒绝
+	var on_obstacle: SkillExecutor.ExecutionResult = _executor.execute(ranger,
+			_LoadSkill(&"skl_ranger_set_trap"), Vector2i(2, 2), _Ctx(1, 1))
+	assert_bool(on_obstacle.success).is_false()
+	assert_str(String(on_obstacle.error)).is_equal("blocked_cell")
+	assert_bool(_grid.dynamic_tile_at(Vector2i(2, 2)).is_empty()).is_true()
+	# 存活单位脚下拒绝
+	var enemy := _MakeUnit(&"enemy", 1, Vector2i(4, 6))
+	var on_unit: SkillExecutor.ExecutionResult = _executor.execute(ranger,
+			_LoadSkill(&"skl_ranger_set_trap"), Vector2i(4, 6), _Ctx(1, 1))
+	assert_bool(on_unit.success).is_false()
+	assert_str(String(on_unit.error)).is_equal("blocked_cell")
+	assert_bool(_grid.dynamic_tile_at(Vector2i(4, 6)).is_empty()).is_true()
+
+func test_error_code_constants_single_source() -> void:
+	## 失败码常量单源（A-5）：SkillExecutor 常量 = 字面量契约值——BattleLog
+	## 键与测试断言共引，token 漂移在此拦截
+	assert_str(String(SkillExecutor.ERROR_CASTER_DOWNED)).is_equal("caster_downed")
+	assert_str(String(SkillExecutor.ERROR_OUT_OF_RANGE)).is_equal("out_of_range")
+	assert_str(String(SkillExecutor.ERROR_NO_LINE_OF_SIGHT)).is_equal("no_line_of_sight")
+	assert_str(String(SkillExecutor.ERROR_NO_RESOURCE)).is_equal("no_resource")
+	assert_str(String(SkillExecutor.ERROR_INVALID_TARGET)).is_equal("invalid_target")
+	assert_str(String(SkillExecutor.ERROR_TARGET_DOWNED)).is_equal("target_downed")
+	assert_str(String(SkillExecutor.ERROR_BLOCKED_CELL)).is_equal("blocked_cell")
+
+func test_trap_same_cell_rejected() -> void:
+	## 陷阱同格拒绝（R2-5 拍板 A）：目标格已有动态地格 → blocked_cell 不耗资源
+	var ranger := _MakeUnit(&"ranger", 0, Vector2i(3, 6))
+	ranger.attrs = {&"agility": 16}
+	ranger.resource_stamina = 100
+	_grid.spawn_dynamic_tile(Vector2i(3, 5), &"tile_trap", 10, &"someone")
+	var result: SkillExecutor.ExecutionResult = _executor.execute(ranger,
+			_LoadSkill(&"skl_ranger_set_trap"), Vector2i(3, 5), _Ctx(1, 1))
+	assert_bool(result.success).is_false()
+	assert_str(String(result.error)).is_equal(String(SkillExecutor.ERROR_BLOCKED_CELL))
+	assert_int(ranger.resource_stamina).is_equal(100)
+
+func test_trap_status_tile_rejected() -> void:
+	## 陷阱避开状态地格（R1-7）：草丛/毒沼等 STATUS 格不可覆布
+	var ranger := _MakeUnit(&"ranger", 0, Vector2i(3, 5))
+	ranger.attrs = {&"agility": 16}
+	# (3,4) 为草丛（STATUS 地格）
+	var result: SkillExecutor.ExecutionResult = _executor.execute(ranger,
+			_LoadSkill(&"skl_ranger_set_trap"), Vector2i(3, 4), _Ctx(1, 1))
+	assert_bool(result.success).is_false()
+	assert_str(String(result.error)).is_equal(String(SkillExecutor.ERROR_BLOCKED_CELL))
+
+func test_self_skill_range_cells_only_caster() -> void:
+	## SELF 技红显收窄（R1-6）：range_cells_of 对 SELF 技仅返回施放者格
+	var warrior := _MakeWarrior(Vector2i(3, 5))
+	var shield_wall: SkillDef = _LoadSkill(&"skl_warrior_shield_wall")
+	var cells: Array[Vector2i] = SkillExecutor.range_cells_of(shield_wall,
+			warrior.grid_pos, _grid)
+	assert_int(cells.size()).is_equal(1)
+	assert_vector(cells[0]).is_equal(warrior.grid_pos)
+
+func test_aura_combo_rule_flags_violations() -> void:
+	## AURA 组合校验单技口（R1-5）：伤害型光环 / 非 STATUS_APPLY 效果 → 记错；
+	## 合法怒吼（NONE + STATUS_APPLY）零错
+	var report := ValidationReport.new()
+	var bad_damage := SkillDef.new()
+	bad_damage.id = &"skl_test_aura_damage"
+	bad_damage.target_shape = SkillDef.TargetShape.AURA_3X3
+	bad_damage.damage_type = SkillDef.DamageType.PHYSICAL
+	DataValidator._ReportAuraComboIssue(bad_damage, report)
+	var bad_effect := SkillDef.new()
+	bad_effect.id = &"skl_test_aura_heal"
+	bad_effect.target_shape = SkillDef.TargetShape.AURA_3X3
+	var heal_effect := SkillEffect.new()
+	heal_effect.effect_kind = SkillEffect.EffectKind.HEAL
+	bad_effect.effects = [heal_effect]
+	DataValidator._ReportAuraComboIssue(bad_effect, report)
+	assert_int(report.errors.size()).is_equal(2)
+	# 合法怒吼（NONE + STATUS_APPLY）零错
+	var legal_roar: SkillDef = _LoadSkill(&"skl_enemy_intimidating_roar")
+	var legal_report := ValidationReport.new()
+	DataValidator._ReportAuraComboIssue(legal_roar, legal_report)
+	assert_int(legal_report.errors.size()).is_equal(0)

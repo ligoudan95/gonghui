@@ -53,20 +53,35 @@ func _ready() -> void:
 func initialize_data() -> void:
 	## 扫描全部数据域并建三类索引（autoload _ready 与工具/测试手动加载的共用入口；
 	## -s MainLoop 模式下 root.add_child 不触发 _ready，须显式调用——批 1 实测结论）
+	## S5-6：入口全量重置（issues + 三类索引清空）——重复 initialize 不累积
+	## 旧问题记录、不因索引残留产生「重复 id」误报
 	## 参数：无
 	## 返回：无
+	issues.clear()
+	_records.clear()
+	_paths.clear()
+	_domain_ids.clear()
 	for domain: StringName in DOMAIN_SCHEMA:
 		_ScanDomain(domain, false)
 
 func _ScanDomain(domain: StringName, rescan: bool) -> void:
 	## 扫描单个数据域：递归收集 .tres、校验类型白名单、建三类索引
-	## 参数 domain：域键（DOMAIN_SCHEMA 之一）；rescan：true = 先清空该域旧索引（热重载）
+	## 参数 domain：域键（DOMAIN_SCHEMA 之一）；rescan：true = 热重载（R4-01：
+	## IGNORE 读盘 → **新值逐属性拷入旧实例壳**（同址刷新）→ 索引仍指旧实例——
+	## 既有引用方（GameConfig._config / context.cfg 等）不换对象即可见新值；
+	## S5-6：rescan 同时清空 issues——重扫即全量重建问题列表，不累积）
 	## 返回：无（问题记入 issues 并 push_warning；未知域 push_warning 后跳过）
 	if not DOMAIN_SCHEMA.has(domain):
 		push_warning("GameData: 未知数据域 '%s'，跳过扫描" % domain)
 		return
 	if rescan:
+		issues.clear()
+	# 热重载容器：保留旧实例引用（新值拷入旧壳）；本域旧索引键全清
+	# （磁盘上已删除的记录自索引消失），域 id 列表重建
+	var kept_records: Dictionary = {}
+	if rescan:
 		for old_id: StringName in _GetDomainIds(domain):
+			kept_records[old_id] = _records[old_id]
 			_records.erase(old_id)
 			_paths.erase(old_id)
 		var cleared_ids: Array[StringName] = []
@@ -74,7 +89,11 @@ func _ScanDomain(domain: StringName, rescan: bool) -> void:
 	var allowed_classes: Array = DOMAIN_SCHEMA[domain]
 	var domain_ids: Array[StringName] = _GetDomainIds(domain)
 	for file_path: String in _CollectTresFiles(DATA_ROOT + "/" + domain):
-		var record: Resource = ResourceLoader.load(file_path, "", ResourceLoader.CACHE_MODE_REPLACE)
+		# S5-5/R4-01：常规扫描 REUSE（core 域 cfg 与 GameConfig 共享实例）；
+		# 热重载走 IGNORE——绕缓存直读磁盘新内容（旧实例仍在缓存槽，拷贝后弃新壳）
+		var cache_mode: int = ResourceLoader.CACHE_MODE_IGNORE if rescan \
+				else ResourceLoader.CACHE_MODE_REUSE
+		var record: Resource = ResourceLoader.load(file_path, "", cache_mode)
 		if record == null:
 			_RecordIssue("资源加载失败：%s" % file_path)
 			continue
@@ -86,12 +105,23 @@ func _ScanDomain(domain: StringName, rescan: bool) -> void:
 			])
 			continue
 		var record_id: StringName = _ExtractRecordId(record, file_path)
+		if rescan and kept_records.has(record_id):
+			# R4-01 同址刷新：磁盘新值拷入旧实例（嵌套子资源引用一并替换），
+			# 索引继续指旧实例——所有旧引用同对象见新值，不撕裂
+			var old_record: Resource = kept_records[record_id]
+			CoreConfig.copy_props(record, old_record)
+			record = old_record
+			_records[record_id] = record
+			_paths[record_id] = file_path
+			domain_ids.append(record_id)
+			continue
 		if _records.has(record_id):
 			_RecordIssue("重复 id '%s'：%s 与 %s 冲突" % [record_id, _paths[record_id], file_path])
 			continue
 		_records[record_id] = record
 		_paths[record_id] = file_path
 		domain_ids.append(record_id)
+
 
 func _CollectTresFiles(dir_path: String) -> PackedStringArray:
 	## 递归收集目录下全部 .tres 文件路径
@@ -207,7 +237,8 @@ func get_domain_ids(domain: StringName) -> Array[StringName]:
 	return _domain_ids[domain]
 
 func get_asset_path(id: StringName) -> String:
-	## 按资源 id 查 AssetRegistry 映射的路径（多表按加载序取首个命中）
+	## 按资源 id 查 AssetRegistry 映射的路径（多 registry 任意命中即返回——
+	## R4-13 勘正：REUSE 缓存下遍历序不保证加载序）
 	## 参数 id：资源 id（如 vfx/icon/portrait 引用 id）
 	## 返回：res:// 路径；未登记时返回空串并 push_warning
 	for record: Resource in get_records_of_class(AssetRegistry):
@@ -217,9 +248,14 @@ func get_asset_path(id: StringName) -> String:
 	push_warning("GameData: 资源 id '%s' 未登记于任何 AssetRegistry" % id)
 	return ""
 
-func reload_domain(domain: StringName) -> void:
-	## 热重载单个数据域（清旧索引后重扫，强制从磁盘重读），完成后发出 data_reloaded
+func reload_domain(domain: StringName) -> Error:
+	## 热重载单个数据域（清旧索引后重扫，IGNORE 读盘 + 同址拷贝刷新旧实例），
+	## 成功后发出 data_reloaded（R4-11：未知域失败不发信号）
 	## 参数 domain：域键（DOMAIN_SCHEMA 之一）
-	## 返回：无
+	## 返回：OK = 重载完成；ERR_INVALID_PARAMETER = 未知域（信号未发）
+	if not DOMAIN_SCHEMA.has(domain):
+		push_warning("GameData: 未知数据域 '%s'，跳过热重载" % domain)
+		return ERR_INVALID_PARAMETER
 	_ScanDomain(domain, true)
 	data_reloaded.emit(domain)
+	return OK

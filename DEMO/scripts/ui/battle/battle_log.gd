@@ -21,25 +21,50 @@ enum LineKind {
 
 ## 条目上限（超出裁最旧，防无限增长）
 const MAX_LINES: int = 500
-## 类型着色（系统白/伤害红/治疗绿/状态紫/移动灰）
-const LINE_COLORS: Dictionary = {
-	LineKind.SYSTEM: Color(0.85, 0.88, 0.9),
-	LineKind.DAMAGE: Color(0.98, 0.55, 0.45),
-	LineKind.HEAL: Color(0.5, 0.9, 0.55),
-	LineKind.STATUS: Color(0.75, 0.6, 0.95),
-	LineKind.MOVE: Color(0.6, 0.65, 0.62),
-}
-## 失败码 → 中文（UI 模板层文案映射；键 = trace 数据契约）
+## 失败码 → 中文（UI 模板层文案映射；键 = SkillExecutor 失败码常量——A-5 单源）
 const FAIL_TEXTS: Dictionary = {
-	&"out_of_range": "射程外",
-	&"no_line_of_sight": "视线阻断",
-	&"invalid_target": "目标非法",
-	&"target_downed": "目标已倒地",
-	&"no_resource": "资源不足",
+	SkillExecutor.ERROR_OUT_OF_RANGE: "射程外",
+	SkillExecutor.ERROR_NO_LINE_OF_SIGHT: "视线阻断",
+	SkillExecutor.ERROR_INVALID_TARGET: "目标非法",
+	SkillExecutor.ERROR_TARGET_DOWNED: "目标已倒地",
+	SkillExecutor.ERROR_NO_RESOURCE: "资源不足",
+	SkillExecutor.ERROR_CASTER_DOWNED: "施放者已倒地",
+	SkillExecutor.ERROR_BLOCKED_CELL: "目标格不可放置",
+}
+## 通用提示模板（B-8：battle_screen 直写文案收口到模板常量层——
+## UI 文案单源，改口吻只动此处）
+const MSG_LOS_BLOCKED: String = "视线被障碍阻断——请选择可直视的目标"
+const MSG_TARGET_INVALID_ALLY: String = "目标非法——该技能只能作用于友方单位"
+const MSG_TARGET_OUT_OF_RANGE: String = "目标超出射程——请选择射程内目标"
+const MSG_MOVE_REJECTED: String = "无法移动到该格——请重新选择"
+
+## 施加失败原因 → 中文（S2-2：stack_limit 等拒收原因可感知，资源白扣
+## 不再无反馈；键 = StatusManager 拒收原因契约）
+const APPLY_FAIL_TEXTS: Dictionary = {
+	&"miss": "未命中",
+	&"resisted": "被抵抗",
+	&"stack_limit": "叠层已满",
+	&"source_not_allowed": "来源不符",
 }
 
 ## 战斗上下文（单位名解析；可空）
 var context: BattleSetup.BattleContext = null
+
+## 行色档（B-6：LineKind -> cfg 字段名 + UiTheme 兜底——setup 后按表驱动取色）
+const LINE_COLOR_FIELDS: Dictionary = {
+	LineKind.SYSTEM: [&"ui_log_system_color", UiTheme.LOG_SYSTEM],
+	LineKind.DAMAGE: [&"ui_log_damage_color", UiTheme.LOG_DAMAGE],
+	LineKind.HEAL: [&"ui_log_heal_color", UiTheme.LOG_HEAL],
+	LineKind.STATUS: [&"ui_log_status_color", UiTheme.LOG_STATUS],
+	LineKind.MOVE: [&"ui_log_move_color", UiTheme.LOG_MOVE],
+}
+
+## 行色读取（B-6：cfg 优先、UiTheme 兜底）
+func _Line_color(kind: int) -> Color:
+	## 参数 kind：LineKind
+	## 返回：生效颜色
+	var field: Array = LINE_COLOR_FIELDS.get(kind, LINE_COLOR_FIELDS[LineKind.SYSTEM])
+	return UiTheme.color_of(context.cfg if context != null else null, field[0], field[1])
 ## 条目容器
 var _entries: VBoxContainer = null
 ## 滚动容器
@@ -49,11 +74,10 @@ func _ready() -> void:
 	## 引擎回调：半透明深底 + 滚动区 + 条目容器（子节点自建——参照 ResultPanel）
 	## 参数：无
 	## 返回：无
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.07, 0.08, 0.09, 0.86)
-	style.set_corner_radius_all(6)
-	style.set_content_margin_all(8)
-	add_theme_stylebox_override("panel", style)
+	# B-4：深底面板样式单源（UiTheme.make_dark_panel_style——与 tips 共用，
+	# 原 alpha 0.86/0.92 漂移统一 0.9）
+	add_theme_stylebox_override("panel",
+			UiTheme.make_dark_panel_style(context.cfg if context != null else null))
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_scroll = ScrollContainer.new()
 	_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -79,8 +103,17 @@ func setup(log_controller: BattleController, log_context: BattleSetup.BattleCont
 		push_line("%s 移动 (%d,%d)→(%d,%d)" % [
 			_NameOf(unit.unit_id), from_pos.x, from_pos.y, to_pos.x, to_pos.y,
 		], LineKind.MOVE))
-	log_controller.skill_executed.connect(func(caster, result) -> void:
+	log_controller.skill_executed.connect(
+			func(caster: BattleUnit, result: SkillExecutor.ExecutionResult) -> void:
 		push_skill_trace(_NameOf(caster.unit_id), result))
+	log_controller.round_settled.connect(func(_round_no: int, dot_damage: Array) -> void:
+		# DOT 跳伤逐条成行（盲审批 3 D-2：回合末结算可见化——地格来源在先、
+		# 状态来源在后，与结算时序一致；无跳不打占位行——回合头行已有分隔）
+		for entry: Dictionary in dot_damage:
+			var unit: BattleUnit = entry.get(&"unit", null) as BattleUnit
+			if unit != null:
+				push_line("%s 跳伤 −%d" % [_NameOf(unit.unit_id), int(entry.get(&"damage", 0))],
+						LineKind.DAMAGE))
 	log_controller.status_changed.connect(
 			func(unit: BattleUnit, status_id: StringName) -> void:
 		push_line("%s 状态变化：%s" % [_NameOf(unit.unit_id), _StatusNameOf(status_id)],
@@ -92,6 +125,10 @@ func setup(log_controller: BattleController, log_context: BattleSetup.BattleCont
 	log_controller.battle_ended.connect(func(result: BattleResult) -> void:
 		push_line("◆ %s（%d 回合）" % [result.kind_text(), result.rounds_used],
 				LineKind.SYSTEM))
+	# R3-01：setup 时 context 就绪——按表值重建面板样式（_ready 期 context
+	# 为空只能用兜底色，表驱动的深底色自此生效）
+	add_theme_stylebox_override("panel",
+			UiTheme.make_dark_panel_style(context.cfg if context != null else null))
 
 func push_line(text: String, kind: int) -> void:
 	## 追加一条日志（公开口——信号回调与测试消费）；自动滚底、超限裁旧
@@ -100,8 +137,10 @@ func push_line(text: String, kind: int) -> void:
 	var label := Label.new()
 	label.text = text
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.add_theme_font_size_override("font_size", 12)
-	label.add_theme_color_override("font_color", LINE_COLORS.get(kind, LINE_COLORS[LineKind.SYSTEM]))
+	label.add_theme_font_size_override("font_size",
+			UiTheme.font_of(context.cfg if context != null else null,
+					&"ui_font_size_minor", UiTheme.FONT_MINOR))
+	label.add_theme_color_override("font_color", _Line_color(kind))
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_entries.add_child(label)
 	while _entries.get_child_count() > MAX_LINES:
@@ -140,10 +179,10 @@ func push_skill_trace(caster_name: String, result: SkillExecutor.ExecutionResult
 	if trace.has(&"hit_chain"):
 		var hit_chain: Dictionary = trace[&"hit_chain"]
 		var hit_line: String = "  命中 %d%%（基准 %d +修正 %d −闪避 %d）→ %s" % [
-			roundi(float(hit_chain[&"final"]) * 100.0),
-			roundi(float(hit_chain[&"base"]) * 100.0),
+			UiTheme.pct(float(hit_chain[&"final"])),
+			UiTheme.pct(float(hit_chain[&"base"])),
 			int(hit_chain[&"mod"]),
-			roundi(float(hit_chain[&"dodge"]) * 100.0),
+			UiTheme.pct(float(hit_chain[&"dodge"])),
 			"命中" if hit_chain[&"passed"] else "失手",
 		]
 		push_line(hit_line, LineKind.SYSTEM)
@@ -154,7 +193,7 @@ func push_skill_trace(caster_name: String, result: SkillExecutor.ExecutionResult
 		var chain: Dictionary = trace[&"damage_chain"]
 		var crit_text: String = "未暴击"
 		if chain[&"crit"]:
-			crit_text = "暴击 %d%%" % roundi(float(chain[&"crit_chance"]) * 100.0)
+			crit_text = "暴击 %d%%" % UiTheme.pct(float(chain[&"crit_chance"]))
 		push_line("  输出 %.1f（站位×%.1f 克制×%.1f）→ 减免（抗 %d%% 甲 %d 穿 %d）%d → %s → 最终 %d" % [
 			float(chain[&"raw"]),
 			float(chain[&"panel_mult"]),
@@ -172,12 +211,17 @@ func push_skill_trace(caster_name: String, result: SkillExecutor.ExecutionResult
 	# 治疗链
 	if trace.has(&"heal"):
 		push_line("  治疗 %d" % int(trace[&"heal"]), LineKind.HEAL)
-	# 状态链：逐条施加成败（状态名中文——批 D L7）
+	# 状态链：逐条施加成败（状态名中文——批 D L7；S2-2：失败原因区分——
+	# 未命中/被抵抗/叠层已满/来源不符，资源白扣可感知）
 	if trace.has(&"statuses"):
 		for entry: Dictionary in trace[&"statuses"]:
+			var applied_text: String = "✓"
+			if not entry[&"applied"]:
+				var reason: StringName = entry.get(&"reason", &"resisted")
+				applied_text = "✗（%s）" % APPLY_FAIL_TEXTS.get(reason, String(reason))
 			push_line("  施加 %s %d 回合 %s" % [
-					_StatusNameOf(entry[&"id"]), int(entry[&"duration"]),
-					"✓" if entry[&"applied"] else "✗（被抵抗）"], LineKind.STATUS)
+					_StatusNameOf(entry[&"id"]), int(entry[&"duration"]), applied_text],
+					LineKind.STATUS)
 	# 陷阱链
 	if trace.has(&"trap"):
 		var trap: Dictionary = trace[&"trap"]
@@ -192,13 +236,12 @@ func get_entries() -> VBoxContainer:
 	return _entries
 
 func _NameOf(unit_id: StringName) -> String:
-	## 单位 id → 显示名（context 可查则显示名，查无回退 id 原文）
+	## 单位 id → 显示名（单源薄转发——批 4 C 组 M4：口径集中
+	## BattleContext.display_name_of；空 context 回退 id 原文）
 	## 参数 unit_id：单位 id
 	## 返回：显示名
 	if context != null:
-		var unit: BattleUnit = context.find_unit(unit_id)
-		if unit != null and not unit.display_name.is_empty():
-			return unit.display_name
+		return context.display_name_of(unit_id)
 	return String(unit_id)
 
 func _SkillNameOf(skill_id: StringName) -> String:

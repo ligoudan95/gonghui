@@ -33,17 +33,20 @@ signal round_started(round_no: int)
 signal turn_started(unit: BattleUnit)
 ## 单位移动完成（参数 = 单位 / 起格 / 终格）
 signal unit_moved(unit: BattleUnit, from_pos: Vector2i, to_pos: Vector2i)
-## 技能执行完成（参数 = 施放单位 / 执行结果）
-signal skill_executed(caster, result)
+## 技能执行完成（参数 = 施放单位 / 执行结果——S4-10/S5-7 全量类型标注）
+signal skill_executed(caster: BattleUnit, result: SkillExecutor.ExecutionResult)
 ## 状态变化（参数 = 目标单位 / 状态 id）
 signal status_changed(unit: BattleUnit, status_id: StringName)
 ## 单位倒地（参数 = 倒地单位）
 signal unit_downed(unit: BattleUnit)
+## 回合末结算完成（盲审批 3 D-2：参数 = 回合号 / DOT 跳伤清单——逐跳一条
+## {&"unit": 承伤单位, &"damage": 跳伤值}，供战斗日志与飘字消费；无跳空数组）
+signal round_settled(round_no: int, dot_damage: Array)
 ## 陷阱触发（参数 = 踏入单位 / 预结算伤害——盲审批 1-3：动态地格运行时
 ## 触发链的日志/UI 可观测口）
 signal trap_triggered(unit: BattleUnit, damage: int)
-## 战斗终局（参数 = BattleResult；call_deferred 发出）
-signal battle_ended(result)
+## 战斗终局（参数 = BattleResult；call_deferred 发出——R2-2 类型补全）
+signal battle_ended(result: BattleResult)
 
 ## 敌方行动演出延时（秒；默认 0.4，headless 测试注入 0）
 @export var delay_seconds: float = 0.4
@@ -92,19 +95,22 @@ func _exit_tree() -> void:
 	abort_battle()
 
 func start_battle(context: BattleSetup.BattleContext) -> void:
-	## 开战入口：挂接上下文并启动状态机协程（fire-and-forget——战斗随帧推进）
+	## 开战入口：挂接上下文并启动状态机协程（fire-and-forget——战斗随帧推进）。
+	## R2-9 实例契约：**本实例不可复用开第二场**——收束/中止后 _battle_over/
+	## _downed_ids/_result 为终态残留；连战需求须重建 BattleController
+	## （或自行复位上述三态 + 重新 prepare）
 	## 参数 context：BattleSetup.build 装配产物
 	## 返回：无
 	prepare(context)
 	_run()
 
 func request_move(dest: Vector2i) -> bool:
-	## 玩家指令：当前我方单位移动至可达格（已行动或**已移动**后不可再移
-	## ——盲审批 1-7：原只挡 has_acted，未行动前可反复整程移动；成功且已
-	## 行动过则自动结束行动轮）
+	## 玩家指令：当前我方单位移动至可达格（**已移动**后不可再移——盲审批 1-7；
+	## S3-03 拍板 A：行动顺序任意——去掉 has_acted 前置（先攻击后移动同轮成立，
+	## _auto_end_turn 双标记收束口径不变）
 	## 参数 dest：目的地
 	## 返回：true = 受理执行
-	if not _can_command() or current_unit.has_acted or current_unit.has_moved:
+	if not _can_command() or current_unit.has_moved:
 		return false
 	var reachable: Array[Vector2i] = _context.grid.find_reachable(current_unit,
 			current_unit.move_final())
@@ -117,13 +123,14 @@ func request_move(dest: Vector2i) -> bool:
 func request_skill(skill_id: StringName, target_cell: Vector2i) -> bool:
 	## 玩家指令：当前我方单位释放技能（执行失败不消耗行动——行动轮继续等待）
 	## 参数 skill_id：技能 id；target_cell：目标格
-	## 返回：true = 受理执行（失败 false 不置 has_acted）
+	## 返回：true = 受理执行（失败 false 不置 has_acted；S3-05：技能解析失败
+	## result 为 null 直接拒绝，不触 .success 成员访问）
 	if not _can_command() or current_unit.has_acted:
 		return false
 	if not current_unit.skill_ids.has(skill_id):
 		return false
 	var result = _execute_skill(current_unit, skill_id, target_cell)
-	if not result.success:
+	if result == null or not result.success:
 		return false
 	current_unit.has_acted = true
 	_auto_end_turn()
@@ -149,21 +156,29 @@ func request_retreat() -> bool:
 
 func run_bewitched_action(unit: BattleUnit) -> void:
 	## 蛊惑自动随机行动（公开口——控制器内部分派，亦供集成测试直调验证）：
-	## 随机移动至可达格 + 对射程内随机敌方普攻，否则待机
+	## 随机移动至可达格 + 对射程内随机敌方普攻，否则待机；移动后单位死亡
+	## （踩陷阱）即终止（S3-01——死人不攻击）；攻击目标池过滤视线
+	## （S3-08：los_required 口径，与执行器前置校验一致）
 	## 参数 unit：被蛊惑单位
 	## 返回：无
 	var reachable: Array[Vector2i] = _context.grid.find_reachable(unit, unit.move_final())
 	if not reachable.is_empty():
 		var dest: Vector2i = reachable[_context.rng.randi_range(0, reachable.size() - 1)]
 		_move_unit(unit, dest)
+	if not unit.alive or _battle_over:
+		return
 	var attack: SkillDef = _context.skill_lookup.call(unit.base_attack_id) as SkillDef
 	if attack == null:
 		return
-	var attack_range: int = maxi(1, attack.range)
+	var attack_range: int = _executor.effective_range(attack)
+	var needs_los: bool = _executor.los_required(attack)
 	var in_range: Array = []
 	for enemy: BattleUnit in _hostiles_of(unit):
-		if enemy.alive and _Manhattan(unit.grid_pos, enemy.grid_pos) <= attack_range:
-			in_range.append(enemy)
+		if not enemy.alive or BattleGrid.manhattan(unit.grid_pos, enemy.grid_pos) > attack_range:
+			continue
+		if needs_los and not _context.grid.has_line_of_sight(unit.grid_pos, enemy.grid_pos):
+			continue
+		in_range.append(enemy)
 	if not in_range.is_empty():
 		var target: BattleUnit = in_range[_context.rng.randi_range(0, in_range.size() - 1)]
 		_execute_skill(unit, unit.base_attack_id, target.grid_pos)
@@ -242,16 +257,21 @@ func _run_player_turn(unit: BattleUnit) -> void:
 		await get_tree().process_frame
 
 func _run_enemy_turn(unit: BattleUnit) -> void:
-	## 敌方行动轮：AI 决策 → 移动 → 技能（含演出延时）
+	## 敌方行动轮：AI 决策 → 移动 → 技能（含演出延时）；移动后单位死亡
+	## （踩陷阱）即终止不再攻击（S3-01——尸体不攻击）；ctx 注入
+	## status_manager 供 AI 期望伤害消费站位面板层（S3-06）
 	## 参数 unit：行动单位
 	## 返回：无（协程——含延时）
 	var ctx: Dictionary = {
 		&"cfg": _context.cfg,
 		&"skill_lookup": _context.skill_lookup,
+		&"status_manager": _context.status_manager,
 	}
 	var action := EnemyAI.decide(unit, _context.grid, _context.allies, ctx)
 	if action.move_dest != EnemyAI.NO_CELL:
 		_move_unit(unit, action.move_dest)
+	if not unit.alive or _battle_over:
+		return
 	if action.skill_id != &"" and action.attack_cell != EnemyAI.NO_CELL:
 		_execute_skill(unit, action.skill_id, action.attack_cell)
 	unit.has_acted = true
@@ -294,7 +314,7 @@ func _move_unit(unit: BattleUnit, dest: Vector2i) -> void:
 			_check_battle_end()
 	unit_moved.emit(unit, from_pos, dest)
 
-func _execute_skill(unit: BattleUnit, skill_id: StringName, target_cell: Vector2i):
+func _execute_skill(unit: BattleUnit, skill_id: StringName, target_cell: Vector2i) -> SkillExecutor.ExecutionResult:
 	## 技能执行：组装 ctx（批 1 SkillExecutor）→ 执行 → 发信号（施加/倒地）→
 	## 即时全灭判定
 	## 参数 unit：施放单位；skill_id：技能 id；target_cell：目标格
@@ -316,7 +336,8 @@ func _execute_skill(unit: BattleUnit, skill_id: StringName, target_cell: Vector2
 	skill_executed.emit(unit, result)
 	if result != null:
 		for entry: StringName in result.applied_statuses:
-			var parts: PackedStringArray = String(entry).split("|")
+			# 管道符契约单源解码（批 4 C 组 M2——与 SkillExecutor 生产端同源）
+			var parts: PackedStringArray = _executor.parse_status_entry(entry)
 			if parts.size() == 2:
 				var status_target: BattleUnit = _context.find_unit(StringName(parts[0]))
 				if status_target != null:
@@ -340,11 +361,13 @@ func _mark_downed(unit_id: StringName) -> void:
 
 func _do_round_end() -> void:
 	## 回合末结算：批 1 StatusManager.end_of_round_tick（DOT → 递减 → 控制窗口
-	## 推进）→ DOT 致倒地的占位清理与信号 → 兜底全灭判定 → 回合数护栏
+	## 推进，D-2 起返回 DOT 跳伤清单）→ 发 round_settled（日志/飘字消费）→
+	## DOT 致倒地的占位清理与信号 → 兜底全灭判定 → 回合数护栏
 	## 参数：无
 	## 返回：无
-	_context.status_manager.end_of_round_tick(_context.round_no, _context.units,
-			_context.rng)
+	var dot_events: Array = _context.status_manager.end_of_round_tick(
+			_context.round_no, _context.units, _context.rng)
+	round_settled.emit(_context.round_no, dot_events)
 	for unit: BattleUnit in _context.units:
 		if not unit.alive:
 			_mark_downed(unit.unit_id)
@@ -457,9 +480,3 @@ func _CompareTurnOrder(a: BattleUnit, b: BattleUnit) -> bool:
 	if a.side != b.side:
 		return a.side < b.side
 	return a.slot_index < b.slot_index
-
-func _Manhattan(a: Vector2i, b: Vector2i) -> int:
-	## 曼哈顿距离
-	## 参数 a/b：两坐标
-	## 返回：|dx| + |dy|
-	return absi(a.x - b.x) + absi(a.y - b.y)

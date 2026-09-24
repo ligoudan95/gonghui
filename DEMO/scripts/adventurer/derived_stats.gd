@@ -42,9 +42,10 @@ const RESIST_WEIGHT_FALLBACK: float = 0.02
 const HIT_BASE_FALLBACK: float = 0.85
 ## 闪避率基准兜底（= cfg_main.dodge_base）
 const DODGE_BASE_FALLBACK: float = 0.05
-
-## 奇术师职业 id（法术穿甲特例 = 意志调整值，§3.2 #17）
-const ARCANIST_CLASS_ID: StringName = &"cls_arcanist"
+## 穿甲换算乘数兜底（= cfg_main.pierce_per_modifier——A-1）
+const PIERCE_PER_MODIFIER_FALLBACK: int = 1
+## 护甲换算乘数兜底（= cfg_main.armor_per_modifier——A-1）
+const ARMOR_PER_MODIFIER_FALLBACK: int = 1
 
 static func calc_hp(constitution: int, cls: ClassDef, level: int,
 		cfg: CoreConfig = null) -> int:
@@ -112,10 +113,13 @@ static func calc_speed(agility: int) -> int:
 	return agility
 
 static func calc_phys_pierce(strength: int, cfg: CoreConfig) -> int:
-	## 物理穿甲 = 力量调整值×1（点数直接抵消护甲），钳制 ≥0（第十轮盲审）
+	## 物理穿甲 = 力量调整值 × pierce_per_modifier（A-1 入表，原 ×1 硬编码），
+	## 钳制 ≥0（第十轮盲审）
 	## 参数 strength：力量值；cfg：总控配置
 	## 返回：物理穿甲点数（≥0）
-	return maxi(0, BattleRules.attr_modifier(strength, cfg) * 1)
+	var per_modifier: int = cfg.pierce_per_modifier if cfg != null and cfg.pierce_per_modifier > 0 \
+			else PIERCE_PER_MODIFIER_FALLBACK
+	return maxi(0, BattleRules.attr_modifier(strength, cfg) * per_modifier)
 
 static func calc_mag_pierce(source_attr_value: int, _unused_willpower: int,
 		_class_id: StringName, cfg: CoreConfig) -> int:
@@ -123,8 +127,10 @@ static func calc_mag_pierce(source_attr_value: int, _unused_willpower: int,
 	## 表驱动——批 C M8：原 cls_arcanist 意志特例分支删除改读表，五职业智力/
 	## 奇术师意志由表承载；签名保留兼容既有调用方，第二/三参数已不消费）
 	## 参数 source_attr_value：换算源属性值（调用方按表取）；cfg：总控配置
-	## 返回：法术穿甲点数（≥0）
-	return maxi(0, BattleRules.attr_modifier(source_attr_value, cfg) * 1)
+	## 返回：法术穿甲点数（≥0；换算乘数 = pierce_per_modifier——A-1 入表）
+	var per_modifier: int = cfg.pierce_per_modifier if cfg != null and cfg.pierce_per_modifier > 0 \
+			else PIERCE_PER_MODIFIER_FALLBACK
+	return maxi(0, BattleRules.attr_modifier(source_attr_value, cfg) * per_modifier)
 
 static func calc_phys_resist(constitution: int, cfg: CoreConfig) -> float:
 	## 物理抗性 = 体质调整值×resist_weight（+ 装备词条，装备项由调用方并入），钳制 ≥0
@@ -143,11 +149,16 @@ static func calc_mag_resist(perception: int, cfg: CoreConfig) -> float:
 static func calc_phys_armor(equip_armor: int, constitution: int, cfg: CoreConfig) -> int:
 	## 物理护甲 = 装备护甲值（主导）+ 体质调整值×1，钳制 ≥0（§3.2 物理←体质）
 	## 参数 equip_armor：装备护甲值（物理/法术双轨同计）；constitution：体质值；cfg：总控配置
-	## 返回：物理护甲（≥0）
-	return maxi(0, equip_armor + BattleRules.attr_modifier(constitution, cfg) * 1)
+	## 返回：物理护甲（≥0；属性段乘数 = armor_per_modifier——A-1 入表）
+	var per_modifier: int = cfg.armor_per_modifier if cfg != null and cfg.armor_per_modifier > 0 \
+			else ARMOR_PER_MODIFIER_FALLBACK
+	return maxi(0, equip_armor + BattleRules.attr_modifier(constitution, cfg) * per_modifier)
 
 static func calc_mag_armor(equip_armor: int, perception: int, cfg: CoreConfig) -> int:
-	## 法术护甲 = 装备护甲值（双轨同计）+ 感知调整值×1，钳制 ≥0（§3.2 法术←感知）
+	## 法术护甲 = 装备护甲值（双轨同计）+ 感知调整值 × armor_per_modifier
+	## （R1-1 补改入表，原 ×1 硬编码），钳制 ≥0（§3.2 法术←感知）
 	## 参数 equip_armor：装备护甲值；perception：感知值；cfg：总控配置
 	## 返回：法术护甲（≥0）
-	return maxi(0, equip_armor + BattleRules.attr_modifier(perception, cfg) * 1)
+	var per_modifier: int = cfg.armor_per_modifier if cfg != null and cfg.armor_per_modifier > 0 \
+			else ARMOR_PER_MODIFIER_FALLBACK
+	return maxi(0, equip_armor + BattleRules.attr_modifier(perception, cfg) * per_modifier)

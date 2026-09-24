@@ -11,12 +11,28 @@ extends Control
 const SceneManagerScript: GDScript = preload("res://scripts/autoload/scene_manager.gd")
 
 func _ready() -> void:
-	## 引擎回调：刷新版本号文案与「继续」按钮可用性
+	## 引擎回调：刷新版本号文案与「继续」按钮可用性；B-7：tscn 内嵌字号
+	## 按档位覆写（tscn 值留占位——字号体系只动 cfg）
 	## 参数：无
 	## 返回：无
+	_ApplyFontTiers()
 	%VersionLabel.text = _BuildVersionText()
 	%ContinueButton.disabled = not _save_manager().has_save()
 	%HintLabel.text = ""
+
+func _ApplyFontTiers() -> void:
+	## tscn 内嵌字号档位覆写（B-7）：游戏名（64→display）/ VersionLabel
+	## （20→body）/ HintLabel（18→normal）
+	## 参数：无
+	## 返回：无
+	var game_data: Node = get_node_or_null("/root/GameData")
+	var cfg: CoreConfig = game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig 			if game_data != null else null
+	%VersionLabel.get_parent().get_node("TitleLabel").add_theme_font_size_override(
+			"font_size", UiTheme.font_of(cfg, &"ui_font_size_display", UiTheme.FONT_DISPLAY))
+	%VersionLabel.add_theme_font_size_override("font_size",
+			UiTheme.font_of(cfg, &"ui_font_size_body", UiTheme.FONT_BODY))
+	%HintLabel.add_theme_font_size_override("font_size",
+			UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 
 func _save_manager() -> Node:
 	## 取 SaveManager 自动加载单例（节点路径方式，环境无关）
@@ -31,13 +47,18 @@ func _scene_manager() -> Node:
 	return get_node("/root/SceneManager")
 
 func _BuildVersionText() -> String:
-	## 构建版本号文案："DEMO M0" + ProjectSettings 版本（未设则只显示前者）
+	## 构建版本号文案（B-11 单源：cfg_main.version_label 替代「DEMO M0」
+	## 三处字面量）+ ProjectSettings 版本（未设则只显示前者）
 	## 参数：无
 	## 返回：版本号文本
+	var game_data: Node = get_node_or_null("/root/GameData")
+	var cfg: CoreConfig = game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig 			if game_data != null else null
+	var label: String = cfg.version_label if cfg != null and not cfg.version_label.is_empty() \
+			else "DEMO"
 	var version: String = String(ProjectSettings.get_setting("application/config/version", ""))
 	if version.is_empty():
-		return "DEMO M0"
-	return "DEMO M0 · v%s" % version
+		return label
+	return "%s · v%s" % [label, version]
 
 func _on_start_pressed() -> void:
 	## 「开始」按钮：新建存档并进入公会壳

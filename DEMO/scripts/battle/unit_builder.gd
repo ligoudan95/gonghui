@@ -23,9 +23,10 @@ static func build_ally(adv: AdventurerData, cls: ClassDef, eqp: EquipDef,
 	unit.class_id = adv.class_id
 	unit.level = adv.level
 	unit.attrs = adv.attrs.duplicate()
-	unit.max_hp = DerivedStats.calc_hp(int(adv.attrs.get(&"constitution", 10)), cls, adv.level, cfg)
+	unit.max_hp = DerivedStats.calc_hp(int(adv.attrs.get(AttrKeys.CONSTITUTION, AttrKeys.DEFAULT_ATTR_VALUE)), cls, adv.level, cfg)
 	unit.current_hp = unit.max_hp
-	var source_value: int = int(adv.attrs.get(cls.resource_source_attr, 10))
+	var source_value: int = int(adv.attrs.get(cls.resource_source_attr,
+			AttrKeys.DEFAULT_ATTR_VALUE))
 	unit.max_mana = DerivedStats.calc_mana(source_value, cfg)
 	unit.current_mana = unit.max_mana
 	unit.max_stamina = DerivedStats.calc_stamina(source_value, cfg)
@@ -83,13 +84,14 @@ static func build_enemy(enemy: EnemyDef, slot: int) -> BattleUnit:
 
 static func _RaceTagOf(race_tag: int) -> StringName:
 	## 敌表种族枚举 -> StringName 标记（种族克制消费口径——盲审批 1-4：
-	## UNDEAD 映射补全，亡灵克制链路（圣光惩击 ×1.5）自此可达）
+	## UNDEAD 映射补全，亡灵克制链路（圣光惩击 ×1.5）自此可达；token 经
+	## UnitTags 单源——批 4 C 组）
 	## 参数 race_tag：EnemyDef.RaceTag 枚举值
-	## 返回：&"beast"/&"humanoid"/&"undead"
+	## 返回：UnitTags.RACE_BEAST / RACE_HUMANOID / RACE_UNDEAD
 	match race_tag:
 		EnemyDef.RaceTag.BEAST:
-			return &"beast"
+			return UnitTags.RACE_BEAST
 		EnemyDef.RaceTag.UNDEAD:
-			return &"undead"
+			return UnitTags.RACE_UNDEAD
 		_:
-			return &"humanoid"
+			return UnitTags.RACE_HUMANOID

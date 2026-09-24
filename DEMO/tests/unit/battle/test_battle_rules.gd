@@ -127,3 +127,37 @@ func test_roll_hit_random_band() -> void:
 	assert_int(hits).is_between(20, 80)
 	assert_bool(BattleRules.roll_hit(0.0, rng, -1)).is_false()
 	assert_bool(BattleRules.roll_hit(1.0, rng, -1)).is_true()
+
+func test_mitigate_by_damage_type_selects_track_pair() -> void:
+	## 减免轨选对单源（批 4 C 组 H2）：物理/法术各取对应抗性/护甲/穿甲对——
+	## 物理轨 100×(1−20%)−(10−4)=74（不看法术面）；法术轨 100×(1−10%)−(8−2)=84
+	## 鸭子契约分量注入（物理穿 4/法术穿 2；物理抗 20%/法术抗 10%；
+	## 物理甲 10/法术甲 8）
+	var fake := UnitDouble.new()
+	fake.phys_pierce = 4
+	fake.mag_pierce = 2
+	fake.phys_resist = 0.2
+	fake.mag_resist = 0.1
+	fake.phys_armor = 10
+	fake.mag_armor = 8
+	assert_int(BattleRules.mitigate_by_damage_type(100.0, SkillDef.DamageType.PHYSICAL,
+			fake, fake, _cfg)).is_equal(74)
+	assert_int(BattleRules.mitigate_by_damage_type(100.0, SkillDef.DamageType.MAGICAL,
+			fake, fake, _cfg)).is_equal(84)
+	# 分量口各自取对（trace 明细消费）
+	assert_float(BattleRules.resist_of(SkillDef.DamageType.PHYSICAL, fake)).is_equal_approx(0.2, 0.0001)
+	assert_float(BattleRules.resist_of(SkillDef.DamageType.MAGICAL, fake)).is_equal_approx(0.1, 0.0001)
+	assert_int(BattleRules.armor_of(SkillDef.DamageType.PHYSICAL, fake)).is_equal(10)
+	assert_int(BattleRules.armor_of(SkillDef.DamageType.MAGICAL, fake)).is_equal(8)
+	assert_int(BattleRules.pierce_of(SkillDef.DamageType.PHYSICAL, fake)).is_equal(4)
+	assert_int(BattleRules.pierce_of(SkillDef.DamageType.MAGICAL, fake)).is_equal(2)
+
+## 减免轨选对测试替身（抗性/护甲/穿甲双轨分量）
+class UnitDouble:
+	extends RefCounted
+	var phys_pierce: int = 0
+	var mag_pierce: int = 0
+	var phys_resist: float = 0.0
+	var mag_resist: float = 0.0
+	var phys_armor: int = 0
+	var mag_armor: int = 0

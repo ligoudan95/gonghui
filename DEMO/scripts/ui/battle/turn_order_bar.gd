@@ -9,28 +9,45 @@ extends HBoxContainer
 const ICON_SIZE: float = 36.0
 ## 条目间距
 const ENTRY_SEPARATION: int = 8
+## 总控配置（B-2/B-3/B-7：配色/字号表驱动注入——setup 传入，空 = 纯兜底）
+var _cfg: CoreConfig = null
+
+## 表驱动色读取（B-2/B-3）
+func _Color(field: StringName, fallback: Color) -> Color:
+	## 参数 field：cfg 字段名；fallback：UiTheme 兜底常量
+	## 返回：生效颜色
+	return UiTheme.color_of(_cfg, field, fallback)
+
+## 字号档位读取（B-7）
+func _UiFont(field: StringName, fallback: int) -> int:
+	## 参数 field：cfg 字段名；fallback：UiTheme 兜底档位
+	## 返回：生效字号
+	return UiTheme.font_of(_cfg, field, fallback)
 
 ## 条目池（unit_id -> PanelContainer）
 var _entries: Dictionary = {}
-## sprite 纹理缓存（sprite id -> Texture2D；setup 注入来源）
-var _texture_cache: Dictionary = {}
-## GameData（sprite 路径解析）
+## 条目单位索引（unit_id -> BattleUnit；S4-6 倒地灰显的即时查询）
+var _units: Dictionary = {}
+## GameData（sprite 路径解析——批 4 H3：纹理缓存与解析逻辑单源至 SpriteResolver，
+## 本层缓存字段删除）
 var _game_data: Node = null
 
-func setup(game_data: Node) -> void:
-	## 注入依赖（sprite 解析）
-	## 参数 game_data：GameData
+func setup(game_data: Node, cfg: CoreConfig = null) -> void:
+	## 注入依赖（sprite 解析 + 配色/字号表驱动配置）
+	## 参数 game_data：GameData；cfg：总控配置（可空——B 席批表驱动）
 	## 返回：无
 	_game_data = game_data
+	_cfg = cfg
 	add_theme_constant_override("separation", ENTRY_SEPARATION)
 
 func rebuild(units: Array) -> void:
-	## 重建序列条（ROUND_START 调；按行动序排布）
+	## 重建序列条（ROUND_START 调；按行动序排布；倒地条目建即灰显）
 	## 参数 units：本回合行动序列（速度排序产物）
 	## 返回：无
 	for child: Node in get_children():
 		child.queue_free()
 	_entries.clear()
+	_units.clear()
 	for unit: BattleUnit in units:
 		var entry := PanelContainer.new()
 		entry.custom_minimum_size = Vector2(ICON_SIZE + 16, ICON_SIZE + 28)
@@ -43,55 +60,50 @@ func rebuild(units: Array) -> void:
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.custom_minimum_size = Vector2(ICON_SIZE, ICON_SIZE)
 		icon.size = Vector2(ICON_SIZE, ICON_SIZE)
-		icon.texture = _TextureOf(_SpriteIdOf(unit))
+		icon.texture = SpriteResolver.texture_of(
+				SpriteResolver.sprite_id_of(unit, _game_data), _game_data)
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		box.add_child(icon)
 		var speed_label := Label.new()
 		speed_label.text = str(unit.speed_for_order())
-		speed_label.add_theme_font_size_override("font_size", 12)
+		speed_label.add_theme_font_size_override("font_size", _UiFont(&"ui_font_size_minor", UiTheme.FONT_MINOR))
 		speed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		speed_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		box.add_child(speed_label)
 		entry.add_child(box)
 		add_child(entry)
 		_entries[unit.unit_id] = entry
+		_units[unit.unit_id] = unit
 		if not unit.alive:
-			entry.modulate = Color(0.5, 0.5, 0.5, 0.5)
+			entry.modulate = _Color(&"ui_downed_modulate_color", UiTheme.DOWNED_MODULATE)
 
 func set_current(unit: BattleUnit) -> void:
-	## 当前行动位高亮（金色；其余复位；倒地灰显保持）
+	## 当前行动位高亮（金色；其余复位——倒地条目复位时保持灰显，
+	## S4-6：经 _units 索引判活）
 	## 参数 unit：当前行动单位（null = 全清）
 	## 返回：无
 	for unit_id: StringName in _entries:
 		var entry: PanelContainer = _entries[unit_id]
 		if unit != null and unit_id == unit.unit_id:
-			entry.modulate = Color(1.0, 0.85, 0.3)
+			entry.modulate = _Color(&"ui_highlight_gold_color", UiTheme.HIGHLIGHT_GOLD)
 		else:
-			entry.modulate = Color(1, 1, 1, 1)
+			entry.modulate = _Color(&"ui_downed_modulate_color", UiTheme.DOWNED_MODULATE) \
+					if _IsDowned(unit_id) else Color(1, 1, 1, 1)
 
-func _TextureOf(sprite_id: StringName) -> Texture2D:
-	## sprite id → 纹理（缓存复用；缺登记返回 null——头像空白）
-	## 参数 sprite_id：资源 id
-	## 返回：Texture2D
-	if _texture_cache.has(sprite_id):
-		return _texture_cache[sprite_id]
-	var texture: Texture2D = null
-	if _game_data != null:
-		var path: String = _game_data.get_asset_path(sprite_id)
-		if not path.is_empty():
-			texture = load(path) as Texture2D
-	_texture_cache[sprite_id] = texture
-	return texture
+func set_downed(unit: BattleUnit) -> void:
+	## 倒地即时灰显（S4-6：unit_downed 信号回调——此前倒地灰显只在回合初
+	## rebuild 生效，同回合内 UI 追认延迟）
+	## 参数 unit：倒地单位
+	## 返回：无
+	_units[unit.unit_id] = unit
+	var entry: PanelContainer = _entries.get(unit.unit_id, null)
+	if entry != null:
+		entry.modulate = _Color(&"ui_downed_modulate_color", UiTheme.DOWNED_MODULATE)
 
-func _SpriteIdOf(unit: BattleUnit) -> StringName:
-	## 单位 → sprite 资源 id（批 A H3 表驱动：ClassDef/EnemyDef.sprite_id——
-	## 经 GameData 查表，删除原拼接规则复刻；查无回退空 id 走占位色块）
-	## 参数 unit：单位
-	## 返回：sprite id
-	if _game_data == null:
-		return &""
-	if unit.side == SkillDef.SkillSide.ALLY:
-		var cls: ClassDef = _game_data.get_record(unit.class_id) as ClassDef
-		return cls.sprite_id if cls != null else &""
-	var enemy: EnemyDef = _game_data.get_record(unit.enemy_id) as EnemyDef
-	return enemy.sprite_id if enemy != null else &""
+func _IsDowned(unit_id: StringName) -> bool:
+	## 条目单位是否倒地（S4-6：无索引记录按存活处理）
+	## 参数 unit_id：单位 id
+	## 返回：true = 倒地
+	var unit: BattleUnit = _units.get(unit_id, null)
+	return unit != null and not unit.alive
+

@@ -9,6 +9,7 @@ display_name = "陷阱"
 kind = 2
 trigger = 1
 fill_color = Color(0.32, 0.36, 0.29, 1)
+mark_color = Color(1, 0.5, 0.1, 0.8)
 style = 0
 description = "敌方踏入时受到一次性固定伤害（预结算直接生效，免判定免减免）。"
 comment = "【占位·试玩校准】陷阱：敌方踏入触发一次性纯伤害（预结算直取、免两段判定与减免轨——第九轮拍板 DEMO 降级，无状态绑定）；来源：17 案 §3.9 地格效果"

@@ -10,29 +10,39 @@
 class_name DataValidator
 extends RefCounted
 
-## 七属性 id 全集（17 案 §3.1 一级属性域；校验 ref-skill-attr 用）
-const SEVEN_ATTRS: Array[StringName] = [
-	&"strength", &"agility", &"constitution",
-	&"intelligence", &"perception", &"willpower", &"luck",
-]
-
-## 状态允许来源 token 值域
-const ALLOWED_SOURCES: Array[StringName] = [&"SKILL", &"CHECKIN", &"TILE"]
+## 七属性 id 全集取值口（单源 AttrKeys.seven_attrs——批 4 C 组属性常量类；
+## 校验 ref-skill-attr 用；const 表达式不支持函数调用，降为静态取值口）
+static func _SevenAttrs() -> Array[StringName]:
+	## 参数：无
+	## 返回：七属性 id 全集
+	return AttrKeys.seven_attrs()
 
 ## 叠加规则 token 值域（空=未指定）
 const STACK_RULES: Array[StringName] = [&"no_stack_take_larger"]
 
-## 移除策略 token 值域（空=回合计数流逝）
-const REMOVE_POLICIES: Array[StringName] = [&"on_leave_tile"]
-
 ## core 域 M0 固定资源白名单（id 前缀规则的例外表）
-const CORE_WHITELIST: Array[StringName] = [&"cfg_main", &"naming_registry"]
+const CORE_WHITELIST: Array[StringName] = [CoreConfig.CFG_MAIN_ID, &"naming_registry"]
 
 ## assets 域固定资源白名单（盲审批 2 A-9：assets 域纳入校验遍历——仅 registry 一条）
 const ASSETS_WHITELIST: Array[StringName] = [&"registry"]
 
-## 敌人职能标记合法集（盲审批 2 A-7：role_tag 值域——与 BattleUnit 消费口径对齐）
-const ENEMY_ROLE_TAGS: Array[StringName] = [&"trash", &"elite"]
+## 敌人职能标记合法集取值口（单源 UnitTags.role_tags——批 4 C 组；
+## 盲审批 2 A-7 口径：表值必须可被 BattleUnit/AI/UI 消费）
+static func _EnemyRoleTags() -> Array[StringName]:
+	## 参数：无
+	## 返回：合法职能标记全集
+	return UnitTags.role_tags()
+
+## naming 前缀校验注册表（C-6：spr_/tend_ 等前缀特改数据驱动——
+## 前缀 -> 附加校验类别（AssetRegistry 映射 / 职业倾向存在性））
+const NAMING_PREFIX_CHECKS: Array = [
+	{"prefix": "spr_", "check": &"asset_registry"},
+	{"prefix": "tend_", "check": &"class_tendencies"},
+]
+
+## owner 为空的技能白名单（C-6 具名化：敌方通用普攻 skl_atk_enemy_common——
+## 全敌人共用的普攻无单一归属职业/敌人，语义豁免）
+const OWNER_EMPTY_WHITELIST: Array[StringName] = [&"skl_atk_enemy_common"]
 
 ## 预期孤儿状态白名单（盲审批 2 A-4②：allowed_sources 含 SKILL 但零技能
 ## 引用的豁免清单——【占位·完整版】检定带入技能未实现前的预留；当前全库
@@ -54,15 +64,7 @@ const DOMAIN_PREFIXES: Dictionary[StringName, Array] = {
 	&"battle/maps": [&"btm_"],
 	&"battle/tiles": [&"tile_"],
 	&"equip": [&"eqp_"],
-	&"assets": [&"registry"],
 }
-
-## 六数据域键（校验遍历范围；core/assets 域一并处理——盲审批 2 A-9）
-const DATA_DOMAINS: Array[StringName] = [
-	&"class/classes", &"class/skills", &"status/stats",
-	&"status/mutex_groups", &"battle/enemies", &"battle/enemy_packs",
-	&"battle/maps", &"battle/tiles", &"equip", &"assets",
-]
 
 static func run_all(game_data: Node) -> ValidationReport:
 	## 全库校验入口：M0/M1/批 A/批 2 规则顺序执行并返回报告
@@ -111,6 +113,10 @@ static func run_all(game_data: Node) -> ValidationReport:
 	_CheckCfgDomains(report, game_data)
 	_CheckValueDomains(report, game_data)
 	_CheckTileMatrix(report, game_data)
+	# ---- 解耦复审 C 批新增（V-B2-cfg-fallback：兜底常量与表值一致性——C-3）----
+	_CheckCfgFallbacks(report, game_data)
+	# ---- 三轮复审新增（R1-5：AURA_3X3 技组合合法性）----
+	_CheckAuraCombo(report, game_data)
 	return report
 
 # --------------------------------------------------------------------------
@@ -195,13 +201,14 @@ static func _CheckEnumDomains(report: ValidationReport, game_data: Node) -> void
 		if status.dot != null:
 			_CheckEnumRange(report, status.id, "DotParams.mode", status.dot.mode, DotParams.Mode.size() - 1)
 		for source: StringName in status.allowed_sources:
-			if not ALLOWED_SOURCES.has(source):
+			if not StatusDef.allowed_source_tokens().has(source):
 				report.add_error("V-M0-enum", status.id,
 						"allowed_sources 含未知来源 token '%s'" % source)
 		if not String(status.stack_rule).is_empty() and not STACK_RULES.has(status.stack_rule):
 			report.add_error("V-M0-enum", status.id,
 					"stack_rule 含未知 token '%s'" % status.stack_rule)
-		if not String(status.remove_policy).is_empty() and not REMOVE_POLICIES.has(status.remove_policy):
+		if not String(status.remove_policy).is_empty() \
+				and not StatusDef.remove_policies().has(status.remove_policy):
 			report.add_error("V-M0-enum", status.id,
 					"remove_policy 含未知 token '%s'" % status.remove_policy)
 	for record: Resource in _DomainRecords(game_data, &"battle/enemies"):
@@ -217,7 +224,7 @@ static func _CheckEnumDomains(report: ValidationReport, game_data: Node) -> void
 		var cls := record as ClassDef
 		if String(cls.mag_pierce_source_attr).is_empty():
 			report.add_error("V-A-class-attr", cls.id, "mag_pierce_source_attr 为空")
-		elif not SEVEN_ATTRS.has(cls.mag_pierce_source_attr):
+		elif not _SevenAttrs().has(cls.mag_pierce_source_attr):
 			report.add_error("V-A-class-attr", cls.id,
 					"mag_pierce_source_attr '%s' 不在七属性集" % cls.mag_pierce_source_attr)
 
@@ -255,7 +262,7 @@ static func _CheckRefSkillAttr(report: ValidationReport, game_data: Node) -> voi
 		var skill := record as SkillDef
 		var weight_sum: float = 0.0
 		for attr_id: StringName in skill.attr_weights:
-			if not SEVEN_ATTRS.has(attr_id):
+			if not _SevenAttrs().has(attr_id):
 				report.add_error("V-M0-ref-skill-attr", skill.id,
 						"权重键 '%s' 不在七属性集" % attr_id)
 			var weight: float = skill.attr_weights[attr_id]
@@ -276,9 +283,10 @@ static func _CheckRefSkillOwner(report: ValidationReport, game_data: Node) -> vo
 	for record: Resource in _DomainRecords(game_data, &"class/skills"):
 		var skill := record as SkillDef
 		if String(skill.owner_id).is_empty():
-			if skill.id != &"skl_atk_enemy_common":
+			if not OWNER_EMPTY_WHITELIST.has(skill.id):
 				report.add_error("V-M0-ref-skill-owner", skill.id,
-						"owner 为空（仅 skl_atk_enemy_common 放行）")
+						"owner 为空（仅 %s 放行——敌方通用普攻无单一归属者）" %
+						str(OWNER_EMPTY_WHITELIST))
 			continue
 		var owner: Resource = game_data.get_record(skill.owner_id)
 		if owner == null:
@@ -382,14 +390,15 @@ static func _CheckNumericDomains(report: ValidationReport, game_data: Node) -> v
 	## 参数：报告 / GameData
 	## 返回：无
 	var move_cap: int = _MoveBaseCap(game_data)
+	var range_max: int = _SkillRangeMax(game_data)
 	for record: Resource in _DomainRecords(game_data, &"class/skills"):
 		var skill := record as SkillDef
 		if skill.resource_cost < 0:
 			report.add_error("V-M0-num-domain", skill.id,
 					"资源消耗 %d 为负" % skill.resource_cost)
-		if skill.range < 0 or skill.range > 5:
+		if skill.range < 0 or skill.range > range_max:
 			report.add_error("V-M0-num-domain", skill.id,
-					"射程 %d 越界 [0, 5]" % skill.range)
+					"射程 %d 越界 [0, %d]" % [skill.range, range_max])
 	for record: Resource in _DomainRecords(game_data, &"class/classes"):
 		var cls := record as ClassDef
 		if cls.move_range < 1 or cls.move_range > move_cap:
@@ -476,11 +485,15 @@ static func _CheckTileStatus(report: ValidationReport, game_data: Node) -> void:
 
 static func _CheckMapLayout(report: ValidationReport, game_data: Node) -> void:
 	## V-M1-map-layout：地图 rows 行数 == size.y / 每行行长 == size.x /
-	## 布局字符 ∈ legend / legend 值为已存在的地格 id
+	## 布局字符 ∈ legend / legend 值为已存在的地格 id / legend 必含 '.'
+	## 空格图例（A-7——运行时 BattleGrid 兜底不再静默回退，表侧拦截缺项）
 	## 参数：报告 / GameData
 	## 返回：无
 	for record: Resource in _DomainRecords(game_data, &"battle/maps"):
 		var map_def := record as BattleMapDef
+		if not map_def.legend.has("."):
+			report.add_error("V-M1-map-layout", map_def.id,
+					"legend 缺 '.' 图例项（空格地格未定义——运行时不再静默回退）")
 		if map_def.rows.size() != map_def.size.y:
 			report.add_error("V-M1-map-layout", map_def.id,
 					"rows 行数 %d != size.y %d" % [map_def.rows.size(), map_def.size.y])
@@ -599,7 +612,7 @@ static func _CountBand(game_data: Node, field_prefix: String, fallback: int) -> 
 	## 取 cfg_main 的计数带（<prefix>_min/<prefix>_max；值 ≤0 视为未设回退）
 	## 参数 game_data：GameData；field_prefix：cfg 字段前缀；fallback：回退定值
 	## 返回：Vector2i(min, max)
-	var cfg: CoreConfig = game_data.get_record(&"cfg_main") as CoreConfig
+	var cfg: CoreConfig = game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
 	var band_min: int = fallback
 	var band_max: int = fallback
 	if cfg != null:
@@ -638,9 +651,36 @@ static func _CheckRefAssetPath(report: ValidationReport, game_data: Node) -> voi
 # 批 A 解耦整改规则（V-A-* 三条）
 # --------------------------------------------------------------------------
 
+static func _CheckAuraCombo(report: ValidationReport, game_data: Node) -> void:
+	## V-M1-aura-combo（R1-5）：AURA_3X3 技能组合合法性——damage_type 必须 NONE
+	## （DEMO 怒吼无伤害段；伤害型光环待需求出现时松绑）且 effects ⊆ STATUS_APPLY
+	## （HEAL/TILE_SPAWN/COMBAT_MOD 对光环无消费通路）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"class/skills"):
+		var skill := record as SkillDef
+		if skill.target_shape != SkillDef.TargetShape.AURA_3X3:
+			continue
+		_ReportAuraComboIssue(skill, report)
+
+static func _ReportAuraComboIssue(skill: SkillDef, report: ValidationReport) -> void:
+	## 单技 AURA 组合检查（R1-5 可测口：测试侧手造坏技能直调）
+	## 参数 skill：技能定义；report：报告
+	## 返回：无
+	if skill.target_shape != SkillDef.TargetShape.AURA_3X3:
+		return
+	if skill.damage_type != SkillDef.DamageType.NONE:
+		report.add_error("V-M1-aura-combo", skill.id,
+				"AURA_3X3 技 damage_type 必须 NONE（当前 %d——DEMO 怒吼无伤害段）" % skill.damage_type)
+	for effect: SkillEffect in skill.effects:
+		if effect.effect_kind != SkillEffect.EffectKind.STATUS_APPLY:
+			report.add_error("V-M1-aura-combo", skill.id,
+					"AURA_3X3 技含无消费通路的效果类型 %d（仅允许 STATUS_APPLY）" % effect.effect_kind)
+
 static func _CheckTileVisual(report: ValidationReport, game_data: Node) -> void:
 	## V-A-tile-visual：地格视觉表驱动字段必填（批 A H2）——fill_color 非默认
-	## 透明（alpha > 0）；style 为 RAISED/BLOCK 时 accent_color 必填
+	## 透明（alpha > 0）；style 为 RAISED/BLOCK 时 accent_color 必填；
+	## ENEMY_ENTER_ONCE 陷阱类 mark_color 必填（S1-4：动态地格标记色入表）
 	## 参数：报告 / GameData
 	## 返回：无
 	for record: Resource in _DomainRecords(game_data, &"battle/tiles"):
@@ -650,6 +690,15 @@ static func _CheckTileVisual(report: ValidationReport, game_data: Node) -> void:
 		if tile.style != TileTypeDef.Style.PLAIN and tile.accent_color.a <= 0.0:
 			report.add_error("V-A-tile-visual", tile.id,
 					"style=%d 需要 accent_color 但未回填（alpha ≤ 0）" % tile.style)
+		if tile.trigger == TileTypeDef.Trigger.ENEMY_ENTER_ONCE and tile.mark_color.a <= 0.0:
+			report.add_error("V-A-tile-visual", tile.id,
+					"ENEMY_ENTER_ONCE 触发类需要 mark_color 但未回填（alpha ≤ 0）")
+		elif tile.id == &"tile_trap" and not tile.mark_color.is_equal_approx(
+				BattleBoard.COLOR_TRAP_MARK_FALLBACK):
+			# #8：陷阱标记色与 UI 兜底常量锚定（表值调色须同步 battle_board 兜底）
+			report.add_error("V-A-tile-visual", tile.id,
+					"mark_color %s != UI 兜底常量 %s（调表须同步）" % [
+						str(tile.mark_color), str(BattleBoard.COLOR_TRAP_MARK_FALLBACK)])
 
 static func _CheckSpriteIds(report: ValidationReport, game_data: Node) -> void:
 	## V-A-sprite-id：职业/敌人表 sprite_id 非空且在 AssetRegistry 有登记
@@ -744,14 +793,22 @@ static func _CheckNamingRegistry(report: ValidationReport, game_data: Node) -> v
 			continue
 		registered[entry.resource_id] = true
 		var rid: String = String(entry.resource_id)
-		if rid.begins_with("spr_"):
-			if asset_registry == null or not asset_registry.mapping.has(entry.resource_id):
-				report.add_error("V-B2-naming", entry.resource_id,
-						"spr_ 登记未在 AssetRegistry mapping 中")
-		elif rid.begins_with("tend_"):
-			if not tend_ids.has(entry.resource_id):
-				report.add_error("V-B2-naming", entry.resource_id,
-						"tend_ 登记不存在于任何职业表 tendencies")
+		# C-6：前缀特判改注册表驱动（前缀 -> 校验类别；新增前缀类别只加一行）
+		var prefix_rule: Dictionary = {}
+		for rule: Dictionary in NAMING_PREFIX_CHECKS:
+			if rid.begins_with(String(rule["prefix"])):
+				prefix_rule = rule
+				break
+		if not prefix_rule.is_empty():
+			var check_kind: StringName = prefix_rule["check"]
+			if check_kind == &"asset_registry":
+				if asset_registry == null or not asset_registry.mapping.has(entry.resource_id):
+					report.add_error("V-B2-naming", entry.resource_id,
+							"%s 登记未在 AssetRegistry mapping 中" % prefix_rule["prefix"])
+			elif check_kind == &"class_tendencies":
+				if not tend_ids.has(entry.resource_id):
+					report.add_error("V-B2-naming", entry.resource_id,
+							"%s 登记不存在于任何职业表 tendencies" % prefix_rule["prefix"])
 		elif id_domains.has(entry.resource_id):
 			if id_domains[entry.resource_id] != entry.domain:
 				report.add_error("V-B2-naming", entry.resource_id,
@@ -828,52 +885,52 @@ static func _CheckCfgDomains(report: ValidationReport, game_data: Node) -> void:
 	## 参数基本值域（批 B/M 系字段：正数 / 率值 (0,1] / 带序）
 	## 参数：报告 / GameData
 	## 返回：无
-	var cfg: CoreConfig = game_data.get_record(&"cfg_main") as CoreConfig
+	var cfg: CoreConfig = game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
 	if cfg == null:
-		report.add_error("V-M0-cfg-domain", &"cfg_main", "总控配置缺失")
+		report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID, "总控配置缺失")
 		return
 	for divisor_name: String in ["attr_modifier_divisor", "crit_success_drop_divisor",
 			"luck_floor_z_divisor"]:
 		if int(cfg.get(divisor_name)) <= 0:
-			report.add_error("V-M0-cfg-domain", &"cfg_main",
+			report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
 					"%s ≤ 0（除零 NaN 风险）" % divisor_name)
 	if cfg.hit_clamp_min < 0.0 or cfg.hit_clamp_max > 1.0 or cfg.hit_clamp_min > cfg.hit_clamp_max:
-		report.add_error("V-M0-cfg-domain", &"cfg_main",
+		report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
 				"命中钳制带 [%f, %f] 非法" % [cfg.hit_clamp_min, cfg.hit_clamp_max])
 	var tiers: Array = ["极易", "容易", "普通", "困难", "极难"]
 	if cfg.difficulty_tiers.size() != tiers.size():
-		report.add_error("V-M0-cfg-domain", &"cfg_main",
+		report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
 				"难度档数 %d != 5" % cfg.difficulty_tiers.size())
 	for tier: String in tiers:
 		if not cfg.difficulty_tiers.has(tier):
-			report.add_error("V-M0-cfg-domain", &"cfg_main", "难度档缺失 '%s'" % tier)
+			report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID, "难度档缺失 '%s'" % tier)
 	var system_keys: Array[StringName] = GameConfigScript.SYSTEM_KEYS
 	for sys_key: StringName in cfg.enabled_systems:
 		if not system_keys.has(sys_key):
-			report.add_error("V-M0-cfg-domain", &"cfg_main",
+			report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
 					"enabled_systems 含未知系统键 '%s'" % sys_key)
 	for sys_key: StringName in system_keys:
 		if not cfg.enabled_systems.has(sys_key):
-			report.add_error("V-M0-cfg-domain", &"cfg_main",
+			report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
 					"enabled_systems 缺少系统键 '%s'（须全覆盖）" % sys_key)
 	# 批 B/M 公式参数基本值域
 	for positive_name: String in ["hp_base", "hp_con_mult", "pool_base", "pool_mult",
 			"move_base_cap", "agility_move_bonus_line", "ai_roar_ally_count_line",
 			"recruit_band_min", "recruit_band_max"]:
 		if int(cfg.get(positive_name)) <= 0:
-			report.add_error("V-M0-cfg-domain", &"cfg_main",
+			report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
 					"%s ≤ 0" % positive_name)
 	if cfg.recruit_band_min > cfg.recruit_band_max:
-		report.add_error("V-M0-cfg-domain", &"cfg_main", "招募带 min > max")
+		report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID, "招募带 min > max")
 	for rate_name: String in ["hit_base", "dodge_base", "attr_hit_weight",
 			"attr_dodge_weight", "status_resist_base", "status_resist_weight",
 			"resist_weight", "crit_base", "crit_luck_weight", "crit_agility_weight"]:
 		var rate_value: float = float(cfg.get(rate_name))
 		if rate_value <= 0.0 or rate_value > 1.0:
-			report.add_error("V-M0-cfg-domain", &"cfg_main",
+			report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
 					"%s = %f 越界 (0, 1]" % [rate_name, rate_value])
 	if cfg.crit_mult_base < 1.0:
-		report.add_error("V-M0-cfg-domain", &"cfg_main",
+		report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
 				"crit_mult_base %f < 1.0" % cfg.crit_mult_base)
 	for band_name: String in ["content_skill_attacks", "content_class_skills",
 			"content_enemy_skills", "content_enemy_common", "content_status",
@@ -882,7 +939,7 @@ static func _CheckCfgDomains(report: ValidationReport, game_data: Node) -> void:
 		var band_min: int = int(cfg.get(band_name + "_min"))
 		var band_max: int = int(cfg.get(band_name + "_max"))
 		if band_min < 0 or band_min > band_max:
-			report.add_error("V-M0-cfg-domain", &"cfg_main",
+			report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
 					"%s 计数带 [%d, %d] 非法" % [band_name, band_min, band_max])
 
 static func _CheckValueDomains(report: ValidationReport, game_data: Node) -> void:
@@ -899,14 +956,162 @@ static func _CheckValueDomains(report: ValidationReport, game_data: Node) -> voi
 						"属性 '%s' 区间下限 %d > 上限 %d" % [attr_id, bounds.x, bounds.y])
 	for record: Resource in _DomainRecords(game_data, &"battle/enemies"):
 		var enemy := record as EnemyDef
-		if not ENEMY_ROLE_TAGS.has(enemy.role_tag):
+		if not _EnemyRoleTags().has(enemy.role_tag):
 			report.add_error("V-B2-value-domain", enemy.id,
-					"role_tag '%s' 不在合法集 %s" % [enemy.role_tag, str(ENEMY_ROLE_TAGS)])
+					"role_tag '%s' 不在合法集 %s" % [enemy.role_tag, str(_EnemyRoleTags())])
 	for record: Resource in _DomainRecords(game_data, &"status/stats"):
 		var status := record as StatusDef
 		if status.default_duration < 0:
 			report.add_error("V-B2-value-domain", status.id,
 					"default_duration %d 为负" % status.default_duration)
+	# cfg UI 视觉参数回填（S1-4：地格兜底色入表——alpha ≤ 0 = 未回填）
+	var cfg: CoreConfig = game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
+	if cfg != null and cfg.ui_tile_fallback_color.a <= 0.0:
+		report.add_error("V-B2-value-domain", CoreConfig.CFG_MAIN_ID,
+				"ui_tile_fallback_color 未回填（alpha ≤ 0）")
+
+static func _CheckCfgFallbacks(report: ValidationReport, game_data: Node) -> void:
+	## V-B2-cfg-fallback（C-3 护栏）：全部代码兜底常量 == cfg_main 对应字段值——
+	## 表值调整而兜底漏改（cfg 未注入路径行为分叉）在落盘校验侧即拦截。
+	## 跨层口径特例：本规则引用 battle/adventurer/ui 层兜底常量做一致性断言
+	## （校验器性质 = 跨层一致性工具；被引类不反向依赖校验器，无环）。
+	## 参数：报告 / GameData
+	## 返回：无
+	var cfg: CoreConfig = game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
+	if cfg == null:
+		return
+	# int 域（字段名 -> 兜底常量）
+	var int_pairs: Array = [
+		["attr_modifier_offset", DerivedStats.ATTR_MODIFIER_OFFSET_FALLBACK],
+		["attr_modifier_divisor", DerivedStats.ATTR_MODIFIER_DIVISOR_FALLBACK],
+		["damage_floor", BattleRules.DAMAGE_FLOOR_FALLBACK],
+		["move_base_cap", BattleUnit.MOVE_BASE_CAP_FALLBACK],
+		["agility_move_bonus_line", BattleUnit.AGILITY_MOVE_BONUS_LINE_FALLBACK],
+		["agility_move_bonus_amount", BattleUnit.AGILITY_MOVE_BONUS_AMOUNT_FALLBACK],
+		["ai_roar_ally_count_line", EnemyAI.ROAR_ALLY_COUNT_LINE_FALLBACK],
+		["status_stack_limit", StatusManager.STACK_LIMIT_FALLBACK],
+		["hp_base", DerivedStats.HP_BASE_FALLBACK],
+		["hp_con_mult", DerivedStats.HP_CON_MULT_FALLBACK],
+		["pool_base", DerivedStats.POOL_BASE_FALLBACK],
+		["pool_mult", DerivedStats.POOL_MULT_FALLBACK],
+		["pierce_per_modifier", DerivedStats.PIERCE_PER_MODIFIER_FALLBACK],
+		["armor_per_modifier", DerivedStats.ARMOR_PER_MODIFIER_FALLBACK],
+		["skill_range_max", SKILL_RANGE_MAX_FALLBACK],
+	]
+	for pair: Array in int_pairs:
+		var raw_int: Variant = cfg.get(pair[0])
+		if not (raw_int is int):
+			report.add_error("V-B2-cfg-fallback", CoreConfig.CFG_MAIN_ID,
+					"%s 字段类型异常（期望 int，实际 %s）" % [pair[0], typeof(raw_int)])
+			continue
+		var table_value: int = raw_int
+		if table_value != int(pair[1]):
+			report.add_error("V-B2-cfg-fallback", CoreConfig.CFG_MAIN_ID,
+					"%s 表值 %d != 兜底常量 %d（调表须同步兜底）" % [pair[0], table_value, int(pair[1])])
+	# float 域（近似比较；R3-08：徽章低血阈值入列）
+	var float_pairs: Array = [
+		["ui_badge_hp_low_threshold", UiTheme.BADGE_HP_LOW_THRESHOLD],
+		["crit_mult_base", BattleRules.CRIT_MULT_BASE_FALLBACK],
+		["crit_base", BattleRules.CRIT_BASE_FALLBACK],
+		["crit_luck_weight", BattleRules.CRIT_LUCK_WEIGHT_FALLBACK],
+		["crit_agility_weight", BattleRules.CRIT_AGILITY_WEIGHT_FALLBACK],
+		["hit_clamp_min", BattleRules.HIT_CLAMP_MIN_FALLBACK],
+		["hit_clamp_max", BattleRules.HIT_CLAMP_MAX_FALLBACK],
+		["attr_hit_weight", DerivedStats.ATTR_HIT_WEIGHT_FALLBACK],
+		["attr_dodge_weight", DerivedStats.ATTR_DODGE_WEIGHT_FALLBACK],
+		["status_resist_base", DerivedStats.STATUS_RESIST_BASE_FALLBACK],
+		["status_resist_weight", DerivedStats.STATUS_RESIST_WEIGHT_FALLBACK],
+		["resist_weight", DerivedStats.RESIST_WEIGHT_FALLBACK],
+		["hit_base", DerivedStats.HIT_BASE_FALLBACK],
+		["dodge_base", DerivedStats.DODGE_BASE_FALLBACK],
+	]
+	for pair: Array in float_pairs:
+		var raw_float: Variant = cfg.get(pair[0])
+		if not (raw_float is float):
+			report.add_error("V-B2-cfg-fallback", CoreConfig.CFG_MAIN_ID,
+					"%s 字段类型异常（期望 float，实际 %s）" % [pair[0], typeof(raw_float)])
+			continue
+		var table_value_f: float = raw_float
+		if not is_equal_approx(table_value_f, float(pair[1])):
+			report.add_error("V-B2-cfg-fallback", CoreConfig.CFG_MAIN_ID,
+					"%s 表值 %s != 兜底常量 %s（调表须同步兜底）" % [pair[0], str(table_value_f), str(pair[1])])
+	# UI 颜色域（表值须回填且 == UiTheme 兜底常量）
+	var color_pairs: Array = [
+		["ui_tile_fallback_color", UiTheme.TILE_FALLBACK],
+		["ui_result_defeat_color", UiTheme.RESULT_DEFEAT],
+		["ui_result_retreat_color", UiTheme.RESULT_RETREAT],
+		["ui_badge_hp_low_color", UiTheme.BADGE_HP_LOW],
+		["ui_badge_hp_ok_color", UiTheme.BADGE_HP_OK],
+		["ui_badge_bar_back_color", UiTheme.BADGE_BAR_BACK],
+		["ui_badge_res_mana_color", UiTheme.BADGE_RES_MANA],
+		["ui_badge_res_stamina_color", UiTheme.BADGE_RES_STAMINA],
+		["ui_badge_fallback_ally_color", UiTheme.BADGE_FALLBACK_ALLY],
+		["ui_badge_fallback_enemy_color", UiTheme.BADGE_FALLBACK_ENEMY],
+		["ui_badge_bewitch_color", UiTheme.BADGE_BEWITCH],
+		["ui_badge_preview_strip_color", UiTheme.BADGE_PREVIEW_STRIP],
+		["ui_badge_preview_text_color", UiTheme.BADGE_PREVIEW_TEXT],
+		["ui_badge_outline_color", UiTheme.BADGE_OUTLINE],
+		["ui_card_buff_color", UiTheme.CARD_BUFF],
+		["ui_card_debuff_color", UiTheme.CARD_DEBUFF],
+		["ui_card_unknown_color", UiTheme.CARD_UNKNOWN],
+		["ui_card_muted_color", UiTheme.CARD_MUTED],
+		["ui_overlay_move_fill_color", UiTheme.OVERLAY_MOVE_FILL],
+		["ui_overlay_move_border_color", UiTheme.OVERLAY_MOVE_BORDER],
+		["ui_overlay_skill_fill_color", UiTheme.OVERLAY_SKILL_FILL],
+		["ui_overlay_skill_border_color", UiTheme.OVERLAY_SKILL_BORDER],
+		["ui_overlay_blocked_fill_color", UiTheme.OVERLAY_BLOCKED_FILL],
+		["ui_overlay_blocked_border_color", UiTheme.OVERLAY_BLOCKED_BORDER],
+		["ui_overlay_blocked_slash_color", UiTheme.OVERLAY_BLOCKED_SLASH],
+		["ui_overlay_path_color", UiTheme.OVERLAY_PATH],
+		["ui_overlay_confirm_color", UiTheme.OVERLAY_CONFIRM],
+		["ui_log_system_color", UiTheme.LOG_SYSTEM],
+		["ui_log_damage_color", UiTheme.LOG_DAMAGE],
+		["ui_log_heal_color", UiTheme.LOG_HEAL],
+		["ui_log_status_color", UiTheme.LOG_STATUS],
+		["ui_log_move_color", UiTheme.LOG_MOVE],
+		["ui_downed_modulate_color", UiTheme.DOWNED_MODULATE],
+		["ui_highlight_gold_color", UiTheme.HIGHLIGHT_GOLD],
+		["ui_panel_dark_color", UiTheme.PANEL_DARK],
+	]
+	for pair: Array in color_pairs:
+		var raw_color: Variant = cfg.get(pair[0])
+		var table_color: Color = raw_color if raw_color is Color else Color(0, 0, 0, 0)
+		if table_color.a <= 0.0:
+			report.add_error("V-B2-cfg-fallback", CoreConfig.CFG_MAIN_ID,
+					"%s 未回填（alpha ≤ 0）" % pair[0])
+		elif not table_color.is_equal_approx(pair[1]):
+			report.add_error("V-B2-cfg-fallback", CoreConfig.CFG_MAIN_ID,
+					"%s 表值 %s != 兜底常量 %s（调表须同步兜底）" % [pair[0], str(table_color), str(pair[1])])
+	# UI 字号档位（表值须回填且 == UiTheme 兜底档位）
+	var font_pairs: Array = [
+		["ui_font_size_display", UiTheme.FONT_DISPLAY],
+		["ui_font_size_title", UiTheme.FONT_TITLE],
+		["ui_font_size_heading", UiTheme.FONT_HEADING],
+		["ui_font_size_subheading", UiTheme.FONT_SUBHEADING],
+		["ui_font_size_large", UiTheme.FONT_LARGE],
+		["ui_font_size_body", UiTheme.FONT_BODY],
+		["ui_font_size_normal", UiTheme.FONT_NORMAL],
+		["ui_font_size_small", UiTheme.FONT_SMALL],
+		["ui_font_size_minor", UiTheme.FONT_MINOR],
+	]
+	for pair: Array in font_pairs:
+		var raw_font: Variant = cfg.get(pair[0])
+		var table_font: int = raw_font if raw_font is int else 0
+		if table_font <= 0:
+			report.add_error("V-B2-cfg-fallback", CoreConfig.CFG_MAIN_ID,
+					"%s 未回填（≤ 0）" % pair[0])
+		elif table_font != int(pair[1]):
+			report.add_error("V-B2-cfg-fallback", CoreConfig.CFG_MAIN_ID,
+					"%s 表值 %d != 兜底档位 %d（调表须同步兜底）" % [pair[0], table_font, int(pair[1])])
+	# 版本标签/演出延时（非锚定值：仅完备性——非空/正数）
+	var raw_label: Variant = cfg.get("version_label")
+	if not (raw_label is String) or String(raw_label).is_empty():
+		report.add_error("V-B2-cfg-fallback", CoreConfig.CFG_MAIN_ID,
+				"version_label 未回填（空串）")
+	var raw_delay: Variant = cfg.get("ui_battle_delay_seconds")
+	if (raw_delay is float and raw_delay < 0.0) or (raw_delay is int and raw_delay < 0):
+		report.add_error("V-B2-cfg-fallback", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_delay_seconds 为负")
 
 static func _CheckTileMatrix(report: ValidationReport, game_data: Node) -> void:
 	## V-B2-tile-matrix（A-8）：地格三元联动矩阵——NORMAL/OBSTACLE 必空
@@ -931,7 +1136,7 @@ static func _CheckTileMatrix(report: ValidationReport, game_data: Node) -> void:
 		for effect: SkillEffect in skill.effects:
 			if effect.effect_kind != SkillEffect.EffectKind.TILE_SPAWN:
 				continue
-			if not SEVEN_ATTRS.has(effect.dot_attr_id):
+			if not _SevenAttrs().has(effect.dot_attr_id):
 				report.add_error("V-B2-tile-matrix", skill.id,
 						"TILE_SPAWN dot_attr_id '%s' 不在七属性集" % effect.dot_attr_id)
 
@@ -939,21 +1144,35 @@ static func _CheckTileMatrix(report: ValidationReport, game_data: Node) -> void:
 # 辅助
 # --------------------------------------------------------------------------
 
+## 技能射程上限兜底（= cfg_main.skill_range_max——C-8）
+const SKILL_RANGE_MAX_FALLBACK: int = 5
+
+static func _SkillRangeMax(game_data: Node) -> int:
+	## 技能射程上限（读 cfg_main.skill_range_max——C-8 入表；缺省回退兜底常量）
+	## 参数：GameData
+	## 返回：上限值
+	var cfg: CoreConfig = game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
+	return cfg.skill_range_max if cfg != null and cfg.skill_range_max > 0  \
+			else SKILL_RANGE_MAX_FALLBACK
+
 static func _MoveBaseCap(game_data: Node) -> int:
 	## 移动力基准段上限（读 cfg_main.move_base_cap——批 B M2 与单位终值同源；
 	## 缺省回退 6 与 cfg 表值一致）
 	## 参数：GameData
 	## 返回：上限值
-	var cfg: CoreConfig = game_data.get_record(&"cfg_main") as CoreConfig
-	return cfg.move_base_cap if cfg != null and cfg.move_base_cap > 0 else 6
+	var cfg: CoreConfig = game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
+	return cfg.move_base_cap if cfg != null and cfg.move_base_cap > 0 \
+			else BattleUnit.MOVE_BASE_CAP_FALLBACK
 
 static func _AllDomains(game_data: Node) -> Array[StringName]:
-	## 全部数据域键（六数据域 + core）
+	## 全部数据域键（C-1 单源：从 GameData.DOMAIN_SCHEMA 键集派生——域清单
+	## 唯一登记处即 DOMAIN_SCHEMA，校验器不再自持第二份清单；运行时实例
+	## 读取无 preload/加载序问题）
 	## 参数：GameData
 	## 返回：域键数组
 	var domains: Array[StringName] = []
-	domains.append_array(DATA_DOMAINS)
-	domains.append(&"core")
+	for domain: StringName in game_data.DOMAIN_SCHEMA:
+		domains.append(domain)
 	return domains
 
 static func _DomainRecords(game_data: Node, domain: StringName) -> Array[Resource]:

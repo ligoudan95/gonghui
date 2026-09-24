@@ -1,7 +1,8 @@
 ## 敌方 AI（EnemyAI，纯静态工具类）
 ## 职责：敌方单位的单回合决策——目标四级链（可击杀 > 追击记忆 > 血量最低
 ## （持平最近）> 兜底最近）、技能选择（精英怒吼首用义务/穷追优先；杂兵资源
-## 优先耗尽转普攻）、移动（距目标曼哈顿最近的可达可停留格，已在射程不移动）。
+## 优先耗尽转普攻）、移动（距目标曼哈顿最近的可达可停留格，已在射程不移动；
+## 盲审批 3 D-4：射程 >1 技能的攻击位候选加视线过滤——与执行器同口径）。
 ## 数据来源：案 9 §2.5（目标链第七轮口径）；17 案 §3.8 敌方技能表 +
 ## 17-C16 P1（怒吼每场首次条件满足必用 1 次、此后穷追猛打优先；条件首次
 ## 满足但精力不足 → 义务作废不顺延）。
@@ -41,11 +42,13 @@ static func decide(self_unit: Object, grid: BattleGrid, player_units: Array,
 		ctx: Dictionary) -> AIAction:
 	## 敌方单回合决策主入口：技能选择 →（非怒吼）目标四级链 → 移动裁决
 	## 参数 self_unit：决策单位（BattleUnit）；grid：战场；player_units：我方单位全集；
-	## ctx：{cfg, skill_lookup}
+	## ctx：{cfg, skill_lookup, status_manager（S3-06：期望伤害消费站位面板层，
+	## 缺省回退 1.0——headless 简化上下文兼容）}
 	## 返回：AIAction（执行由 BattleController 消费）
 	var action := AIAction.new()
 	var cfg: CoreConfig = ctx.get(&"cfg") as CoreConfig
 	var skill_lookup: Callable = ctx.get(&"skill_lookup") as Callable
+	var status_manager: StatusManager = ctx.get(&"status_manager") as StatusManager
 	var candidates: Array = player_units.filter(func(unit): return unit.alive)
 	if candidates.is_empty():
 		return action
@@ -60,29 +63,37 @@ static func decide(self_unit: Object, grid: BattleGrid, player_units: Array,
 		action.attack_cell = self_unit.grid_pos
 		return action
 	# ---- 目标四级链 ----
-	var target: Object = _ChooseTarget(self_unit, skill, candidates, cfg)
+	var target: Object = _ChooseTarget(self_unit, skill, candidates, cfg, status_manager)
 	if target == null:
 		return action
 	action.target_unit = target
 	self_unit.ai_context[&"last_target_id"] = target.id
-	# ---- 移动裁决 ----
-	var distance: int = _Manhattan(self_unit.grid_pos, target.grid_pos)
-	if distance <= skill.range:
+	# ---- 移动裁决（盲审批 3 D-4：攻击位候选加 LOS 过滤——与执行器
+	# 前置校验同口径经 SkillExecutor.los_required 单源判定，远程技不再
+	# 走进被障碍挡视线的格子白耗一回合）----
+	var needs_los: bool = SkillExecutor.los_required(skill)
+	var distance: int = BattleGrid.manhattan(self_unit.grid_pos, target.grid_pos)
+	if distance <= SkillExecutor.effective_range(skill) \
+			and (not needs_los or grid.has_line_of_sight(self_unit.grid_pos, target.grid_pos)):
 		action.attack_cell = target.grid_pos
 		return action
 	var reachable: Array[Vector2i] = grid.find_reachable(self_unit, self_unit.move_final())
 	var best: Vector2i = NO_CELL
 	var best_distance: int = distance
 	for cell: Vector2i in reachable:
-		var cell_distance: int = _Manhattan(cell, target.grid_pos)
-		if cell_distance < best_distance:
-			best = cell
-			best_distance = cell_distance
+		var cell_distance: int = BattleGrid.manhattan(cell, target.grid_pos)
+		if cell_distance >= best_distance:
+			continue
+		if needs_los and not grid.has_line_of_sight(cell, target.grid_pos):
+			continue
+		best = cell
+		best_distance = cell_distance
 	if best == NO_CELL:
 		return action
 	action.move_dest = best
-	# 移动后目标进入射程才攻击，否则只移动待机
-	if best_distance <= skill.range:
+	# 移动后目标进入射程才攻击，否则只移动待机（LOS 已由候选过滤保证）
+	# R2-7：射程判定经 effective_range 单源收口
+	if best_distance <= SkillExecutor.effective_range(skill):
 		action.attack_cell = target.grid_pos
 	return action
 
@@ -105,7 +116,7 @@ static func _ChooseSkill(self_unit: Object, grid: BattleGrid, candidates: Array,
 		elif skill.damage_type != SkillDef.DamageType.NONE:
 			damage_skills.append(skill_id)
 	# 精英分支（role_tag=elite）
-	if self_unit.role_tag == &"elite":
+	if self_unit.role_tag == UnitTags.ROLE_ELITE:
 		if roar_id != &"" and not self_unit.ai_context.get(&"roar_used", false):
 			var roar_skill: SkillDef = skill_lookup.call(roar_id) as SkillDef
 			if _AlliesInAura3x3(self_unit, candidates, grid) >= _RoarAllyCountLine(cfg):
@@ -128,14 +139,15 @@ static func _ChooseSkill(self_unit: Object, grid: BattleGrid, candidates: Array,
 	return common
 
 static func _ChooseTarget(self_unit: Object, skill: SkillDef, candidates: Array,
-		cfg: CoreConfig) -> Object:
+		cfg: CoreConfig, status_manager: StatusManager = null) -> Object:
 	## 目标四级链：①期望伤害 ≥ 目标剩余 HP（可击杀，多个取最近）②追击记忆
 	## （last_target_id 存活即在）③血量最低（持平按距离最近）④兜底距离最近
-	## 参数 self_unit/skill/candidates：决策上下文；cfg：注入配置
+	## 参数 self_unit/skill/candidates：决策上下文；cfg：注入配置；
+	## status_manager：S3-06 期望伤害的站位面板层来源（缺省 null 回退 1.0）
 	## 返回：目标单位（空候选由调用方前置拦截）
 	# ①可击杀（最近优先）
 	var killable: Array = candidates.filter(func(unit):
-		return _ExpectedDamage(self_unit, skill, unit, cfg) >= float(unit.current_hp))
+		return _ExpectedDamage(self_unit, skill, unit, cfg, status_manager) >= float(unit.current_hp))
 	if not killable.is_empty():
 		return _NearestOf(self_unit, killable)
 	# ②追击记忆
@@ -152,37 +164,36 @@ static func _ChooseTarget(self_unit: Object, skill: SkillDef, candidates: Array,
 			continue
 		var hp_less: bool = unit.current_hp < best.current_hp
 		var hp_equal: bool = unit.current_hp == best.current_hp
-		var distance: int = _Manhattan(self_unit.grid_pos, unit.grid_pos)
-		var best_distance: int = _Manhattan(self_unit.grid_pos, best.grid_pos)
+		var distance: int = BattleGrid.manhattan(self_unit.grid_pos, unit.grid_pos)
+		var best_distance: int = BattleGrid.manhattan(self_unit.grid_pos, best.grid_pos)
 		if hp_less or (hp_equal and distance < best_distance):
 			best = unit
 	return best
 
 static func _ExpectedDamage(self_unit: Object, skill: SkillDef, target: Object,
-		cfg: CoreConfig) -> float:
-	## 对目标单发期望伤害（镜像 SkillExecutor 攻击链：毛面板 → 减免轨 →
-	## 命中 × 暴击期望）
-	## 参数 self_unit/skill/target：决策三角；cfg：注入配置
+		cfg: CoreConfig, status_manager: StatusManager = null) -> float:
+	## 对目标单发期望伤害（镜像 SkillExecutor 攻击链：毛面板（含站位面板乘算层
+	## ——S3-06：SkillExecutor.panel_mult_of 单源，与我方同享高地面板；status_manager
+	## 缺省回退 1.0）→ 减免轨（选对经 BattleRules.mitigate_by_damage_type 单源——
+	## 批 4 H2）→ 命中 × 暴击期望）
+	## 参数 self_unit/skill/target：决策三角；cfg：注入配置；
+	## status_manager：站位修正来源（可空）
 	## 返回：期望伤害（float）
+	var panel_mult: float = SkillExecutor.panel_mult_of(self_unit, status_manager) \
+			if status_manager != null else 1.0
+	# A-14：种族克制经 collect_race_mult 单源（原硬编码 1.0——AI 与执行链
+	# 对亡灵目标的期望口径分叉自此对齐镜像）
+	var race_mult: float = SkillExecutor.collect_race_mult(skill, target.race_tag)
 	var raw: float = BattleRules.raw_panel_damage(self_unit.attrs, self_unit.weapon_bonus,
-			skill, 1.0, 1.0)
-	var resist: float = 0.0
-	var armor: int = 0
-	var pierce: int = 0
-	if skill.damage_type == SkillDef.DamageType.PHYSICAL:
-		resist = target.phys_resist
-		armor = target.phys_armor
-		pierce = self_unit.phys_pierce
-	else:
-		resist = target.mag_resist
-		armor = target.mag_armor
-		pierce = self_unit.mag_pierce
-	var mitigated: int = BattleRules.mitigate(raw, resist, armor, pierce, cfg)
+			skill, panel_mult, race_mult)
+	var mitigated: int = BattleRules.mitigate_by_damage_type(raw, skill.damage_type,
+			self_unit, target, cfg)
 	var chance: float = BattleRules.hit_chance(self_unit.hit, target.dodge, skill.hit_mod, cfg)
-	var crit: float = BattleRules.crit_rate(int(self_unit.attrs.get(&"luck", 0)),
-			int(self_unit.attrs.get(&"agility", 0)),
+	var crit: float = BattleRules.crit_rate(int(self_unit.attrs.get(AttrKeys.LUCK, AttrKeys.DEFAULT_ATTR_VALUE)),
+			int(self_unit.attrs.get(AttrKeys.AGILITY, AttrKeys.DEFAULT_ATTR_VALUE)),
 			SkillExecutor.collect_combat_mod(skill, SkillExecutor.KEY_CRIT_BONUS), cfg)
-	return BattleRules.expected_damage(mitigated, chance, crit, cfg.crit_mult_base)
+	return BattleRules.expected_damage(mitigated, chance, crit,
+			BattleRules.crit_mult_base_of(cfg))
 
 static func _AlliesInAura3x3(self_unit: Object, candidates: Array, grid: BattleGrid) -> int:
 	## 自中心 3×3（切比雪夫 ≤1）内存活我方数（怒吼义务门槛）
@@ -202,14 +213,9 @@ static func _NearestOf(self_unit: Object, units: Array) -> Object:
 	var best: Object = null
 	var best_distance: int = 0
 	for unit: Object in units:
-		var distance: int = _Manhattan(self_unit.grid_pos, unit.grid_pos)
+		var distance: int = BattleGrid.manhattan(self_unit.grid_pos, unit.grid_pos)
 		if best == null or distance < best_distance:
 			best = unit
 			best_distance = distance
 	return best
 
-static func _Manhattan(a: Vector2i, b: Vector2i) -> int:
-	## 曼哈顿距离
-	## 参数 a/b：两坐标
-	## 返回：|dx| + |dy|
-	return absi(a.x - b.x) + absi(a.y - b.y)

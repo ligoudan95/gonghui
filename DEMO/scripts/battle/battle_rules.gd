@@ -8,11 +8,25 @@
 class_name BattleRules
 extends RefCounted
 
-## 调整值换算偏移基准（属性 10 = +0 的对齐点；cfg 未注入参数时的兜底常量，
-## 正常路径一律走 cfg_main 显式值）
-const ATTR_MODIFIER_OFFSET_FALLBACK: int = 10
-## 调整值换算除数兜底常量（同上）
-const ATTR_MODIFIER_DIVISOR_FALLBACK: int = 2
+## 调整值换算兜底（C-3 单源收敛：offset/divisor 常量唯一定义点在
+## DerivedStats——battle→adventurer 合向引用，三重出现收敛为一）
+const ATTR_MODIFIER_OFFSET_FALLBACK: int = DerivedStats.ATTR_MODIFIER_OFFSET_FALLBACK
+const ATTR_MODIFIER_DIVISOR_FALLBACK: int = DerivedStats.ATTR_MODIFIER_DIVISOR_FALLBACK
+## 伤害下限兜底（= cfg_main.damage_floor——A-4 提名）
+const DAMAGE_FLOOR_FALLBACK: int = 1
+## 命中钳制带下限兜底（= cfg_main.hit_clamp_min——A-4 提名）
+const HIT_CLAMP_MIN_FALLBACK: float = 0.05
+## 命中钳制带上限兜底（= cfg_main.hit_clamp_max——A-4 提名）
+const HIT_CLAMP_MAX_FALLBACK: float = 0.95
+## 暴击伤害倍率兜底（= cfg_main.crit_mult_base——R1-3 提名；执行链与 AI 期望共用）
+const CRIT_MULT_BASE_FALLBACK: float = 1.5
+
+static func crit_mult_base_of(cfg: CoreConfig) -> float:
+	## 暴击伤害倍率读取（R1-3 单源口：cfg 值优先、兜底回退——执行链暴击乘算
+	## 与 AI 期望伤害共引，cfg 空保护两处同口径）
+	## 参数 cfg：总控配置（可空）
+	## 返回：倍率（>0）
+	return cfg.crit_mult_base if cfg != null and cfg.crit_mult_base > 0.0 			else CRIT_MULT_BASE_FALLBACK
 
 static func attr_modifier(attr: int, cfg: CoreConfig) -> int:
 	## 属性调整值 = floor((属性 − offset) / divisor)（§3.3 全局换算式；速查 6→−2/9→−1/10→0/16→+3）
@@ -33,7 +47,8 @@ static func raw_panel_damage(attrs: Dictionary, weapon_bonus: int, skill: SkillD
 	var weighted: float = float(weapon_bonus)
 	for attr_id: StringName in skill.attr_weights:
 		var weight: float = skill.attr_weights[attr_id]
-		weighted += weight * float(int(attrs.get(attr_id, 0)))
+		weighted += weight * float(int(attrs.get(attr_id,
+				AttrKeys.DEFAULT_ATTR_VALUE)))
 	return weighted * skill.power_coefficient * panel_mult * race_mult
 
 static func mitigate(raw: float, resist: float, armor: int, pierce: int, cfg: CoreConfig) -> int:
@@ -42,9 +57,45 @@ static func mitigate(raw: float, resist: float, armor: int, pierce: int, cfg: Co
 	## 参数 raw：毛面板伤害；resist：目标抗性（0-1）；armor：目标护甲（按物理/法术轨取值）；
 	## pierce：施放者穿甲（同轨）；cfg：总控配置（伤害下限）
 	## 返回：减免后伤害（int，≥ 伤害下限）
-	var floor_value: int = cfg.damage_floor if cfg != null else 1
+	var floor_value: int = cfg.damage_floor if cfg != null and cfg.damage_floor > 0  \
+			else DAMAGE_FLOOR_FALLBACK
 	var net_armor: int = maxi(0, armor - pierce)
 	return maxi(floor_value, int(round(raw * (1.0 - resist))) - net_armor)
+
+static func mitigate_by_damage_type(raw: float, damage_type: int, caster: Object,
+		target: Object, cfg: CoreConfig) -> int:
+	## 减免轨选对（单源——批 4 C 组 H2）：按伤害类型物理/法术选抗性/护甲/
+	## 穿甲对后走 mitigate——原 SkillExecutor 攻击链、EnemyAI 期望伤害、
+	## battle_screen 目标预览三处复刻的选对逻辑收敛于此，换轨口径只动一处。
+	## 单位鸭子契约（target.phys_resist 等 / caster.phys_pierce 等——
+	## 与 SkillExecutor 执行链同契约）
+	## 参数 raw：毛面板伤害；damage_type：SkillDef.DamageType（PHYSICAL 走物理对，
+	## 其余走法术对——与执行链分支对齐）；caster：施放单位（穿甲）；
+	## target：目标单位（抗性/护甲）；cfg：总控配置
+	## 返回：减免后伤害（int，≥ 伤害下限）
+	return mitigate(raw, resist_of(damage_type, target), armor_of(damage_type, target),
+			pierce_of(damage_type, caster), cfg)
+
+static func resist_of(damage_type: int, target: Object) -> float:
+	## 减免轨抗性分量（H2 单源选对的分量口——trace 明细/日志消费）
+	## 参数 damage_type：SkillDef.DamageType；target：目标单位
+	## 返回：该轨抗性（0-1）
+	return target.phys_resist if damage_type == SkillDef.DamageType.PHYSICAL \
+			else target.mag_resist
+
+static func armor_of(damage_type: int, target: Object) -> int:
+	## 减免轨护甲分量（H2 单源选对的分量口）
+	## 参数 damage_type：SkillDef.DamageType；target：目标单位
+	## 返回：该轨护甲
+	return target.phys_armor if damage_type == SkillDef.DamageType.PHYSICAL \
+			else target.mag_armor
+
+static func pierce_of(damage_type: int, caster: Object) -> int:
+	## 减免轨穿甲分量（H2 单源选对的分量口）
+	## 参数 damage_type：SkillDef.DamageType；caster：施放单位
+	## 返回：该轨穿甲
+	return caster.phys_pierce if damage_type == SkillDef.DamageType.PHYSICAL \
+			else caster.mag_pierce
 
 static func hit_chance(hit_stat: float, dodge_stat: float, skill_hit_mod: int, cfg: CoreConfig) -> float:
 	## 实际命中概率 = 施放者命中率 − 目标闪避率 + 技能命中修正（百分点×0.01），
@@ -52,8 +103,10 @@ static func hit_chance(hit_stat: float, dodge_stat: float, skill_hit_mod: int, c
 	## 参数 hit_stat：施放者命中率（DerivedStats.calc_hit 基准）；dodge_stat：目标闪避率；
 	## skill_hit_mod：技能命中修正（int 百分点，1 = +1%）；cfg：总控配置（钳制带）
 	## 返回：钳制后命中概率
-	var clamp_min: float = cfg.hit_clamp_min if cfg != null else 0.05
-	var clamp_max: float = cfg.hit_clamp_max if cfg != null else 0.95
+	var clamp_min: float = cfg.hit_clamp_min if cfg != null and cfg.hit_clamp_min > 0.0  \
+			else HIT_CLAMP_MIN_FALLBACK
+	var clamp_max: float = cfg.hit_clamp_max if cfg != null and cfg.hit_clamp_max > 0.0  \
+			else HIT_CLAMP_MAX_FALLBACK
 	return clampf(hit_stat - dodge_stat + skill_hit_mod * 0.01, clamp_min, clamp_max)
 
 static func roll_hit(chance: float, rng: RandomNumberGenerator, forced: int = -1) -> bool:
@@ -97,7 +150,8 @@ static func heal_amount(attrs: Dictionary, effect: SkillEffect) -> int:
 	## 治疗量 = round(换算源属性 × ratio + flat)（§3.4 治愈术行：感知×1.5+10）
 	## 参数 attrs：施放者一级属性 {StringName: int}；effect：HEAL 效果参数组
 	## 返回：治疗量（int）
-	return int(round(int(attrs.get(effect.source_attr, 0)) * effect.ratio + effect.flat))
+	return int(round(int(attrs.get(effect.source_attr,
+			AttrKeys.DEFAULT_ATTR_VALUE)) * effect.ratio + effect.flat))
 
 static func dot_tick(attrs: Dictionary, dot: DotParams) -> int:
 	## DOT 跳伤：FIXED 直取固定值 / ATTR_RATIO = round(属性 × ratio)——
@@ -106,4 +160,11 @@ static func dot_tick(attrs: Dictionary, dot: DotParams) -> int:
 	## 返回：单跳伤害（int）
 	if dot.mode == DotParams.Mode.FIXED:
 		return dot.fixed
-	return int(round(int(attrs.get(dot.attr_id, 0)) * dot.ratio))
+	return dot_tick_from_value(int(attrs.get(dot.attr_id, AttrKeys.DEFAULT_ATTR_VALUE)), dot)
+
+static func dot_tick_from_value(value: int, dot: DotParams) -> int:
+	## DOT 跳伤换算单源（A-9）：round(数值 × ratio)——attrs 口径（受方属性回退）
+	## 与施方快照口径（status_manager 定格值）两路共用同一换算式
+	## 参数 value：换算源数值（属性值或快照值）；dot：DOT 参数子资源
+	## 返回：单跳伤害（int）
+	return int(round(float(value) * dot.ratio))

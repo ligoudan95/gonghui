@@ -58,3 +58,11 @@ func test_broken_owner_ref_is_caught() -> void:
 	assert_bool(matched).is_true()
 	var report_after: ValidationReport = DataValidator.run_all(_game_data)
 	assert_int(report_after.errors.size()).is_equal(0)
+
+func test_all_domains_derived_from_schema() -> void:
+	## 域清单单源（C-1）：校验遍历域 = GameData.DOMAIN_SCHEMA 键全集——
+	## 校验器不再自持第二份清单（新增域只改 DOMAIN_SCHEMA 一处）
+	var domains: Array[StringName] = DataValidator._AllDomains(_game_data)
+	assert_int(domains.size()).is_equal(_game_data.DOMAIN_SCHEMA.size())
+	for domain: StringName in _game_data.DOMAIN_SCHEMA:
+		assert_bool(domains.has(domain)).is_true()

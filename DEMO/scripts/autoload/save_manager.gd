@@ -3,8 +3,9 @@
 ## （autosave，出征锁跳过）、读档（load_game，损坏容错不崩）与各系统快照
 ## provider 的注册扩展点（M0 空 registry、机制就位）。
 ## 数据来源：M0 批 3 方案；存档路径 user://saves/main_save.json。
-## 事务口径：原子写——先写 main_save.json.tmp 再 rename 替换正本，
-## 半写/中断不污染既有存档（rename 覆盖失败时降级 remove+rename 两段式）。
+## 事务口径：原子写（盲审批 3 B-2 三段式加固）——写 tmp → 正本备份 .bak →
+## tmp 回正本（成功清 .bak，失败回滚 .bak），半写/中断不污染既有存档；
+## 读档对「正本缺失但 .bak 在」的崩溃窗口走兜底。
 ## 依赖口径：不依赖 SceneManager（批 4 才有）；scene_id 以 StringName 字面量占位。
 extends Node
 
@@ -19,16 +20,22 @@ signal save_corrupt(reason: String)
 const SAVE_DIR: String = "user://saves"
 const SAVE_PATH: String = "user://saves/main_save.json"
 const TEMP_PATH: String = "user://saves/main_save.json.tmp"
+## 备份路径（盲审批 3 B-2 三段式 rename 的中转：正本→.bak→tmp 回正本，
+## 任一步失败可回滚——防 remove+rename 两段式窗口内崩溃写坏正本）
+const BAK_PATH: String = "user://saves/main_save.json.bak"
 
 ## 识别的存档结构版本（不识别则拒载走 save_corrupt）——**单源读 SaveData
 ## 常量**（批 D L8：原双份字面量已删，版本号只在 SaveData.SCHEMA_VERSION 一处）
 const SUPPORTED_SCHEMA_VERSION: int = SaveData.SCHEMA_VERSION
 
-## 占位场景 id：公会壳（批 4 SceneManager 落地前）
-const SCENE_GUILD_SHELL: StringName = &"guild_shell"
+## 占位场景 id：公会壳（C-4 单源：引 SaveData.SCENE_GUILD_SHELL——
+## 场景名字面量不在本类重复定义）
+const SCENE_GUILD_SHELL: StringName = SaveData.SCENE_GUILD_SHELL
 
 ## 运行态存档（new_game/load_game 建立前为 null）
 var current: SaveData
+## 最近一次解析失败原因（S5-1：load_game 统一信号文案的传递位）
+var _last_parse_fail_reason: String = ""
 
 ## 出征锁（#26：出征中不自动存档；M3 出征层经 set_expedition_lock 调用）
 var _expedition_lock: bool = false
@@ -37,9 +44,11 @@ var _expedition_lock: bool = false
 var _snapshot_providers: Dictionary[StringName, Array] = {}
 
 func new_game() -> SaveData:
-	## 建立新档：重置运行态（game_day=1、mode 取 GameConfig、scene_id=公会壳占位）
+	## 建立新档：重置运行态（game_day=1、mode 取 GameConfig、scene_id=公会壳
+	## 占位）；S5-3：同步重置出征锁（新档无出征语义，防上一局的锁泄漏）
 	## 参数：无
 	## 返回：新建的 SaveData（同时赋给 current）
+	_expedition_lock = false
 	current = SaveData.new()
 	current.schema_version = SUPPORTED_SCHEMA_VERSION
 	current.save_point = SaveData.SavePoint.DAY_END
@@ -72,34 +81,56 @@ func autosave(point: SaveData.SavePoint) -> Error:
 	return OK
 
 func load_game() -> SaveData:
-	## 读档：文件缺失返回 null（不发信号）；JSON 解析失败/版本不识别/字段校验
-	## 失败→emit save_corrupt 并返回 null（不崩、current 不变）；
-	## 成功→from_dict→current 更新→恢复快照→emit save_loaded
+	## 读档（S5-1 加固）：正本可读但解析/校验失败且 .bak 存在 → 兜底重试
+	## .bak（正本半写/外写坏时的恢复通路；两处均败才发 save_corrupt）；
+	## 正本缺失但有 .bak 同样兜底（B-2 崩溃窗口）；成功→current 更新→
+	## 恢复快照→emit save_loaded；S5-3：成功路径重置出征锁（读档回到存档
+	## 时点的非出征态）
 	## 参数：无
 	## 返回：载入的 SaveData；无文件或损坏返回 null
-	if not has_save():
+	if not has_save() and not FileAccess.file_exists(BAK_PATH):
 		return null
-	var file: FileAccess = FileAccess.open(SAVE_PATH, FileAccess.READ)
-	if file == null:
-		save_corrupt.emit("存档文件无法打开（错误码 %d）" % FileAccess.get_open_error())
+	var text: String = _ReadSaveTextWithFallback()
+	var fail_reason: String = "存档文件无法打开（错误码 %d）" % FileAccess.get_open_error()
+	var data: SaveData = null
+	if not text.is_empty():
+		data = _ParseSaveText(text)
+		fail_reason = _last_parse_fail_reason
+	if data == null and FileAccess.file_exists(BAK_PATH):
+		# 正本不可用（打不开/解析失败）→ .bak 兜底重试
+		push_warning("SaveManager: 正本不可用，尝试 .bak 兜底读档")
+		var bak_text: String = _ReadFileAt(BAK_PATH)
+		if not bak_text.is_empty() and bak_text != text:
+			data = _ParseSaveText(bak_text)
+			if data == null:
+				fail_reason = _last_parse_fail_reason
+	if data == null:
+		save_corrupt.emit(fail_reason)
 		return null
-	var text: String = file.get_as_text()
-	file.close()
+	current = data
+	_expedition_lock = false
+	_RestoreSnapshots()
+	save_loaded.emit(data)
+	return data
+
+func _ParseSaveText(text: String) -> SaveData:
+	## 存档文本解析管线（S5-1 抽取）：JSON → 版本 → 字段校验；任一失败
+	## 返回 null 并记录原因（不发 save_corrupt——由 load_game 统一决定
+	## 是否 .bak 兜底与最终信号文案）
+	## 参数 text：存档 JSON 文本
+	## 返回：SaveData；解析失败返回 null
 	var parsed: Variant = JSON.parse_string(text)
 	if parsed == null or not (parsed is Dictionary):
-		save_corrupt.emit("JSON 解析失败")
+		_last_parse_fail_reason = "JSON 解析失败"
 		return null
 	var version_value: Variant = parsed.get("schema_version", null)
 	if not SaveData.IsIntLike(version_value) or int(version_value) != SUPPORTED_SCHEMA_VERSION:
-		save_corrupt.emit("schema_version 不识别（%s，支持 %d）" % [str(version_value), SUPPORTED_SCHEMA_VERSION])
+		_last_parse_fail_reason = "schema_version 不识别（%s，支持 %d）" % [
+			str(version_value), SUPPORTED_SCHEMA_VERSION]
 		return null
 	var data: SaveData = SaveData.from_dict(parsed)
 	if data == null:
-		save_corrupt.emit("存档字段类型校验失败")
-		return null
-	current = data
-	_RestoreSnapshots()
-	save_loaded.emit(data)
+		_last_parse_fail_reason = "存档字段类型校验失败"
 	return data
 
 func has_save() -> bool:
@@ -145,7 +176,10 @@ func _RestoreSnapshots() -> void:
 		provider[1].call(current.payload[sys_name])
 
 func _WriteAtomic(json_text: String) -> Error:
-	## 原子写：建目录→写 tmp→rename 替换正本（rename 覆盖失败降级 remove+rename）
+	## 原子写（B-2 三段式 + S5-1 半写链加固）：建目录→写 tmp（store 后查
+	## get_error——写失败直接返回不动正本）→tmp 文本 JSON.parse_string 自校验
+	## （内存损坏/序列化异常在替换正本前拦截）→正本备份 .bak→tmp 回正本→
+	## 成功清 .bak；回正本失败→.bak 回滚；正本备份失败降级旧两段式
 	## 参数 json_text：序列化后的 JSON 文本
 	## 返回：OK=正本已替换；否则为文件/目录操作错误码
 	var dir_err: Error = DirAccess.make_dir_recursive_absolute(SAVE_DIR)
@@ -156,19 +190,77 @@ func _WriteAtomic(json_text: String) -> Error:
 		return FileAccess.get_open_error()
 	file.store_string(json_text)
 	file.flush()
+	# S5-1①：写入侧错误检查——store/flush 失败（磁盘满等）直接失败，正本未动
+	var write_err: Error = file.get_error()
 	file.close()
+	if write_err != OK:
+		push_error("SaveManager: tmp 写入异常（错误码 %d），中止替换" % write_err)
+		DirAccess.remove_absolute(TEMP_PATH)
+		return write_err
+	# S5-1②：tmp 文本回读自校验——序列化产物必须是合法 JSON 才允许替换正本
+	var verify: FileAccess = FileAccess.open(TEMP_PATH, FileAccess.READ)
+	if verify == null:
+		return FileAccess.get_open_error()
+	var verify_text: String = verify.get_as_text()
+	verify.close()
+	if JSON.parse_string(verify_text) == null:
+		push_error("SaveManager: tmp 自校验失败（JSON 非法），中止替换——正本未动")
+		DirAccess.remove_absolute(TEMP_PATH)
+		return FAILED
 	var dir: DirAccess = DirAccess.open(SAVE_DIR)
 	if dir == null:
+		DirAccess.remove_absolute(TEMP_PATH)
 		return FAILED
+	# ②正本 → .bak（存在旧正本才备份；失败降级两段式）
+	if has_save():
+		dir.remove(BAK_PATH)
+		var backup_err: Error = dir.rename(SAVE_PATH, BAK_PATH)
+		if backup_err != OK:
+			push_warning("SaveManager: 正本备份失败（错误码 %d），降级 remove+rename" % backup_err)
+			var remove_err: Error = dir.remove(SAVE_PATH)
+			if remove_err != OK and has_save():
+				return remove_err
+			return dir.rename(TEMP_PATH, SAVE_PATH)
+	# ③tmp → 正本（正本已挪走，无覆盖冲突）；成功清 .bak
 	var rename_err: Error = dir.rename(TEMP_PATH, SAVE_PATH)
 	if rename_err == OK:
+		dir.remove(BAK_PATH)
 		return OK
-	# Windows 平台 rename 覆盖已存在目标可能失败：降级两段式（移除旧正本再改名）
-	push_warning("SaveManager: rename 直接覆盖失败（错误码 %d），降级 remove+rename" % rename_err)
-	var remove_err: Error = dir.remove(SAVE_PATH)
-	if remove_err != OK and has_save():
-		return remove_err
-	return dir.rename(TEMP_PATH, SAVE_PATH)
+	# ④回滚：.bak 恢复为正本（保证正本回到上一完整版本；R4-12：残留 tmp 清除）
+	push_error("SaveManager: tmp 回正本失败（错误码 %d），回滚 .bak" % rename_err)
+	dir.remove(TEMP_PATH)
+	dir.remove(SAVE_PATH)
+	var rollback_err: Error = dir.rename(BAK_PATH, SAVE_PATH)
+	if rollback_err != OK:
+		push_error("SaveManager: .bak 回滚失败（错误码 %d）——正本缺失，下次读档走 .bak 兜底" % rollback_err)
+	return rename_err
+
+func _ReadSaveTextWithFallback() -> String:
+	## 读正本文本；正本无法打开（缺失/占用/坏盘）且 .bak 存在时兜底读 .bak
+	## （B-2：三段式中途被杀的崩溃窗口——正本已挪 .bak、tmp 未回正）
+	## 参数：无
+	## 返回：存档文本；两处均不可读返回空串
+	var file: FileAccess = FileAccess.open(SAVE_PATH, FileAccess.READ)
+	if file == null:
+		push_warning("SaveManager: 正本无法打开（错误码 %d），尝试 .bak 兜底" % FileAccess.get_open_error())
+		file = FileAccess.open(BAK_PATH, FileAccess.READ)
+		if file == null:
+			return ""
+	var text: String = file.get_as_text()
+	file.close()
+	return text
+
+func _ReadFileAt(path: String) -> String:
+	## 读指定路径文本（S5-1：.bak 兜底重试的独立读取口——正本可读场景下
+	## .bak 与正本内容比对去重用）
+	## 参数 path：user:// 文件路径
+	## 返回：文件内容；不可读返回空串
+	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return ""
+	var text: String = file.get_as_text()
+	file.close()
+	return text
 
 func _ResolveMode() -> String:
 	## 解析运行模式：优先取 GameConfig 自动加载单例；不在树内或单例缺失时

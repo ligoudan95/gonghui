@@ -11,6 +11,10 @@
 ## 加值区间 2-3 取上值 3——任务定值、区间内，见完成报告偏差注）。
 extends SceneTree
 
+## !! 警示（解耦复审 C-10）：本工具为 M0/M1 首次生成占位数据的脚本——
+## 全库数据已人工调校定稿，重跑将【覆盖调校值】，必须先备份并对 diff
+## 逐行复核后才可采纳。
+
 # ---- 属性 id 常量（七属性，小写下划线，naming_registry 登记说明） ----
 const ATTR_STRENGTH: StringName = &"strength"
 const ATTR_AGILITY: StringName = &"agility"

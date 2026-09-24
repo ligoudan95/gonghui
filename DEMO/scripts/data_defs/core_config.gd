@@ -8,6 +8,23 @@
 class_name CoreConfig
 extends Resource
 
+## cfg_main 固定资源 id（C-5 单源：&"cfg_main" 字面量全库收敛此处——
+## GameConfig 直载路径与 GameData 查表消费点统一引用）
+const CFG_MAIN_ID: StringName = &"cfg_main"
+
+static func copy_props(from_record: Resource, to_record: Resource) -> void:
+	## 资源属性逐项拷贝（R4-01 热重载同址刷新核心——定义于数据定义层：
+	## GameConfig/GameData 两单例合向引用不反向）：脚本导出字段与普通属性
+	## 全量拷入旧实例（嵌套子资源为引用替换——新 dot/modifiers 等一并生效）；
+	## resource_* 内建、script 本身与元数据跳过（同脚本类——属性集恒一致）
+	## 参数 from_record：磁盘新读实例；to_record：旧实例（同址壳）
+	## 返回：无
+	for prop: Dictionary in from_record.get_property_list():
+		var prop_name: String = String(prop["name"])
+		if prop_name.begins_with("resource_") or prop_name == "script" 				or prop_name == "NODE_PATH" or prop_name.begins_with("metadata/"):
+			continue
+		to_record.set(prop_name, from_record.get(prop_name))
+
 ## 运行模式：DEMO 阶段或完整版
 enum Mode {
 	DEMO,
@@ -89,10 +106,22 @@ enum Mode {
 # ---- 移动力/行动参数（批 B M2/M3）----
 ## 移动力基准段上限（职业 + 敏捷加成合计封顶；状态修正不封顶——17-C8）
 @export var move_base_cap: int = 0
-## 敏捷移动加成门槛（敏捷 ≥ 本值时移动力 +1，17-C8）
+## 敏捷移动加成门槛（敏捷 ≥ 本值时移动力获得加成，17-C8）
 @export var agility_move_bonus_line: int = 0
+## 敏捷移动加成点数（A-2：达门槛时移动力 + 本值——原 +1 硬编码入表）
+@export var agility_move_bonus_amount: int = 0
 ## 敌方 AI 怒吼义务门槛（3×3 内我方数 ≥ 本值才考虑怒吼——AI 行为可调参数）
 @export var ai_roar_ally_count_line: int = 0
+
+# ---- 穿甲/护甲换算参数（A-1：原 ×1 硬编码入表）----
+## 物理穿甲 = 力量调整值 × 本值（§3.2 穿甲行）
+@export var pierce_per_modifier: int = 0
+## 护甲属性段 = 对应调整值 × 本值（物理←体质 / 法术←感知，§3.2）
+@export var armor_per_modifier: int = 0
+
+# ---- 技能域参数（C-8）----
+## 技能射程上限（技能表 range 合法域 [0, 本值]——校验带兜底）
+@export var skill_range_max: int = 0
 
 # ---- 招募参数（批 B M4）----
 ## 招募属性钳制带下限（百分位）
@@ -126,6 +155,75 @@ enum Mode {
 @export var content_tiles_max: int = 0
 @export var content_equip_min: int = 0
 @export var content_equip_max: int = 0
+
+# ---- UI 视觉参数（S1-4 + B 席批：视觉数值入表——铁律①口径延伸）----
+## 地格解析失败兜底色（tile 表查无定义的占位格色；默认透明 = 未回填，
+## UI 侧回退代码兜底常量，V-B2-value-domains 拦截 alpha ≤ 0）
+@export var ui_tile_fallback_color: Color = Color(0, 0, 0, 0)
+## 版本标签前缀（B-11：title 屏版本文案单源——替代代码「DEMO M0」三处字面量）
+@export var version_label: String = ""
+## 敌方行动演出延时秒（A-10：BattleController.delay_seconds 的表侧权威值；
+## @export 保留为测试注入口，生产经 BattleSetup 装配后回填）
+@export var ui_battle_delay_seconds: float = 0.0
+## 结算面板战败色（R3-08）
+@export var ui_result_defeat_color: Color = Color(0, 0, 0, 0)
+## 结算面板撤退色（R3-08）
+@export var ui_result_retreat_color: Color = Color(0, 0, 0, 0)
+## 徽章 HP 低血阈值（R3-08：hp_ratio ≤ 本值转低血色——原 0.35 内联）
+@export var ui_badge_hp_low_threshold: float = 0.0
+
+# ---- UI 徽章配色（B-1/B-2/B-3：unit_badge 全部内联色入表；默认透明 = 未回填）----
+@export var ui_badge_hp_low_color: Color = Color(0, 0, 0, 0)
+@export var ui_badge_hp_ok_color: Color = Color(0, 0, 0, 0)
+@export var ui_badge_bar_back_color: Color = Color(0, 0, 0, 0)
+@export var ui_badge_res_mana_color: Color = Color(0, 0, 0, 0)
+@export var ui_badge_res_stamina_color: Color = Color(0, 0, 0, 0)
+@export var ui_badge_fallback_ally_color: Color = Color(0, 0, 0, 0)
+@export var ui_badge_fallback_enemy_color: Color = Color(0, 0, 0, 0)
+@export var ui_badge_bewitch_color: Color = Color(0, 0, 0, 0)
+@export var ui_badge_preview_strip_color: Color = Color(0, 0, 0, 0)
+@export var ui_badge_preview_text_color: Color = Color(0, 0, 0, 0)
+@export var ui_badge_outline_color: Color = Color(0, 0, 0, 0)
+
+# ---- UI 信息卡配色（B-1：unit_info_card 内联色入表）----
+@export var ui_card_buff_color: Color = Color(0, 0, 0, 0)
+@export var ui_card_debuff_color: Color = Color(0, 0, 0, 0)
+@export var ui_card_unknown_color: Color = Color(0, 0, 0, 0)
+@export var ui_card_muted_color: Color = Color(0, 0, 0, 0)
+
+# ---- UI 覆盖层配色（B-5：battle_board 范围/路径/确认/阻断色入表）----
+@export var ui_overlay_move_fill_color: Color = Color(0, 0, 0, 0)
+@export var ui_overlay_move_border_color: Color = Color(0, 0, 0, 0)
+@export var ui_overlay_skill_fill_color: Color = Color(0, 0, 0, 0)
+@export var ui_overlay_skill_border_color: Color = Color(0, 0, 0, 0)
+@export var ui_overlay_blocked_fill_color: Color = Color(0, 0, 0, 0)
+@export var ui_overlay_blocked_border_color: Color = Color(0, 0, 0, 0)
+@export var ui_overlay_blocked_slash_color: Color = Color(0, 0, 0, 0)
+@export var ui_overlay_path_color: Color = Color(0, 0, 0, 0)
+@export var ui_overlay_confirm_color: Color = Color(0, 0, 0, 0)
+
+# ---- UI 战斗日志配色（B-6：LINE_COLORS 五色入表）----
+@export var ui_log_system_color: Color = Color(0, 0, 0, 0)
+@export var ui_log_damage_color: Color = Color(0, 0, 0, 0)
+@export var ui_log_heal_color: Color = Color(0, 0, 0, 0)
+@export var ui_log_status_color: Color = Color(0, 0, 0, 0)
+@export var ui_log_move_color: Color = Color(0, 0, 0, 0)
+
+# ---- UI 共享配色（B-2 倒地灰显 / B-3 金色高亮 / B-4 深底面板）----
+@export var ui_downed_modulate_color: Color = Color(0, 0, 0, 0)
+@export var ui_highlight_gold_color: Color = Color(0, 0, 0, 0)
+@export var ui_panel_dark_color: Color = Color(0, 0, 0, 0)
+
+# ---- UI 字号档位（B-7：display/title/heading/subheading/large/body/normal/small/minor）----
+@export var ui_font_size_display: int = 0
+@export var ui_font_size_title: int = 0
+@export var ui_font_size_heading: int = 0
+@export var ui_font_size_subheading: int = 0
+@export var ui_font_size_large: int = 0
+@export var ui_font_size_body: int = 0
+@export var ui_font_size_normal: int = 0
+@export var ui_font_size_small: int = 0
+@export var ui_font_size_minor: int = 0
 
 ## 设计备注（【占位·试玩校准】等标注与数据来源说明，Inspector 可编辑）
 @export var comment: String = ""

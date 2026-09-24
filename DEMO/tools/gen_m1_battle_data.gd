@@ -12,6 +12,10 @@
 ## V-M1-* 校验由本批代码侧同步落地。
 extends SceneTree
 
+## !! 警示（解耦复审 C-10）：本工具为 M0/M1 首次生成占位数据的脚本——
+## 全库数据已人工调校定稿，重跑将【覆盖调校值】，必须先备份并对 diff
+## 逐行复核后才可采纳。
+
 ## 我方出生位（底部 4 格；两张图同规格口径——x 居中 4 连格）
 const PLAYER_SPAWNS_8X8: Array[Vector2i] = [
 	Vector2i(2, 7), Vector2i(3, 7), Vector2i(4, 7), Vector2i(5, 7),

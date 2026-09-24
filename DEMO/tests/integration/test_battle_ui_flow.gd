@@ -94,21 +94,26 @@ func test_signal_flow_and_request_move() -> void:
 
 func test_degraded_run_interaction_guards() -> void:
 	## 降级路径交互守卫（盲审批 1-6：无参直开 context 为 null——按钮 handler
-	## 直调不崩、板面坐标换算返回界外哨兵、五钮统一禁用、板面不接鼠标）
+	## 直调不崩、板面坐标换算返回界外哨兵、四钮统一禁用、板面不接鼠标；
+	## S5-2：撤退钮改「返回公会壳」保留降级出口——不再禁用，文案对齐）
 	var runner: GdUnitSceneRunner = scene_runner(BATTLE_SCENE)
 	var battle: Control = runner.scene() as Control
 	assert_object(battle).is_not_null()
 	assert_object(battle.context).is_null()
 	battle._on_attack_button_pressed()
 	battle._on_end_turn_button_pressed()
-	battle._on_retreat_button_pressed()
 	var board: BattleBoard = battle.get_node("%BoardLayer") as BattleBoard
 	assert_vector(board.cell_from_local(Vector2(100, 100))).is_equal(Vector2i(-1, -1))
 	assert_int(board.mouse_filter).is_equal(Control.MOUSE_FILTER_IGNORE)
 	for button_name: String in ["%AttackButton", "%SkillButtonA", "%SkillButtonB",
-			"%EndTurnButton", "%RetreatButton"]:
+			"%EndTurnButton"]:
 		assert_bool((battle.get_node(button_name) as Button).disabled) \
 				.override_failure_message("降级路径 %s 未禁用" % button_name).is_true()
+	# S5-2：撤退钮保留可用且文案 = 返回公会壳（降级出口）
+	var retreat_button: Button = battle.get_node("%RetreatButton") as Button
+	assert_bool(retreat_button.disabled) \
+			.override_failure_message("降级路径撤退钮应保留降级出口").is_false()
+	assert_str(retreat_button.text).is_equal("返回公会壳")
 
 func test_battle_screen_direct_load_smoke() -> void:
 	## 直开冒烟：无跨场景参数 → 优雅降级（IdleLabel 提示、不开战不崩溃）
@@ -417,6 +422,63 @@ func test_los_blocked_range_rendering_and_tap() -> void:
 			.is_true()
 	battle.controller.abort_battle()
 
+func test_target_tips_hidden_on_target_switch() -> void:
+	## 换目标 tips 不残留（盲审批 3 D-3）：进确认态（tips 显示）后点射程内
+	## 空格（无可显示数据的新目标位）→ tips 立即隐藏且不残留旧目标数据；
+	## 再点敌方目标格 → tips 重新显示（换目标 show 正常）；断格路径同理隐藏
+	var runner: GdUnitSceneRunner = scene_runner(GUILD_SCENE)
+	var button: Button = runner.find_child("DebugRandomButton", true, false) as Button
+	button.pressed.emit()
+	await _AwaitSceneSwap()
+	var battle: Control = get_tree().root.find_child("BattleScreen", true, false) as Control
+	assert_object(battle).is_not_null()
+	battle.controller.delay_seconds = 0.0
+	var waited: int = 0
+	while not battle.controller.awaiting_command and waited < MAX_WAIT_FRAMES:
+		await get_tree().process_frame
+		waited += 1
+	assert_bool(battle.controller.awaiting_command).is_true()
+	# 传送当前单位到存活敌方相邻空格（贴身测普攻射程 1）
+	var unit: BattleUnit = battle.controller.current_unit
+	var enemy: BattleUnit = null
+	for candidate: BattleUnit in battle.context.enemies:
+		if candidate.alive:
+			enemy = candidate
+			break
+	assert_object(enemy).is_not_null()
+	var dest: Vector2i = Vector2i(-1, -1)
+	for offset: Vector2i in [Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 0), Vector2i(-1, 0)]:
+		var near: Vector2i = enemy.grid_pos + offset
+		if battle.context.grid.get_unit_at(near) == null:
+			dest = near
+			break
+	assert_bool(dest != Vector2i(-1, -1)).is_true()
+	battle.context.grid.remove_unit(unit.grid_pos)
+	unit.grid_pos = dest
+	battle.context.grid.place_unit(dest, unit)
+	var board: BattleBoard = battle.get_node("%BoardLayer") as BattleBoard
+	# ①进确认态：点敌方目标格 → tips 显示
+	(battle.get_node("%AttackButton") as Button).pressed.emit()
+	battle._HandleSkillTap(enemy.grid_pos)
+	assert_bool(board.is_target_tips_visible()).is_true()
+	# ②换目标点射程内空格（自身普攻射程 1 内、非目标格的空位）：无可显示
+	## 数据 → tips 隐藏（D-3 前旧 tips 残留在旧目标格上）
+	var empty_neighbor: Vector2i = Vector2i(-1, -1)
+	for offset: Vector2i in [Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 0), Vector2i(-1, 0)]:
+		var near: Vector2i = dest + offset
+		if near != enemy.grid_pos and battle.context.grid.get_unit_at(near) == null \
+				and battle._skill_range_cells.has(near):
+			empty_neighbor = near
+			break
+	assert_bool(empty_neighbor != Vector2i(-1, -1)).is_true()
+	battle._HandleSkillTap(empty_neighbor)
+	assert_bool(board.is_target_tips_visible()) \
+			.override_failure_message("点射程内空格后旧目标 tips 不应残留").is_false()
+	# ③再点敌方目标格：tips 重新显示（换目标 show 正常）
+	battle._HandleSkillTap(enemy.grid_pos)
+	assert_bool(board.is_target_tips_visible()).is_true()
+	battle.controller.abort_battle()
+
 func test_batch_a_table_driven_contract() -> void:
 	## 批 A 表驱动链路契约（H1/H2/H3）：①地格渲染读表——改 fill_color 重建
 	## 即变（表驱动零改码）；②sprite 读取链——_SpriteIdOf（查表）→ _TextureOf
@@ -443,9 +505,12 @@ func test_batch_a_table_driven_contract() -> void:
 	board._BuildCells()
 	assert_bool((board.cell_visual(Vector2i(5, 2)) as ColorRect).color \
 			.is_equal_approx(original_fill)).is_true()
-	# ②sprite 表驱动读取链：查表 id → registry 路径 → load 纹理非空
+	# ②sprite 表驱动读取链（B-18：薄壳已删——直呼 SpriteResolver 单源）：
+	# 查表 id → registry 路径 → load 纹理非空
 	var ally: BattleUnit = battle.context.allies[0]
-	var texture: Texture2D = board._TextureOf(board._SpriteIdOf(ally))
+	var game_data_node: Node = get_tree().root.get_node("GameData")
+	var texture: Texture2D = SpriteResolver.texture_of(
+			SpriteResolver.sprite_id_of(ally, game_data_node), game_data_node)
 	assert_object(texture).is_not_null()
 	# ③UI/执行器同源同值（H1）：手造 undead 目标，UI 值 == 单源链复算
 	var smite: SkillDef = game_data.get_record(&"skl_priest_smite") as SkillDef
@@ -467,3 +532,104 @@ func _AwaitSceneSwap() -> void:
 	## 返回：无（协程）
 	await get_tree().process_frame
 	await get_tree().process_frame
+
+func test_ally_skill_tap_on_enemy_rejected() -> void:
+	## 治疗技点敌方格（S4-1）：ALLY 技点敌方单位格 → 不进确认态（pending
+	## 保持哨兵）+ 日志「目标非法」提示；恒 false 死代码已删（敌方分支内
+	## 直接拦截）
+	var runner: GdUnitSceneRunner = scene_runner(GUILD_SCENE)
+	var button: Button = runner.find_child("DebugRandomButton", true, false) as Button
+	button.pressed.emit()
+	await _AwaitSceneSwap()
+	var battle: Control = get_tree().root.find_child("BattleScreen", true, false) as Control
+	assert_object(battle).is_not_null()
+	battle.controller.delay_seconds = 0.0
+	var waited: int = 0
+	while not battle.controller.awaiting_command and waited < MAX_WAIT_FRAMES:
+		await get_tree().process_frame
+		waited += 1
+	assert_bool(battle.controller.awaiting_command).is_true()
+	# 牧师行动轮（等待到牧师回合——治疗技持有者）
+	var priest_turn: bool = false
+	waited = 0
+	while not priest_turn and waited < MAX_WAIT_FRAMES * 4:
+		if battle.controller.awaiting_command \
+				and battle.controller.current_unit != null \
+				and battle.controller.current_unit.skill_ids.has(&"skl_priest_heal"):
+			priest_turn = true
+			break
+		if battle.controller.awaiting_command:
+			battle.controller.request_end_unit_turn()
+		await get_tree().process_frame
+		waited += 1
+	assert_bool(priest_turn).override_failure_message("未等到牧师行动轮").is_true()
+	var priest: BattleUnit = battle.controller.current_unit
+	# 传送牧师到敌方旁贴身（治疗射程 5 内直接点敌格亦可——用贴身保证射程内）
+	var enemy: BattleUnit = null
+	for candidate: BattleUnit in battle.context.enemies:
+		if candidate.alive:
+			enemy = candidate
+			break
+	assert_object(enemy).is_not_null()
+	# 传送牧师贴身（保证敌格在治疗射程内——点敌格走射程内分支才可验证 S4-1）
+	var near_cell: Vector2i = Vector2i(-1, -1)
+	for offset: Vector2i in [Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 0), Vector2i(-1, 0)]:
+		var near: Vector2i = enemy.grid_pos + offset
+		if battle.context.grid.get_unit_at(near) == null:
+			near_cell = near
+			break
+	assert_bool(near_cell != Vector2i(-1, -1)).is_true()
+	battle.context.grid.remove_unit(priest.grid_pos)
+	priest.grid_pos = near_cell
+	battle.context.grid.place_unit(near_cell, priest)
+	# 进入治疗技选择模式（skill_ids[1] = 档 1 首技——按装配序含治疗）
+	var heal_slot: int = -1
+	for index: int in priest.skill_ids.size():
+		var skill: SkillDef = battle.context.skill_lookup.call(priest.skill_ids[index]) as SkillDef
+		if skill != null and skill.target_side == SkillDef.TargetSide.ALLY:
+			heal_slot = index
+			break
+	assert_int(heal_slot).is_greater(0)
+	battle._EnterSkillMode(priest.skill_ids[heal_slot])
+	assert_str(String(battle._selected_skill_id)).is_not_empty()
+	# 点敌方目标格：不进确认态（哨兵）——治疗技敌方格拦截
+	battle._HandleSkillTap(enemy.grid_pos)
+	assert_vector(battle._pending_cell).is_equal(battle.NO_CELL) \
+			.override_failure_message("ALLY 技点敌格不应进确认态")
+	assert_str(String(battle._selected_skill_id)).is_not_empty()
+	battle.controller.abort_battle()
+
+func test_attack_button_toggles_and_move_after_action() -> void:
+	## 普攻钮 toggle（S4-7）+ 行动后仍可移动（S3-03 UI）：普攻钮再点取消
+	## 回移动范围；已行动后移动范围照常显示（has_moved 短路才隐藏路径预览）
+	var runner: GdUnitSceneRunner = scene_runner(GUILD_SCENE)
+	var button: Button = runner.find_child("DebugRandomButton", true, false) as Button
+	button.pressed.emit()
+	await _AwaitSceneSwap()
+	var battle: Control = get_tree().root.find_child("BattleScreen", true, false) as Control
+	assert_object(battle).is_not_null()
+	battle.controller.delay_seconds = 0.0
+	var waited: int = 0
+	while not battle.controller.awaiting_command and waited < MAX_WAIT_FRAMES:
+		await get_tree().process_frame
+		waited += 1
+	assert_bool(battle.controller.awaiting_command).is_true()
+	var unit: BattleUnit = battle.controller.current_unit
+	var board: BattleBoard = battle.get_node("%BoardLayer") as BattleBoard
+	# ①普攻钮 toggle：首点进技能模式、再点取消回移动范围
+	(battle.get_node("%AttackButton") as Button).pressed.emit()
+	assert_str(String(battle._selected_skill_id)).is_not_empty()
+	(battle.get_node("%AttackButton") as Button).pressed.emit()
+	assert_str(String(battle._selected_skill_id)).is_empty() \
+			.override_failure_message("普攻钮再点应取消选择（S4-7）")
+	# R5-07：取消后移动范围照常显示（_RestoreMoveRangeIfUsable 生效）
+	assert_int(board._move_overlays.size()).is_greater(0) \
+			.override_failure_message("取消选择后应回显移动范围（R3-05/R5-07）")
+	# ②行动后仍可移动（S3-03）：置 has_acted 后 request_move 仍受理
+	unit.has_acted = true
+	var reachable: Array[Vector2i] = battle.context.grid.find_reachable(unit, unit.move_final())
+	assert_int(reachable.size()).is_greater(0)
+	assert_bool(battle.controller.request_move(reachable[0])).is_true() \
+			.override_failure_message("行动后移动应受理（S3-03 顺序任意）")
+	assert_bool(unit.has_moved).is_true()
+	battle.controller.abort_battle()

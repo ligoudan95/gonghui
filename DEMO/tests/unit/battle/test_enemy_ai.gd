@@ -210,3 +210,90 @@ func test_elite_relentless_priority_after_roar() -> void:
 	elite.current_stamina = 5
 	var exhausted := EnemyAI.decide(elite, _grid, [target], _Ctx())
 	assert_str(String(exhausted.skill_id)).is_equal("skl_atk_enemy_common")
+
+func test_ranged_attack_respects_line_of_sight() -> void:
+	## 攻击位候选 LOS 过滤（盲审批 3 D-4）：远程技（射程 >1 需视线——与执行器
+	## SkillExecutor.los_required 同口径）原位射程内但被障碍挡视线 → 不原地
+	## 攻击，移动到视线通畅格再攻击（不再白耗一回合吃 no_line_of_sight）
+	var rat := _MakeEnemy(&"archer", "en_m1_mutant_rat.tres", Vector2i(0, 2))
+	var target := _MakeAlly(&"los_target", Vector2i(4, 2), 90)
+	# 前提锚点：(0,2)→(4,2) 同行水平视线必经障碍 (2,2) → 阻断
+	assert_bool(_grid.has_line_of_sight(rat.grid_pos, target.grid_pos)).is_false()
+	# 假远程技射程 5（射程内但视线断）；包装 lookup 注入
+	var ranged := SkillDef.new()
+	ranged.id = &"skl_test_ranged"
+	ranged.range = 5
+	ranged.damage_type = SkillDef.DamageType.PHYSICAL
+	ranged.target_shape = SkillDef.TargetShape.SINGLE
+	var wrapped_lookup: Callable = func(skill_id: StringName) -> Resource:
+		if skill_id == &"skl_test_ranged":
+			return ranged
+		return _skill_lookup.call(skill_id)
+	rat.skill_ids = [&"skl_test_ranged"]
+	rat.base_attack_id = &"skl_test_ranged"
+	var action := EnemyAI.decide(rat, _grid, [target],
+			{&"cfg": _cfg, &"skill_lookup": wrapped_lookup})
+	# 移动目的地视线通畅 + 随后可攻击目标
+	assert_vector(action.move_dest).is_not_equal(EnemyAI.NO_CELL)
+	assert_bool(_grid.has_line_of_sight(action.move_dest, target.grid_pos)).is_true()
+	assert_vector(action.attack_cell).is_equal(target.grid_pos)
+
+func test_ranged_los_matches_executor_rule() -> void:
+	## D-4 口径锚点：AI 消费的 LOS 需求判定与执行器单源（los_required）一致
+	## ——近战射程 1 免视线、远程 >1 需视线（测试侧用真表技能双锚定）
+	var melee: SkillDef = _skill_lookup.call(&"skl_atk_enemy_common") as SkillDef
+	assert_int(melee.range).is_equal(1)
+	assert_bool(SkillExecutor.los_required(melee)).is_false()
+	var fireball: SkillDef = _skill_lookup.call(&"skl_mage_fireball") as SkillDef
+	assert_int(fireball.range).is_greater(1)
+	assert_bool(SkillExecutor.los_required(fireball)).is_true()
+
+func test_expected_damage_uses_standing_panel_mult() -> void:
+	## AI 期望伤害消费站位面板层（S3-06）：ctx 注入 status_manager 后——
+	## 敌站高地（面板 ×1.2）期望伤害高于平地；缺省（null）回退 1.0
+	var rat := _MakeEnemy(&"rat", "en_m1_mutant_rat.tres", Vector2i(3, 4))
+	var target := _MakeAlly(&"target", Vector2i(3, 5), 90)
+	var skill: SkillDef = _skill_lookup.call(&"skl_atk_enemy_common") as SkillDef
+	# 平地基线（ctx 无 status_manager——回退 1.0）
+	var baseline: float = EnemyAI._ExpectedDamage(rat, skill, target, _cfg, null)
+	# 高地：独立建带状态 lookup 的管理器（套件 _status_manager 的 lookup 为
+	# 空解析，站格状态施加需要真状态表）施加 BUFF_tile_highground
+	var highground_tile: TileTypeDef = _tiles.get(&"tile_highground", null) as TileTypeDef
+	assert_object(highground_tile).is_not_null()
+	var hg_status: StatusDef = load("res://data/status/stats/BUFF_tile_highground.tres") as StatusDef
+	assert_object(hg_status).is_not_null()
+	var sm := StatusManager.new()
+	sm.setup(_cfg, func(status_id: StringName) -> Resource:
+		if status_id == hg_status.id:
+			return hg_status
+		return null)
+	assert_bool(sm.apply_tile_standing(rat, highground_tile, 1)).is_true()
+	var boosted: float = EnemyAI._ExpectedDamage(rat, skill, target, _cfg, sm)
+	assert_float(boosted).is_greater(baseline)
+
+func test_expected_damage_applies_race_mult() -> void:
+	## 种族克制镜像对齐（A-14）：AI 期望伤害经 collect_race_mult 单源——
+	## 对亡灵目标（技能带种族键）期望 > 同面板人形目标
+	var rat := _MakeEnemy(&"rat", "en_m1_mutant_rat.tres", Vector2i(3, 4))
+	var humanoid := _MakeAlly(&"human", Vector2i(3, 5), 90)
+	var undead := _MakeAlly(&"undead", Vector2i(3, 6), 90)
+	undead.race_tag = &"undead"
+	# 手造带种族克制键的技能（×1.5——同圣光惩击口径）
+	var smite := SkillDef.new()
+	smite.id = &"skl_test_smite"
+	smite.range = 1
+	smite.damage_type = SkillDef.DamageType.MAGICAL
+	smite.target_shape = SkillDef.TargetShape.SINGLE
+	smite.power_coefficient = 1.0
+	var typed_weights: Dictionary[StringName, float] = {&"intelligence": 1.0}
+	smite.attr_weights = typed_weights
+	var effect := SkillEffect.new()
+	effect.effect_kind = SkillEffect.EffectKind.COMBAT_MOD
+	effect.key = ModKeys.RACE_UNDEAD_MULT
+	effect.value = 1.5
+	smite.effects = [effect]
+	var vs_undead: float = EnemyAI._ExpectedDamage(rat, smite, undead, _cfg)
+	var vs_humanoid: float = EnemyAI._ExpectedDamage(rat, smite, humanoid, _cfg)
+	assert_float(vs_undead).is_greater(vs_humanoid)
+	# 比值带（减免轨减法项使精确比偏离 1.5——带内断言）
+	assert_float(vs_undead / maxi(0.0001, vs_humanoid)).is_between(1.4, 1.7)

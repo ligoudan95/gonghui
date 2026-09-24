@@ -69,3 +69,32 @@ func test_status_icon_modifier_text_formatting() -> void:
 	assert_bool(tooltips.contains("+4")) \
 			.override_failure_message("int 域修正（armor_physical 4）显示不符：%s" % tooltips) \
 			.is_true()
+
+func test_mouse_filter_and_name_resolver_contract() -> void:
+	## S4-4/S4-9 契约：面板容器与内层布局 IGNORE（右栏不遮点击——状态图标
+	## 单独 STOP 保 tooltip）；显示名经 resolver 单源解析（回退直读兼容）
+	var card := UnitInfoCard.new()
+	add_child(card)
+	auto_free(card)
+	var resolver_calls: Array[StringName] = []
+	var resolver: Callable = func(unit_id: StringName) -> String:
+		resolver_calls.append(unit_id)
+		return "解析名·%s" % String(unit_id)
+	card.setup(_LookupStatus, resolver)
+	var pair: Array = _MakeCardAndUnit()
+	var unit: BattleUnit = pair[1]
+	card.show_unit(unit)
+	# S4-9：名称来自 resolver（单源 BattleContext.display_name_of 注入口）
+	assert_str(card._name_label.text).is_equal("解析名·test_unit（我方）")
+	assert_int(resolver_calls.size()).is_greater(0)
+	# S4-4：面板与容器 IGNORE（图标 STOP 在 _MakeStatusIcon 已置——本用例锚定容器层）
+	assert_int(card.mouse_filter).is_equal(Control.MOUSE_FILTER_IGNORE)
+	var box: Container = card.get_child(0) as Container
+	assert_int(box.mouse_filter).is_equal(Control.MOUSE_FILTER_IGNORE)
+	# resolver 无效（降级路径）：回退 unit.display_name 直读
+	var degraded := UnitInfoCard.new()
+	add_child(degraded)
+	auto_free(degraded)
+	degraded.setup(_LookupStatus)
+	degraded.show_unit(unit)
+	assert_str(degraded._name_label.text).is_equal("测试单位（我方）")

@@ -20,6 +20,8 @@ const AGILITY_MOVE_BONUS_LINE_FALLBACK: int = 16
 ## 移动力基准段上限兜底（= cfg_main.move_base_cap——上限作用于「职业 + 敏捷」
 ## 段，疾步等状态修正在其后叠加不封顶，17-C8 口径；批 B M2）
 const MOVE_BASE_CAP_FALLBACK: int = 6
+## 敏捷移动加成点数兜底（= cfg_main.agility_move_bonus_amount——A-2 入表）
+const AGILITY_MOVE_BONUS_AMOUNT_FALLBACK: int = 1
 
 ## 单位实例 id（我方 = 冒险者 unit_id；敌方 = "<enemy_id>_<序号>" 唯一化）
 var unit_id: StringName = &""
@@ -63,10 +65,10 @@ var skill_ids: Array[StringName] = []
 var base_attack_id: StringName = &""
 ## 本系资源轨（SkillDef.ResourceKind——UI 资源条显示用；我方 = 职业轨、
 ## 敌方 = 精力轨；批 3 增）
-var resource_kind: int = 2
-## 种族标记（StringName 化：&"beast"/&"humanoid"/&"undead"——种族克制消费）
+var resource_kind: int = SkillDef.ResourceKind.STAMINA
+## 种族标记（StringName 化——UnitTags.RACE_*；种族克制消费）
 var race_tag: StringName = &""
-## 职能标记（&"trash"/&"elite"——敌方 AI 分支 + UI 精英放大消费）
+## 职能标记（UnitTags.ROLE_*——敌方 AI 分支 + UI 精英放大消费）
 var role_tag: StringName = &""
 
 # ---- 敌方表定防御（flat 口径）----
@@ -144,8 +146,9 @@ func move_final() -> int:
 			else MOVE_BASE_CAP_FALLBACK
 	var bonus_line: int = _cfg.agility_move_bonus_line if _cfg != null \
 			and _cfg.agility_move_bonus_line > 0 else AGILITY_MOVE_BONUS_LINE_FALLBACK
-	var agility: int = int(attrs.get(&"agility", 0))
-	var base: int = mini(cap, base_move_range + (1 if agility >= bonus_line else 0))
+	var agility: int = int(attrs.get(AttrKeys.AGILITY, AttrKeys.DEFAULT_ATTR_VALUE))
+	var bonus_amount: int = _cfg.agility_move_bonus_amount if _cfg != null 			and _cfg.agility_move_bonus_amount > 0 else AGILITY_MOVE_BONUS_AMOUNT_FALLBACK
+	var base: int = mini(cap, base_move_range 			+ (bonus_amount if agility >= bonus_line else 0))
 	return maxi(0, base + roundi(_StatusMod(ModKeys.MOVE_RANGE)))
 
 func speed_for_order() -> int:
@@ -153,7 +156,7 @@ func speed_for_order() -> int:
 	## 行动排序、不连带闪避/暴击等敏捷派生）
 	## 参数：无
 	## 返回：排序速度
-	return int(attrs.get(&"agility", 0)) + roundi(_StatusMod(ModKeys.SPEED))
+	return int(attrs.get(AttrKeys.AGILITY, AttrKeys.DEFAULT_ATTR_VALUE)) + roundi(_StatusMod(ModKeys.SPEED))
 
 func has_resource(kind: int, amount: int) -> bool:
 	## 资源余量检查（kind = SkillDef.ResourceKind；敌方技能走精力轨）
@@ -216,41 +219,42 @@ func _DerivedBase(key: StringName) -> float:
 	## 返回：基础值
 	match key:
 		&"hit":
-			return DerivedStats.calc_hit(int(attrs.get(&"perception", 10)), _cfg)
+			return DerivedStats.calc_hit(int(attrs.get(AttrKeys.PERCEPTION, AttrKeys.DEFAULT_ATTR_VALUE)), _cfg)
 		&"dodge":
-			return DerivedStats.calc_dodge(int(attrs.get(&"agility", 10)), _cfg)
+			return DerivedStats.calc_dodge(int(attrs.get(AttrKeys.AGILITY, AttrKeys.DEFAULT_ATTR_VALUE)), _cfg)
 		&"status_resist":
 			if flat_defense and fixed_resist >= 0.0:
 				return fixed_resist
-			return DerivedStats.calc_status_resist(int(attrs.get(&"constitution", 10)),
-					int(attrs.get(&"willpower", 10)), _cfg)
+			return DerivedStats.calc_status_resist(int(attrs.get(AttrKeys.CONSTITUTION, AttrKeys.DEFAULT_ATTR_VALUE)),
+					int(attrs.get(AttrKeys.WILLPOWER, AttrKeys.DEFAULT_ATTR_VALUE)), _cfg)
 		&"phys_pierce":
-			return float(DerivedStats.calc_phys_pierce(int(attrs.get(&"strength", 10)), _cfg))
+			return float(DerivedStats.calc_phys_pierce(int(attrs.get(AttrKeys.STRENGTH, AttrKeys.DEFAULT_ATTR_VALUE)), _cfg))
 		&"mag_pierce":
 			# 换算源经表驱动（批 C M8：ClassDef.mag_pierce_source_attr——
 			# build_ally 回填；空回退智力与敌方口径一致）
 			var source_attr: StringName = mag_pierce_source_attr \
-					if not String(mag_pierce_source_attr).is_empty() else &"intelligence"
+					if not String(mag_pierce_source_attr).is_empty() else AttrKeys.INTELLIGENCE
 			return float(DerivedStats.calc_mag_pierce(
-					int(attrs.get(source_attr, 10)), 0, class_id, _cfg))
+					int(attrs.get(source_attr,
+					AttrKeys.DEFAULT_ATTR_VALUE)), 0, class_id, _cfg))
 		&"phys_resist":
 			if flat_defense and fixed_resist >= 0.0:
 				return fixed_resist
-			return DerivedStats.calc_phys_resist(int(attrs.get(&"constitution", 10)), _cfg)
+			return DerivedStats.calc_phys_resist(int(attrs.get(AttrKeys.CONSTITUTION, AttrKeys.DEFAULT_ATTR_VALUE)), _cfg)
 		&"mag_resist":
 			if flat_defense and fixed_resist >= 0.0:
 				return fixed_resist
-			return DerivedStats.calc_mag_resist(int(attrs.get(&"perception", 10)), _cfg)
+			return DerivedStats.calc_mag_resist(int(attrs.get(AttrKeys.PERCEPTION, AttrKeys.DEFAULT_ATTR_VALUE)), _cfg)
 		&"phys_armor":
 			if flat_defense:
 				return float(armor_equip)
 			return float(DerivedStats.calc_phys_armor(armor_equip,
-					int(attrs.get(&"constitution", 10)), _cfg))
+					int(attrs.get(AttrKeys.CONSTITUTION, AttrKeys.DEFAULT_ATTR_VALUE)), _cfg))
 		&"mag_armor":
 			if flat_defense:
 				return float(armor_equip)
 			return float(DerivedStats.calc_mag_armor(armor_equip,
-					int(attrs.get(&"perception", 10)), _cfg))
+					int(attrs.get(AttrKeys.PERCEPTION, AttrKeys.DEFAULT_ATTR_VALUE)), _cfg))
 		_:
 			return 0.0
 

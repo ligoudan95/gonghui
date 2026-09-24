@@ -18,6 +18,15 @@ enum SavePoint {
 
 ## 存档结构版本（结构变更时递增；旧版拒载走 save_corrupt）
 const SCHEMA_VERSION: int = 1
+## 公会壳场景名（C-4 单源：新档默认场景——SaveManager 占位与 SceneManager
+## 注册表键同名；SaveManager 引用本常量（勿反向 preload SceneManager））
+const SCENE_GUILD_SHELL: StringName = &"guild_shell"
+## 序列化必需键全集（C-7 单源：to_dict 键与 from_dict 必需键校验共用——
+## 结构变更时只改此一处）
+const REQUIRED_KEYS: Array[String] = [
+	"schema_version", "save_point", "game_day", "mode", "scene_id",
+	"saved_unix_time", "payload",
+]
 
 ## 存档结构版本
 @export var schema_version: int = SCHEMA_VERSION
@@ -27,15 +36,16 @@ const SCHEMA_VERSION: int = 1
 @export var game_day: int = 1
 ## 运行模式（demo/full）
 @export var mode: String = "demo"
-## 场景 id（占位：批 4 SceneManager 落地前的 StringName 字面量）
-@export var scene_id: StringName = &"guild_shell"
+## 场景 id（C-4：默认值经 SCENE_GUILD_SHELL 常量单源）
+@export var scene_id: StringName = SCENE_GUILD_SHELL
 ## 写入时刻的 Unix 时间戳（秒）
 @export var saved_unix_time: int = 0
 ## 各系统快照（键=系统名 StringName，值=该系统快照 Dictionary；M0 空）
 @export var payload: Dictionary = {}
 
 func to_dict() -> Dictionary:
-	## 序列化为可 JSON 化的 Dictionary（save_point 落枚举序号）
+	## 序列化为可 JSON 化的 Dictionary（save_point 落枚举序号；键集 =
+	## REQUIRED_KEYS 单源——C-7 与 from_dict 必需键校验共用）
 	## 参数：无
 	## 返回：含全字段的 Dictionary（String 键）
 	return {
@@ -52,8 +62,8 @@ static func from_dict(data: Dictionary) -> SaveData:
 	## 反序列化（JSON 桥）：全字段存在性与类型校验，任一异常返回 null
 	## 参数 data：JSON.parse_string 产出的 Dictionary
 	## 返回：SaveData；校验失败返回 null（调用方走 save_corrupt 流程）
-	# 必需键齐备
-	for key: String in ["schema_version", "save_point", "game_day", "mode", "scene_id", "saved_unix_time", "payload"]:
+	# 必需键齐备（C-7：REQUIRED_KEYS 单源——与 to_dict 键集恒一致）
+	for key: String in REQUIRED_KEYS:
 		if not data.has(key):
 			return null
 	# 类型校验（JSON 数字解析为 float，int 字段容错整数性 float）
@@ -84,9 +94,12 @@ static func from_dict(data: Dictionary) -> SaveData:
 	return save
 
 static func IsIntLike(value: Variant) -> bool:
-	## int 兼容校验：int 直过；float 须为整数值（JSON 数字桥容错）；其余拒绝
+	## int 兼容校验：int 直过；float 须为整数值（JSON 数字桥容错）；
+	## bool 显式拒绝（R4-06——GDScript bool 可隐转 int，防 true→1 穿透）
 	## 参数 value：待校验值
 	## 返回：true = 可安全转 int
+	if value is bool:
+		return false
 	if value is int:
 		return true
 	if value is float:

@@ -14,6 +14,14 @@
 class_name BattleGrid
 extends RefCounted
 
+## 曼哈顿距离（静态单源——批 4 C 组 M3：射程/移动度量，原 battle_grid/
+## battle_controller/enemy_ai 三份私有实现 + skill_executor 内联式共 4 份
+## 收敛于此）
+static func manhattan(a: Vector2i, b: Vector2i) -> int:
+	## 参数 a/b：两坐标
+	## 返回：|dx| + |dy|
+	return absi(a.x - b.x) + absi(a.y - b.y)
+
 ## 地图尺寸（格；x = 列数 / y = 行数）
 var size: Vector2i = Vector2i.ZERO
 ## 基础地格 id 阵列（展平行主序：index = y × size.x + x；setup 解析 BattleMapDef.rows）
@@ -45,12 +53,17 @@ func setup(map_def: BattleMapDef, tile_lookup: Callable) -> bool:
 			map_def.rows.size(), map_def.size.y, map_def.id,
 		])
 		setup_issues.append("rows 行数 %d != size.y %d" % [map_def.rows.size(), map_def.size.y])
-	var fallback: StringName = map_def.legend.get(".", &"tile_normal")
+	# '.' 图例兜底（A-7：legend 缺 '.' 不再静默回退 tile_normal——记 setup_issue，
+	# 回退空 id 走不可通行/渲染兜底色块，破损显式可见）
+	var fallback: StringName = map_def.legend.get(".", &"")
+	if String(fallback).is_empty():
+		push_error("BattleGrid: legend 缺 '.' 图例项（%s）——空格无地格定义" % map_def.id)
+		setup_issues.append("legend 缺 '.' 图例项（空格地格未定义）")
 	for row: String in map_def.rows:
 		for row_char: String in row:
 			var tile_id: StringName = map_def.legend.get(row_char, &"")
 			if String(tile_id).is_empty():
-				push_error("BattleGrid: 非法布局字符 '%s'（%s，回退 '.'）" % [row_char, map_def.id])
+				push_error("BattleGrid: 非法布局字符 '%s'（%s，按空格处理）" % [row_char, map_def.id])
 				setup_issues.append("非法布局字符 '%s'" % row_char)
 				tile_id = fallback
 			base_tiles.append(tile_id)
@@ -203,7 +216,7 @@ func cells_in_range(origin: Vector2i, distance: int) -> Array[Vector2i]:
 	for y: int in range(maxi(0, origin.y - distance), mini(size.y, origin.y + distance + 1)):
 		for x: int in range(maxi(0, origin.x - distance), mini(size.x, origin.x + distance + 1)):
 			var pos: Vector2i = Vector2i(x, y)
-			if _Manhattan(origin, pos) <= distance:
+			if manhattan(origin, pos) <= distance:
 				result.append(pos)
 	result.sort()
 	return result
@@ -296,12 +309,6 @@ func _BaseTileAt(pos: Vector2i) -> TileTypeDef:
 	if index < 0 or index >= base_tiles.size():
 		return null
 	return _tile_lookup.call(base_tiles[index]) as TileTypeDef
-
-func _Manhattan(a: Vector2i, b: Vector2i) -> int:
-	## 曼哈顿距离（射程/移动度量）
-	## 参数 a/b：两坐标
-	## 返回：|dx| + |dy|
-	return absi(a.x - b.x) + absi(a.y - b.y)
 
 func _Bresenham(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
 	## Bresenham 格线（整数误差项迭代，端点含）

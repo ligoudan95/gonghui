@@ -60,12 +60,53 @@ enum DurationType {
 @export var stack_rule: StringName = &""
 ## 互斥组 id（同组状态互斥，见 status/mutex_groups 域；空 = 不参与互斥）
 @export var mutex_group_id: StringName = &""
-## 允许来源列表（施加方技能/单位 id；空数组 = 不限来源）
+## 允许来源列表（**来源类别** token——S2-5 语义统一：元素取
+## allowed_source_tokens() 全集之一（&"SKILL"/&"CHECKIN"/&"TILE"，
+## 对应 StatusInstance.SourceKind 枚举），空数组 = 不限来源；
+## 施加入口越类拒收）
 @export var allowed_sources: Array[StringName] = []
-## 移除策略标记（如回合结束/战斗结束/检定通过移除；批 2 与案 11 口径定名）
+## 移除策略标记（如回合结束/战斗结束/检定通过移除；批 2 与案 11 口径定名）；
+## 合法值 = remove_policies() 全集之一（A-8 单源：StatusManager 消费口径与
+## DataValidator 值域校验共引此处——常量提数据定义层避免 data→battle 反向依赖）
 @export var remove_policy: StringName = &""
 ## 图标资源 id（路径经 assets 域 AssetRegistry 映射）
 @export var icon_id: StringName = &""
 
 ## 设计备注（【占位·试玩校准】等标注与数据来源说明，Inspector 可编辑）
 @export var comment: String = ""
+
+## 来源类别 -> 允许来源 token 映射（S2-5 + C-2 单源：allowed_sources 元素与
+## StatusInstance.SourceKind 枚举的字符串契约——token 字面量只在 match 出现
+## 一处，列表由 match 派生；新增来源类别只改本 match 一行）
+static func source_kind_token(kind: int) -> StringName:
+	## 参数 kind：StatusInstance.SourceKind 枚举值
+	## 返回：对应 token；未知枚举返回空 StringName
+	match kind:
+		StatusInstance.SourceKind.SKILL:
+			return &"SKILL"
+		StatusInstance.SourceKind.TILE:
+			return &"TILE"
+		StatusInstance.SourceKind.CHECKIN:
+			return &"CHECKIN"
+		_:
+			return &""
+
+## 允许来源 token 全集（C-2：由 source_kind_token 派生——三处对齐单源）
+static func allowed_source_tokens() -> Array[StringName]:
+	## 参数：无
+	## 返回：合法来源类别 token 全集
+	var tokens: Array[StringName] = []
+	for kind: int in [StatusInstance.SourceKind.SKILL, StatusInstance.SourceKind.TILE,
+			StatusInstance.SourceKind.CHECKIN]:
+		tokens.append(source_kind_token(kind))
+	return tokens
+
+## 离格移除策略 token（A-8 单源定义点：站位状态离格移除判据——
+## StatusManager 消费 / DataValidator 值域校验共引）
+const REMOVE_ON_LEAVE_TILE: StringName = &"on_leave_tile"
+
+## 移除策略 token 值域（A-8：DataValidator REMOVE_POLICIES 同源取值）
+static func remove_policies() -> Array[StringName]:
+	## 参数：无
+	## 返回：合法移除策略 token 全集
+	return [REMOVE_ON_LEAVE_TILE]

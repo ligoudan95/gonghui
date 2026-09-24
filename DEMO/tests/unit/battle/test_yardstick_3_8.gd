@@ -76,7 +76,7 @@ func test_per_hit_expectation_vs_trash() -> void:
 	var warrior: Dictionary = {&"strength": 16, &"constitution": 14, &"luck": 10, &"agility": 10}
 	var warrior_hit: float = BattleRules.hit_chance(DerivedStats.calc_hit(9, _cfg), 0.04, 0, _cfg)
 	assert_float(warrior_hit).is_equal_approx(0.79, 0.0001)
-	var power_expected: float = _TrashPerHit(_power_strike, warrior, 4, 3, warrior_hit, 0.05)
+	var power_expected: float = _TrashPerHit(_power_strike, warrior, 4, DerivedStats.calc_phys_pierce(16, _cfg), warrior_hit, BattleRules.crit_rate(10, 10, 0.0, _cfg))
 	assert_float(power_expected).is_equal_approx(20.2, TOLERANCE)
 	# 盗贼：感 11（0）→ 85% − 4% = 81%；穿甲 力10→0 抵后护甲 2；暴击 = 5+2+3+10 = 20%
 	var rogue: Dictionary = {&"agility": 16, &"luck": 13, &"strength": 10}
@@ -90,13 +90,13 @@ func test_per_hit_expectation_vs_trash() -> void:
 	var mage: Dictionary = {&"intelligence": 16, &"luck": 10, &"agility": 10}
 	var mage_hit: float = BattleRules.hit_chance(DerivedStats.calc_hit(11, _cfg), 0.03, 0, _cfg)
 	assert_float(mage_hit).is_equal_approx(0.82, 0.0001)
-	var fireball_expected: float = _TrashPerHit(_fireball, mage, 2, 3, mage_hit, 0.05)
+	var fireball_expected: float = _TrashPerHit(_fireball, mage, 2, DerivedStats.calc_mag_pierce(16, 0, &"", _cfg), mage_hit, BattleRules.crit_rate(10, 10, 0.0, _cfg))
 	assert_float(fireball_expected).is_equal_approx(21.0, TOLERANCE)
 	# 牧师：感 15（+2）→ 89% − 4% = 85%；法穿 智10→0（M2 口径）抵后护甲 2；暴击 5%
 	var priest: Dictionary = {&"perception": 15, &"intelligence": 10, &"luck": 10, &"agility": 10}
 	var priest_hit: float = BattleRules.hit_chance(DerivedStats.calc_hit(15, _cfg), 0.04, 0, _cfg)
 	assert_float(priest_hit).is_equal_approx(0.85, 0.0001)
-	var smite_expected: float = _TrashPerHit(_smite, priest, 2, 0, priest_hit, 0.05)
+	var smite_expected: float = _TrashPerHit(_smite, priest, 2, DerivedStats.calc_mag_pierce(10, 0, &"", _cfg), priest_hit, BattleRules.crit_rate(10, 10, 0.0, _cfg))
 	assert_float(smite_expected).is_equal_approx(15.7, TOLERANCE)
 
 func test_team_output_per_round() -> void:
@@ -106,15 +106,21 @@ func test_team_output_per_round() -> void:
 	var rogue: Dictionary = {&"agility": 16, &"luck": 13, &"strength": 10}
 	var mage: Dictionary = {&"intelligence": 16, &"luck": 10, &"agility": 10}
 	var priest: Dictionary = {&"perception": 15, &"intelligence": 10, &"luck": 10, &"agility": 10}
-	var power: int = roundi(_TrashPerHit(_power_strike, warrior, 4, 3,
-			BattleRules.hit_chance(DerivedStats.calc_hit(9, _cfg), 0.04, 0, _cfg), 0.05))
+	var power: int = roundi(_TrashPerHit(_power_strike, warrior, 4,
+			DerivedStats.calc_phys_pierce(16, _cfg),
+			BattleRules.hit_chance(DerivedStats.calc_hit(9, _cfg), 0.04, 0, _cfg),
+			BattleRules.crit_rate(10, 10, 0.0, _cfg)))
 	var backstab: int = roundi(_TrashPerHit(_backstab, rogue, 3, 0,
 			BattleRules.hit_chance(DerivedStats.calc_hit(11, _cfg), 0.04, 0, _cfg), 0.20))
-	var fireball: int = roundi(_TrashPerHit(_fireball, mage, 2, 3,
-			BattleRules.hit_chance(DerivedStats.calc_hit(11, _cfg), 0.03, 0, _cfg), 0.05))
+	var fireball: int = roundi(_TrashPerHit(_fireball, mage, 2,
+			DerivedStats.calc_mag_pierce(16, 0, &"", _cfg),
+			BattleRules.hit_chance(DerivedStats.calc_hit(11, _cfg), 0.03, 0, _cfg),
+			BattleRules.crit_rate(10, 10, 0.0, _cfg)))
 	assert_int(power + backstab + fireball).is_equal(65)
-	var smite: int = roundi(_TrashPerHit(_smite, priest, 2, 0,
-			BattleRules.hit_chance(DerivedStats.calc_hit(15, _cfg), 0.04, 0, _cfg), 0.05))
+	var smite: int = roundi(_TrashPerHit(_smite, priest, 2,
+			DerivedStats.calc_mag_pierce(10, 0, &"", _cfg),
+			BattleRules.hit_chance(DerivedStats.calc_hit(15, _cfg), 0.04, 0, _cfg),
+			BattleRules.crit_rate(10, 10, 0.0, _cfg)))
 	assert_int(power + backstab + fireball + smite).is_equal(81)
 
 func test_elite_expectation() -> void:
@@ -123,9 +129,11 @@ func test_elite_expectation() -> void:
 	var warrior: Dictionary = {&"strength": 16, &"constitution": 14, &"luck": 10, &"agility": 10}
 	var rogue: Dictionary = {&"agility": 16, &"luck": 13, &"strength": 10}
 	var mage: Dictionary = {&"intelligence": 16, &"luck": 10, &"agility": 10}
-	var power: float = _ElitePerHit(_power_strike, warrior, 4, 3, 0.79, 0.05)
+	var power: float = _ElitePerHit(_power_strike, warrior, 4,
+			DerivedStats.calc_phys_pierce(16, _cfg), 0.79, BattleRules.crit_rate(10, 10, 0.0, _cfg))
 	var backstab: float = _ElitePerHit(_backstab, rogue, 3, 0, 0.81, 0.20)
-	var fireball: float = _ElitePerHit(_fireball, mage, 2, 3, 0.82, 0.05)
+	var fireball: float = _ElitePerHit(_fireball, mage, 2,
+			DerivedStats.calc_mag_pierce(16, 0, &"", _cfg), 0.82, BattleRules.crit_rate(10, 10, 0.0, _cfg))
 	assert_float(power).is_equal_approx(18.6, TOLERANCE)
 	assert_float(backstab).is_equal_approx(21.4, TOLERANCE)
 	assert_float(fireball).is_equal_approx(19.3, TOLERANCE)

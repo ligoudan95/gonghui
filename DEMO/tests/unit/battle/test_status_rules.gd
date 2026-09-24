@@ -403,3 +403,117 @@ func test_clear_all() -> void:
 	_manager.on_unit_turn_finished(unit)
 	_manager.clear_all()
 	assert_int(_manager.get_statuses(unit).size()).is_equal(0)
+
+func test_end_of_round_tick_returns_dot_report() -> void:
+	## 回合末结算返回 DOT 跳伤清单（盲审批 3 D-2）：逐跳一条 {&"unit",
+	## &"damage"}——地格来源在先状态来源在后（与结算时序一致）、施加回合
+	## 未到首跳回合的不计、无跳返回空数组
+	var unit_a := FakeUnit.new()
+	unit_a.id = &"unit_a"
+	var unit_b := FakeUnit.new()
+	unit_b.id = &"unit_b"
+	# unit_a：毒沼（TILE 即时类，回合 1 末即跳 6）+ 诅咒（施加回合 0 → 回合 1 末跳 8）
+	_manager.apply(unit_a, _statuses[&"DEBUFF_tile_poison"],
+			StatusInstance.SourceKind.TILE, &"tile_poison_swamp", 0, 1, false)
+	_manager.apply(unit_a, _statuses[&"DEBUFF_curse"],
+			StatusInstance.SourceKind.SKILL, &"skl_arcanist_curse", 3, 0, false)
+	# unit_b：诅咒当回合施加（回合 1）→ 回合 1 末不跳（施加回合末不递减口径）
+	_manager.apply(unit_b, _statuses[&"DEBUFF_curse"],
+			StatusInstance.SourceKind.SKILL, &"skl_arcanist_curse", 3, 1, false)
+	var report: Array = _manager.end_of_round_tick(1, [unit_a, unit_b], _rng)
+	assert_int(report.size()).is_equal(2)
+	assert_object(report[0][&"unit"]).is_same(unit_a)
+	assert_int(report[0][&"damage"]).is_equal(6)
+	assert_object(report[1][&"unit"]).is_same(unit_a)
+	assert_int(report[1][&"damage"]).is_equal(8)
+	# unit_b 回合 1 无跳；回合 2 末起跳并进入清单（unit_a 毒沼在格常驻
+	# 持续跳 + 诅咒双单位各一跳 = 3 条）
+	var report2: Array = _manager.end_of_round_tick(2, [unit_a, unit_b], _rng)
+	assert_int(report2.size()).is_equal(3)
+	assert_object(report2[1][&"unit"]).is_same(unit_a)
+	assert_int(report2[1][&"damage"]).is_equal(8)
+	assert_object(report2[2][&"unit"]).is_same(unit_b)
+	assert_int(report2[2][&"damage"]).is_equal(8)
+	# 无任何 DOT 的回合：空清单
+	var unit_c := FakeUnit.new()
+	var report3: Array = _manager.end_of_round_tick(3, [unit_c], _rng)
+	assert_int(report3.size()).is_equal(0)
+
+func test_stack_limit_counts_by_polarity() -> void:
+	## 叠层按极性计数（S2-2 拍板 A）：同 category 同 polarity 才互挤上限 2——
+	## 草丛（BUFF）+减速（DEBUFF）占位后疾步（BUFF）仍可施加（BUFF 轨 1/2）；
+	## 盾墙+草丛双 BUFF 满轨时减速（DEBUFF 轨）不受挤仍可施加
+	var unit := FakeUnit.new()
+	# 草丛位（BUFF STAT_MOD，本地假状态——本套件不载真表）+ 减速（DEBUFF STAT_MOD）
+	var grass_buff := _MakeStatMod(&"BUFF_grass_like", {&"dodge": 0.15}, 2)
+	grass_buff.polarity = StatusDef.Polarity.BUFF
+	_Register(grass_buff)
+	assert_bool(_manager.apply(unit, grass_buff,
+			StatusInstance.SourceKind.TILE, &"tile_grass", 2, 1, false)).is_true()
+	assert_bool(_manager.apply(unit, _statuses[&"DEBUFF_slow"],
+			StatusInstance.SourceKind.SKILL, &"skl_x", 2, 1, false)).is_true()
+	# 常规第二 BUFF（R1-8 后即时类不占位——用常规假 BUFF 占满 BUFF 轨 2/2）
+	var second_buff := _MakeStatMod(&"BUFF_second_like", {&"hit": 0.05}, 2)
+	second_buff.polarity = StatusDef.Polarity.BUFF
+	_Register(second_buff)
+	assert_bool(_manager.apply(unit, second_buff,
+			StatusInstance.SourceKind.SKILL, &"skl_y2", 2, 1, false)).is_true()
+	# 第三个常规 BUFF：BUFF 轨 2/2 满 → 拒收 + reason
+	var third_buff := _MakeStatMod(&"BUFF_third_buff", {&"hit": 0.06}, 1)
+	third_buff.polarity = StatusDef.Polarity.BUFF
+	_Register(third_buff)
+	assert_bool(_manager.apply(unit, third_buff,
+			StatusInstance.SourceKind.SKILL, &"skl_z", 1, 1, false)).is_false()
+	assert_str(String(_manager.last_reject_reason())).is_equal("stack_limit")
+	# R1-8 拍板 A：常规 BUFF 轨满时即时类（疾步 duration 0）仍可施加——豁免计数
+	assert_bool(_manager.apply(unit, _statuses[&"BUFF_sprint"],
+			StatusInstance.SourceKind.SKILL, &"skl_y", 0, 1, false)).is_true()
+	# 双 BUFF 满（草丛+疾步）时 DEBUFF 轨仍可施加（异向混计不再互挤）
+	var exposed := _MakeStatMod(&"DEBUFF_exposed2", {&"dodge": -0.10}, 1)
+	exposed.polarity = StatusDef.Polarity.DEBUFF
+	_Register(exposed)
+	assert_bool(_manager.apply(unit, exposed,
+			StatusInstance.SourceKind.SKILL, &"skl_w", 1, 1, false)).is_true()
+
+func test_equal_refresh_reanchors_first_tick() -> void:
+	## 等值重施加重锚点（S2-3：> 改 >=）：同名等值 duration 重施加 →
+	## first_tick_round 重起算（施加回合+1）且 control_locks 同门控刷新
+	var unit := FakeUnit.new()
+	# 2 回合诅咒施加于回合 1（first_tick=2、回合 1 末不递减）；回合 2 等值
+	# 重施加 2 回合——旧口径（>）不刷新锚点；新口径（>=）重锚：
+	# first_tick = 2+1 = 3（本回合末起重新计满 2 回合）
+	_manager.apply(unit, _statuses[&"DEBUFF_curse"],
+			StatusInstance.SourceKind.SKILL, &"skl_curse", 2, 1, false)
+	_manager.end_of_round_tick(1, [unit], _rng)
+	var instance: StatusInstance = _manager.get_statuses(unit)[0]
+	assert_int(instance.remaining).is_equal(2)
+	assert_int(instance.first_tick_round).is_equal(2)
+	_manager.apply(unit, _statuses[&"DEBUFF_curse"],
+			StatusInstance.SourceKind.SKILL, &"skl_curse", 2, 2, false)
+	instance = _manager.get_statuses(unit)[0]
+	assert_int(instance.remaining).is_equal(2)
+	assert_int(instance.first_tick_round).is_equal(3)
+	# 控制锁同门控：定身剩余 1 时等值重施加 1 → 锁窗刷新为 1（>= 门控内）
+	var target := FakeUnit.new()
+	_manager.apply(target, _statuses[&"DEBUFF_root"],
+			StatusInstance.SourceKind.SKILL, &"skl_root", 1, 1, false)
+	_manager.on_unit_turn_finished(target)
+	var root_instance: StatusInstance = _manager.get_statuses(target)[0]
+	assert_int(root_instance.control_locks).is_equal(0)
+	_manager.apply(target, _statuses[&"DEBUFF_root"],
+			StatusInstance.SourceKind.SKILL, &"skl_root", 1, 1, false)
+	root_instance = _manager.get_statuses(target)[0]
+	# 同名刷新：remaining 1 >= 1 → 锁窗重刷为 1（旧口径不刷新则为 0 态不可达——
+	# 施加被同名分支吞并后锁保持旧值）
+	assert_int(root_instance.control_locks).is_equal(1)
+
+func test_allowed_sources_rejects_foreign_kind() -> void:
+	## 来源类别拒收（S2-5）：allowed_sources = [TILE] 的毒沼状态经 SKILL 来源
+	## 施加 → 拒收（reason source_not_allowed）；TILE 来源照常
+	var unit := FakeUnit.new()
+	assert_bool(_manager.apply(unit, _statuses[&"DEBUFF_tile_poison"],
+			StatusInstance.SourceKind.SKILL, &"skl_bad", 0, 1, false)).is_false()
+	assert_str(String(_manager.last_reject_reason())).is_equal("source_not_allowed")
+	assert_int(_manager.get_statuses(unit).size()).is_equal(0)
+	assert_bool(_manager.apply(unit, _statuses[&"DEBUFF_tile_poison"],
+			StatusInstance.SourceKind.TILE, &"tile_poison_swamp", 0, 1, false)).is_true()

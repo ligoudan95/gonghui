@@ -119,3 +119,20 @@ func test_cfg_parameters_take_effect() -> void:
 	_cfg.crit_base = crit_original
 	assert_int(DerivedStats.calc_hp(14, cls, 1, _cfg)).is_equal(90)
 	assert_int(DerivedStats.calc_mana(16, _cfg)).is_equal(58)
+
+func test_mag_armor_uses_tabled_per_modifier() -> void:
+	## 法术护甲表值推算（R1-1 补改核验）：护甲 = 装备 + 感知调整值 ×
+	## cfg.armor_per_modifier（原 ×1 硬编码漏改位）；改表冒烟——乘数 2 时
+	## 属性段翻倍（内存表改值即时生效，用例尾还原）
+	var cfg: CoreConfig = load(CFG_PATH) as CoreConfig
+	if cfg.armor_per_modifier <= 0:
+		cfg.armor_per_modifier = 1
+	# 感知 16 → 调整值 +3：护甲 = 5 + 3 × 表乘数
+	var expected: int = 5 + 3 * cfg.armor_per_modifier
+	assert_int(DerivedStats.calc_mag_armor(5, 16, cfg)).is_equal(expected)
+	# 改表冒烟（R1-1）：乘数翻倍 → 属性段翻倍
+	var original_per: int = cfg.armor_per_modifier
+	cfg.armor_per_modifier = original_per * 2
+	assert_int(DerivedStats.calc_mag_armor(5, 16, cfg)) \
+			.is_equal(5 + 3 * original_per * 2)
+	cfg.armor_per_modifier = original_per

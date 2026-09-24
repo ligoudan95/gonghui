@@ -3,8 +3,13 @@
 ## 对外提供运行模式 / 系统启用 / 参数读取 / 难度档位查询与热重载接口。
 ## 数据来源：CoreConfig（res://scripts/data_defs/core_config.gd）；
 ## 数值权威见案 16 / 案 17 §3.1/§3.3/§3.10/§3.11。
-## 接口契约：缺键行为——is_system_enabled 缺键按 false 并 push_warning；
-## get_param 缺键返回 null 并 push_warning；get_difficulty_tier 缺档返回 -1。
+## 接口契约：缺键行为——is_system_enabled 缺键按 false 并 push_warning
+## （R4-08：get_param/get_difficulty_tier 已删——数值直读 GameData.get_record
+## (CoreConfig.CFG_MAIN_ID)，难度档读 cfg.difficulty_tiers）。
+## 职责收窄口径（C-5 + R4-08 收紧）：**本单例专用 = 系统启停 / 难度档**；
+## 数值参数的合法读取口径 = 经 GameData
+## get_record(CoreConfig.CFG_MAIN_ID) 取 CoreConfig 实例后按字段直读
+## （各系统 cfg 注入消费——铁律④合向），不在本单例扩数值镜像接口。
 extends Node
 
 ## 配置热重载完成信号（reload() 成功后发出，监听方应重新取参数）
@@ -50,14 +55,21 @@ func _ready() -> void:
 
 func _LoadConfig(force: bool) -> void:
 	## 加载总控配置资源
-	## 参数 force：true = 强制从磁盘重读并替换缓存（热重载）；false = 走缓存共享
-	## 返回：无（失败时 push_error 并保持 _config 为 null）
+	## 参数 force：true = 强制从磁盘重读（热重载——R4-01 同址刷新：磁盘新值
+	## 逐属性拷入 _config 旧壳，_config 对象恒不变；与 GameData.reload_domain
+	## 同方案，两单例的 cfg 引用恒同实例）；false = 走缓存共享
+	## 返回：无（失败时 push_error 并保持 _config 现状）
 	var cache_mode: int = ResourceLoader.CACHE_MODE_REUSE
 	if force:
-		cache_mode = ResourceLoader.CACHE_MODE_REPLACE
-	_config = ResourceLoader.load(CONFIG_PATH, "", cache_mode) as CoreConfig
-	if _config == null:
+		cache_mode = ResourceLoader.CACHE_MODE_IGNORE
+	var fresh: CoreConfig = ResourceLoader.load(CONFIG_PATH, "", cache_mode) as CoreConfig
+	if fresh == null:
 		push_error("GameConfig: 无法加载总控配置 %s" % CONFIG_PATH)
+		return
+	if force and _config != null:
+		CoreConfig.copy_props(fresh, _config)
+	else:
+		_config = fresh
 
 func is_demo_mode() -> bool:
 	## 查询当前是否 DEMO 运行模式
@@ -75,29 +87,6 @@ func is_system_enabled(sys: StringName) -> bool:
 		push_warning("GameConfig: 系统键 '%s' 未在 enabled_systems 定义，按 false 处理" % sys)
 		return false
 	return _config.enabled_systems[sys]
-
-func get_param(param_name: StringName) -> Variant:
-	## 按字段名读取总控配置参数（透传 CoreConfig 任意导出字段）
-	## 参数 param_name：CoreConfig 的字段名（如 &"vision_radius"）
-	## 返回：字段值；配置缺失或字段不存在时返回 null（后者附 push_warning）
-	if _config == null:
-		return null
-	if not (param_name in _config):
-		push_warning("GameConfig: 总控配置无字段 '%s'" % param_name)
-		return null
-	return _config.get(param_name)
-
-func get_difficulty_tier(tier: StringName) -> int:
-	## 查询难度档位的判定线
-	## 参数 tier：档名（极易/容易/普通/困难/极难）
-	## 返回：判定线 int；配置缺失或档名不存在时返回 -1（后者附 push_warning）
-	if _config == null:
-		return -1
-	var tier_key: String = String(tier)
-	if not _config.difficulty_tiers.has(tier_key):
-		push_warning("GameConfig: 难度档 '%s' 未定义" % tier_key)
-		return -1
-	return _config.difficulty_tiers[tier_key]
 
 func reload() -> void:
 	## 热重载总控配置（强制从磁盘重读并替换共享缓存），完成后发出 config_reloaded

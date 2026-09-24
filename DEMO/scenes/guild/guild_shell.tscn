@@ -42,7 +42,14 @@ horizontal_alignment = 1
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 22
-text = "（无运行态存档）"
+text = ""
+horizontal_alignment = 1
+
+[node name="SaveWarnLabel" type="Label" parent="Center/Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = ""
 horizontal_alignment = 1
 
 [node name="SaveAndBackButton" type="Button" parent="Center/Layout"]

@@ -7,6 +7,10 @@
 ## 本工具不再生成；生成结果需人工在编辑器复核。
 extends SceneTree
 
+## !! 警示（解耦复审 C-10）：本工具为 M0/M1 首次生成占位数据的脚本——
+## 全库数据已人工调校定稿，重跑将【覆盖调校值】，必须先备份并对 diff
+## 逐行复核后才可采纳。
+
 ## DEMO 启用系统键（真键 13，案 16 启用清单）
 const ENABLED_KEYS: Array[StringName] = [
 	&"calendar", &"guild_facility", &"economy", &"adventurer", &"quest",

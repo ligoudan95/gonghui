@@ -16,24 +16,40 @@ const CELL_SIZE_MIN: float = 40.0
 const CELL_SIZE_MAX: float = 88.0
 ## 覆盖层边框条宽（像素）
 const OVERLAY_BORDER_WIDTH: float = 2.0
-## 覆盖层配色（移动高亮/技能红显/路径/确认点——范围层「极淡填充 + 粗边框」，
-## 层级对比：确认 > 路径；地格底色自批 A H2 起入 tile 表——battle/tiles 域）
-const COLOR_MOVE_RANGE: Color = Color(0.4, 0.7, 1.0, 0.10)
-const COLOR_MOVE_BORDER: Color = Color(0.55, 0.85, 1.0, 0.95)
-const COLOR_SKILL_RANGE: Color = Color(1.0, 0.3, 0.25, 0.10)
-const COLOR_SKILL_BORDER: Color = Color(1.0, 0.42, 0.35, 0.95)
-## 视线阻断格配色（十四轮反馈：射程内但被障碍挡视线的格——暗灰边框 +
-## 中心斜杠，一眼可辨「打不到」）
-const COLOR_BLOCKED_FILL: Color = Color(0.35, 0.35, 0.38, 0.08)
-const COLOR_BLOCKED_BORDER: Color = Color(0.45, 0.45, 0.5, 0.85)
-const COLOR_BLOCKED_SLASH: Color = Color(0.55, 0.55, 0.6, 0.9)
-const COLOR_PATH: Color = Color(1.0, 0.9, 0.4, 0.60)
-const COLOR_CONFIRM: Color = Color(1.0, 0.95, 0.5, 0.75)
-const COLOR_TRAP_MARK: Color = Color(1.0, 0.5, 0.1, 0.8)
+## 陷阱标记色兜底（S1-4：主值入 tile 表 mark_color——tile_trap.tres；
+## 表值缺失时的回退护栏）
+const COLOR_TRAP_MARK_FALLBACK: Color = Color(1.0, 0.5, 0.1, 0.8)
+## 地格解析失败兜底色兜底（S1-4/#8：主值入 cfg_main.ui_tile_fallback_color；
+## 常量单源在 UiTheme.TILE_FALLBACK——DataValidator C-3 同引）
+const TILE_FALLBACK_COLOR_FALLBACK: Color = UiTheme.TILE_FALLBACK
 ## 范围层边框条宽（像素——加粗以显边界）
 const RANGE_BORDER_WIDTH: float = 3.0
 ## 视线阻断格中心斜杠条高（像素）
 const BLOCKED_SLASH_WIDTH: float = 3.0
+## 格间缝宽（B-17：PLAIN 色块缝隙几何提名）
+const CELL_GAP: float = 2.0
+## 障碍/凸边内层缩进（B-17：BLOCK 内块与 RAISED 内层同几何）
+const TILE_INNER_INSET: float = 6.0
+## 陷阱标记尺寸与角偏移（B-17）
+const TRAP_MARK_SIZE: float = 12.0
+const TRAP_MARK_CORNER_OFFSET: float = 18.0
+## tips 定位边距与左右钳位边距（B-17）
+const TIPS_MARGIN: float = 8.0
+const TIPS_CLAMP_MARGIN: float = 4.0
+## 飘字演出参数（B-16：上浮距离/时长/格内偏移/纵向偏移/描边宽）
+const DAMAGE_FLOAT_DISTANCE: float = 34.0
+const DAMAGE_FLOAT_DURATION: float = 0.7
+const DAMAGE_CELL_OFFSET_X: float = 0.22
+const DAMAGE_CELL_OFFSET_Y: float = -6.0
+const DAMAGE_OUTLINE_SIZE: int = 4
+## 飘字文案模板（B-8：暴击/普通两态——文案单源，改措辞只动此处）
+const DAMAGE_TEXT_CRIT: String = "暴击 %d"
+const DAMAGE_TEXT_NORMAL: String = "%d"
+## 飘字配色与 tips 行配色（本文件视觉常量——暴击/普通/tips 两行）
+const COLOR_DAMAGE_CRIT: Color = Color(1.0, 0.4, 0.3)
+const COLOR_DAMAGE_NORMAL: Color = Color(1.0, 0.9, 0.6)
+const COLOR_TIPS_LINE1: Color = Color(0.98, 0.6, 0.5)
+const COLOR_TIPS_LINE2: Color = Color(0.85, 0.88, 0.9)
 
 ## 战斗上下文（setup 注入）
 var context: BattleSetup.BattleContext = null
@@ -48,6 +64,18 @@ var _cells: Dictionary = {}
 var _move_overlays: Array[Control] = []
 var _skill_overlays: Array[Control] = []
 var _path_overlays: Array[Control] = []
+## 表驱动覆盖层色读取（B-5：cfg ui_overlay_* 优先、UiTheme 兜底）
+func _OverlayColor(field: StringName, fallback: Color) -> Color:
+	## 参数 field：cfg 字段名；fallback：UiTheme 兜底常量
+	## 返回：生效颜色
+	return UiTheme.color_of(context.cfg if context != null else null, field, fallback)
+
+## 字号档位读取口（B-7：cfg ui_font_size_* 优先、UiTheme 兜底）
+func _UiFont(field: StringName, fallback: int) -> int:
+	## 参数 field：cfg 字段名；fallback：UiTheme 兜底档位
+	## 返回：生效字号
+	return UiTheme.font_of(context.cfg if context != null else null, field, fallback)
+
 ## 覆盖层专用父容器（懒建全屏 IGNORE——2026-09-24 九轮后修复：覆盖层与
 ## tips 同为 board 子节点时，tips 显示后重建的覆盖层会 add 到尾部压住 tips；
 ## 分层后覆盖层全部收进容器，tips 恒在容器之上，无论覆盖层何时重建）
@@ -60,9 +88,8 @@ var _tips_panel: PanelContainer = null
 var _tips_line1: Label = null
 ## tips 第二行（命中率；空文本 = 隐藏）
 var _tips_line2: Label = null
-## sprite 纹理缓存（sprite id -> Texture2D）
-var _texture_cache: Dictionary = {}
-## GameData（sprite 路径解析）
+## GameData（sprite 路径解析——批 4 H3：纹理缓存与解析逻辑单源至 SpriteResolver，
+## 本层缓存字段删除）
 var _game_data: Node = null
 
 func setup(board_context: BattleSetup.BattleContext, game_data: Node) -> void:
@@ -107,7 +134,9 @@ func show_move_range(cells: Array[Vector2i]) -> void:
 	## 纯边框化，不盖状态地格底色）
 	## 参数 cells：可达格列表
 	## 返回：无
-	_ShowOverlay(cells, COLOR_MOVE_RANGE, _move_overlays, COLOR_MOVE_BORDER,
+	_ShowOverlay(cells, _OverlayColor(&"ui_overlay_move_fill_color", UiTheme.OVERLAY_MOVE_FILL),
+			_move_overlays,
+			_OverlayColor(&"ui_overlay_move_border_color", UiTheme.OVERLAY_MOVE_BORDER),
 			RANGE_BORDER_WIDTH)
 
 func show_skill_range(cells: Array[Vector2i], caster_pos: Vector2i,
@@ -125,7 +154,9 @@ func show_skill_range(cells: Array[Vector2i], caster_pos: Vector2i,
 			blocked.append(cell)
 		else:
 			visible.append(cell)
-	_ShowOverlay(visible, COLOR_SKILL_RANGE, _skill_overlays, COLOR_SKILL_BORDER,
+	_ShowOverlay(visible, _OverlayColor(&"ui_overlay_skill_fill_color", UiTheme.OVERLAY_SKILL_FILL),
+			_skill_overlays,
+			_OverlayColor(&"ui_overlay_skill_border_color", UiTheme.OVERLAY_SKILL_BORDER),
 			RANGE_BORDER_WIDTH)
 	_ShowBlockedOverlay(blocked, _skill_overlays)
 
@@ -140,14 +171,14 @@ func show_path_preview(from_cell: Vector2i, to_cell: Vector2i) -> void:
 		var t: float = float(index) / float(steps)
 		cells.append(Vector2i(roundi(lerpf(from_cell.x, to_cell.x, t)),
 				roundi(lerpf(from_cell.y, to_cell.y, t))))
-	_ShowOverlay(cells, COLOR_PATH, _path_overlays)
+	_ShowOverlay(cells, _OverlayColor(&"ui_overlay_path_color", UiTheme.OVERLAY_PATH), _path_overlays)
 
 func show_target_confirm(cell: Vector2i) -> void:
 	## 二次确认提示（目标格亮框）
 	## 参数 cell：待确认目标格
 	## 返回：无
 	var cells: Array[Vector2i] = [cell]
-	_ShowOverlay(cells, COLOR_CONFIRM, _path_overlays)
+	_ShowOverlay(cells, _OverlayColor(&"ui_overlay_confirm_color", UiTheme.OVERLAY_CONFIRM), _path_overlays)
 
 func clear_overlays() -> void:
 	## 清空全部覆盖层 + 伤害预览 + 目标确认 tips（预览/tips 生命周期与覆盖层
@@ -191,10 +222,11 @@ func show_target_tips(cell: Vector2i, line1: String, line2: String = "") -> void
 	# 定位：格上方居中；上界出界改格下方；左右钳制板内（定位方式参照飘字）
 	var rect: Rect2 = cell_rect(cell)
 	var pos: Vector2 = Vector2(rect.position.x + (rect.size.x - tips_size.x) * 0.5,
-			rect.position.y - tips_size.y - 8.0)
+			rect.position.y - tips_size.y - TIPS_MARGIN)
 	if pos.y < 0.0:
-		pos.y = rect.position.y + rect.size.y + 8.0
-	pos.x = clampf(pos.x, 4.0, maxf(4.0, size.x - tips_size.x - 4.0))
+		pos.y = rect.position.y + rect.size.y + TIPS_MARGIN
+	pos.x = clampf(pos.x, TIPS_CLAMP_MARGIN,
+			maxf(TIPS_CLAMP_MARGIN, size.x - tips_size.x - TIPS_CLAMP_MARGIN))
 	_tips_panel.position = pos
 	_tips_panel.visible = true
 	# 置顶（2026-09-24 九轮后修复：覆盖层在 tips 之后重建会压住 tips——
@@ -237,23 +269,21 @@ func _EnsureTipsPanel() -> void:
 	if _tips_panel != null and is_instance_valid(_tips_panel):
 		return
 	_tips_panel = PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.07, 0.08, 0.09, 0.92)
-	style.set_corner_radius_all(6)
-	style.set_content_margin_all(8)
-	_tips_panel.add_theme_stylebox_override("panel", style)
+	# B-4：深底面板样式单源（UiTheme.make_dark_panel_style——与 BattleLog 共用）
+	_tips_panel.add_theme_stylebox_override("panel",
+			UiTheme.make_dark_panel_style(context.cfg if context != null else null))
 	_tips_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var box := VBoxContainer.new()
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_theme_constant_override("separation", 2)
 	_tips_line1 = Label.new()
-	_tips_line1.add_theme_font_size_override("font_size", 14)
-	_tips_line1.add_theme_color_override("font_color", Color(0.98, 0.6, 0.5))
+	_tips_line1.add_theme_font_size_override("font_size", _UiFont(&"ui_font_size_small", UiTheme.FONT_SMALL))
+	_tips_line1.add_theme_color_override("font_color", COLOR_TIPS_LINE1)
 	_tips_line1.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(_tips_line1)
 	_tips_line2 = Label.new()
-	_tips_line2.add_theme_font_size_override("font_size", 13)
-	_tips_line2.add_theme_color_override("font_color", Color(0.85, 0.88, 0.9))
+	_tips_line2.add_theme_font_size_override("font_size", _UiFont(&"ui_font_size_minor", UiTheme.FONT_MINOR))
+	_tips_line2.add_theme_color_override("font_color", COLOR_TIPS_LINE2)
 	_tips_line2.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(_tips_line2)
 	_tips_panel.add_child(box)
@@ -298,27 +328,42 @@ func set_bewitched(unit: BattleUnit, active: bool) -> void:
 		badge.bewitched = active
 
 func show_damage_number(cell: Vector2i, amount: int, is_crit: bool) -> void:
-	## 飘字伤害数字（上浮淡出后自毁；暴击加大加色）
+	## 飘字伤害数字（上浮淡出后自毁；暴击加大加色）；S4-11：创建后保 tips
+	## 恒顶层（后建节点不压住目标确认小窗）
 	## 参数 cell：目标格；amount：伤害值；is_crit：暴击标记
 	## 返回：无
 	var label := Label.new()
-	label.text = ("暴击 %d" if is_crit else "%d") % amount
-	label.add_theme_font_size_override("font_size", 26 if is_crit else 20)
-	label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.3) if is_crit \
-			else Color(1.0, 0.9, 0.6))
-	label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-	label.add_theme_constant_override("outline_size", 4)
-	label.position = cell_rect(cell).position + Vector2(cell_size * 0.22, -6)
+	label.text = (DAMAGE_TEXT_CRIT if is_crit else DAMAGE_TEXT_NORMAL) % amount
+	label.add_theme_font_size_override("font_size", _UiFont(&"ui_font_size_large", UiTheme.FONT_LARGE) \
+			if is_crit else _UiFont(&"ui_font_size_body", UiTheme.FONT_BODY))
+	label.add_theme_color_override("font_color", COLOR_DAMAGE_CRIT if is_crit \
+			else COLOR_DAMAGE_NORMAL)
+	label.add_theme_color_override("font_outline_color",
+			_OverlayColor(&"ui_badge_outline_color", UiTheme.BADGE_OUTLINE))
+	label.add_theme_constant_override("outline_size", DAMAGE_OUTLINE_SIZE)
+	label.position = cell_rect(cell).position \
+			+ Vector2(cell_size * DAMAGE_CELL_OFFSET_X, DAMAGE_CELL_OFFSET_Y)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(label)
+	_KeepTipsOnTop()
 	var tween: Tween = create_tween()
-	tween.tween_property(label, "position:y", label.position.y - 34.0, 0.7)
-	tween.parallel().tween_property(label, "modulate:a", 0.0, 0.7)
+	tween.tween_property(label, "position:y", label.position.y - DAMAGE_FLOAT_DISTANCE,
+			DAMAGE_FLOAT_DURATION)
+	tween.parallel().tween_property(label, "modulate:a", 0.0, DAMAGE_FLOAT_DURATION)
 	tween.tween_callback(label.queue_free)
 
+func _KeepTipsOnTop() -> void:
+	## 目标确认 tips 置顶（S4-11：飘字/陷阱标记等后建子节点会把 tips 挤下——
+	## 创建后挪回末位，z 序恒高于一切运行时节点）
+	## 参数：无
+	## 返回：无
+	if _tips_panel != null and is_instance_valid(_tips_panel) and _tips_panel.visible:
+		move_child(_tips_panel, get_child_count() - 1)
+
 func RefreshDynamicMarks() -> void:
-	## 动态地格标记刷新（陷阱橙色点——调试可见口径）；地格 hover 描述全量重算
-	## （动态陷阱格经 tile_at 动态优先获得陷阱描述，消耗后回落基础层）
+	## 动态地格标记刷新（陷阱橙色点——调试可见口径；S1-4：标记色经 tile 表
+	## mark_color 字段驱动）；地格 hover 描述全量重算（动态陷阱格经 tile_at
+	## 动态优先获得陷阱描述，消耗后回落基础层）；S4-11：创建后保 tips 恒顶层
 	## 参数：无
 	## 返回：无
 	for child: Node in get_children():
@@ -327,12 +372,33 @@ func RefreshDynamicMarks() -> void:
 	_ApplyAllCellTooltips()
 	for cell: Vector2i in context.grid.dynamic_tiles:
 		var mark := ColorRect.new()
-		mark.color = COLOR_TRAP_MARK
-		mark.size = Vector2(12, 12)
-		mark.position = cell_rect(cell).position + Vector2(cell_size - 18, cell_size - 18)
+		mark.color = _TrapMarkColorOf(cell)
+		mark.size = Vector2(TRAP_MARK_SIZE, TRAP_MARK_SIZE)
+		mark.position = cell_rect(cell).position \
+				+ Vector2(cell_size - TRAP_MARK_CORNER_OFFSET, cell_size - TRAP_MARK_CORNER_OFFSET)
 		mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		mark.set_meta(&"trap_mark", true)
 		add_child(mark)
+	_KeepTipsOnTop()
+
+func _TrapMarkColorOf(cell: Vector2i) -> Color:
+	## 陷阱标记色（S1-4 表驱动）：动态地格的 tile 表 mark_color；表未回填/
+	## 解析失败回退代码兜底常量（COLOR_TRAP_MARK_FALLBACK）
+	## 参数 cell：动态地格所在格
+	## 返回：标记色
+	var tile: TileTypeDef = context.grid.tile_at(cell)
+	if tile != null and tile.mark_color.a > 0.0:
+		return tile.mark_color
+	return COLOR_TRAP_MARK_FALLBACK
+
+func _TileFallbackColor() -> Color:
+	## 地格解析失败兜底色（S1-4 表驱动）：cfg_main.ui_tile_fallback_color；
+	## cfg 缺失/未回填回退代码兜底常量
+	## 参数：无
+	## 返回：兜底色
+	if context != null and context.cfg != null and context.cfg.ui_tile_fallback_color.a > 0.0:
+		return context.cfg.ui_tile_fallback_color
+	return TILE_FALLBACK_COLOR_FALLBACK
 
 func _BuildLayout() -> void:
 	## 版面计算：格子尺寸（界内自适应 + 钳制）与居中原点
@@ -361,15 +427,16 @@ func _MakeCellVisual(cell: Vector2i, tile: TileTypeDef) -> Control:
 	## 参数 cell：格坐标；tile：地格定义
 	## 返回：视觉根节点
 	if tile == null:
-		return _MakeCellRect(cell, Color(0.32, 0.36, 0.29), 2.0)
+		return _MakeCellRect(cell, _TileFallbackColor(), CELL_GAP)
 	match tile.style:
 		TileTypeDef.Style.BLOCK:
 			# 障碍岩块：底色 + 深色内块（darkened 同原式）+ 强调色描边
 			var rect := _MakeCellRect(cell, tile.fill_color, 0.0)
 			var inner := ColorRect.new()
 			inner.color = tile.fill_color.darkened(0.3)
-			inner.size = Vector2(cell_size - 12, cell_size - 12)
-			inner.position = Vector2(6, 6)
+			inner.size = Vector2(cell_size - TILE_INNER_INSET * 2.0,
+					cell_size - TILE_INNER_INSET * 2.0)
+			inner.position = Vector2(TILE_INNER_INSET, TILE_INNER_INSET)
 			inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			rect.add_child(inner)
 			for edge: ColorRect in _MakeEdgeStrips(inner.size, tile.accent_color):
@@ -380,14 +447,15 @@ func _MakeCellVisual(cell: Vector2i, tile: TileTypeDef) -> Control:
 			var raised := _MakeCellRect(cell, tile.fill_color, 0.0)
 			var inner_raised := ColorRect.new()
 			inner_raised.color = tile.accent_color
-			inner_raised.size = Vector2(cell_size - 12, cell_size - 12)
-			inner_raised.position = Vector2(6, 6)
+			inner_raised.size = Vector2(cell_size - TILE_INNER_INSET * 2.0,
+					cell_size - TILE_INNER_INSET * 2.0)
+			inner_raised.position = Vector2(TILE_INNER_INSET, TILE_INNER_INSET)
 			inner_raised.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			raised.add_child(inner_raised)
 			return raised
 		_:
 			# PLAIN：平色块（格间缝）
-			return _MakeCellRect(cell, tile.fill_color, 2.0)
+			return _MakeCellRect(cell, tile.fill_color, CELL_GAP)
 
 func _MakeCellRect(cell: Vector2i, color: Color, gap: float) -> ColorRect:
 	## 构建地格底色块（gap = 格间缝）
@@ -407,37 +475,12 @@ func _BuildBadges() -> void:
 	## 返回：无
 	for unit: BattleUnit in context.units:
 		var badge := UnitBadge.new()
-		var texture: Texture2D = _TextureOf(_SpriteIdOf(unit))
-		badge.setup(unit, texture, cell_size)
+		var texture: Texture2D = SpriteResolver.texture_of(
+				SpriteResolver.sprite_id_of(unit, _game_data), _game_data)
+		badge.setup(unit, texture, cell_size, context.cfg)
 		badge.position = origin + Vector2(unit.grid_pos) * cell_size
 		add_child(badge)
 		_badges[unit.unit_id] = badge
-
-func _TextureOf(sprite_id: StringName) -> Texture2D:
-	## sprite id → 纹理（AssetRegistry 路径解析 + 缓存；缺登记回退 null 占位）
-	## 参数 sprite_id：资源 id（spr_cls_* / spr_en_*）
-	## 返回：Texture2D（未登记返回 null——徽章回退色块）
-	if _texture_cache.has(sprite_id):
-		return _texture_cache[sprite_id]
-	var path: String = _game_data.get_asset_path(sprite_id)
-	var texture: Texture2D = null
-	if not path.is_empty():
-		texture = load(path) as Texture2D
-	_texture_cache[sprite_id] = texture
-	return texture
-
-func _SpriteIdOf(unit: BattleUnit) -> StringName:
-	## 单位 → sprite 资源 id（批 A H3 表驱动：ClassDef/EnemyDef.sprite_id——
-	## 经 GameData 查表，删除原拼接规则；查无回退空 id 走占位色块）
-	## 参数 unit：单位
-	## 返回：sprite id
-	if _game_data == null:
-		return &""
-	if unit.side == SkillDef.SkillSide.ALLY:
-		var cls: ClassDef = _game_data.get_record(unit.class_id) as ClassDef
-		return cls.sprite_id if cls != null else &""
-	var enemy: EnemyDef = _game_data.get_record(unit.enemy_id) as EnemyDef
-	return enemy.sprite_id if enemy != null else &""
 
 func _ShowOverlay(cells: Array[Vector2i], color: Color, pool: Array[Control],
 		border_color: Color = Color(0, 0, 0, 0), border_width: float = OVERLAY_BORDER_WIDTH) -> void:
@@ -490,16 +533,17 @@ func _ShowBlockedOverlay(cells: Array[Vector2i], pool: Array[Control]) -> void:
 		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		holder.set_meta(&"los_blocked", true)
 		var fill := ColorRect.new()
-		fill.color = COLOR_BLOCKED_FILL
+		fill.color = _OverlayColor(&"ui_overlay_blocked_fill_color", UiTheme.OVERLAY_BLOCKED_FILL)
 		fill.size = holder.size
 		fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		holder.add_child(fill)
-		for edge: ColorRect in _MakeEdgeStrips(holder.size, COLOR_BLOCKED_BORDER,
+		for edge: ColorRect in _MakeEdgeStrips(holder.size,
+				_OverlayColor(&"ui_overlay_blocked_border_color", UiTheme.OVERLAY_BLOCKED_BORDER),
 				OVERLAY_BORDER_WIDTH):
 			holder.add_child(edge)
 		# 中心斜杠（绕自身中心旋转 45°）
 		var slash := ColorRect.new()
-		slash.color = COLOR_BLOCKED_SLASH
+		slash.color = _OverlayColor(&"ui_overlay_blocked_slash_color", UiTheme.OVERLAY_BLOCKED_SLASH)
 		slash.size = Vector2(cell_size * 0.72, BLOCKED_SLASH_WIDTH)
 		slash.pivot_offset = slash.size * 0.5
 		slash.position = (holder.size - slash.size) * 0.5
@@ -519,28 +563,11 @@ func _ClearOverlay(pool: Array[Control]) -> void:
 
 func _MakeEdgeStrips(strip_size: Vector2, color: Color,
 		thickness: float = OVERLAY_BORDER_WIDTH) -> Array[ColorRect]:
-	## 构建四边框色带（上/下/左/右；不挂树由调用方挂入，坐标相对宿主 (0,0)）
+	## 构建四边框色带（B-19 单源：UiTheme.make_edge_strip_bars——与
+	## unit_badge 高亮环/蛊惑边同构收口；不挂树由调用方挂入）
 	## 参数 strip_size/color/thickness：宿主尺寸、色、条宽
 	## 返回：四条 ColorRect
-	var edges: Array[ColorRect] = []
-	edges.append(_MakeStrip(Vector2(0, 0), Vector2(strip_size.x, thickness), color))
-	edges.append(_MakeStrip(Vector2(0, strip_size.y - thickness),
-			Vector2(strip_size.x, thickness), color))
-	edges.append(_MakeStrip(Vector2(0, 0), Vector2(thickness, strip_size.y), color))
-	edges.append(_MakeStrip(Vector2(strip_size.x - thickness, 0),
-			Vector2(thickness, strip_size.y), color))
-	return edges
-
-func _MakeStrip(position: Vector2, size: Vector2, color: Color) -> ColorRect:
-	## 构建独立色带（不挂树）
-	## 参数 position/size/color：几何与颜色
-	## 返回：ColorRect
-	var rect := ColorRect.new()
-	rect.position = position
-	rect.size = size
-	rect.color = color
-	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return rect
+	return UiTheme.make_edge_strip_bars(strip_size, thickness, color)
 
 func _ApplyAllCellTooltips() -> void:
 	## 全场地格 hover 描述重算（初建与动态地格增删后调用）

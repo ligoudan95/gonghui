@@ -146,7 +146,7 @@ func test_continue_with_save_roundtrip() -> void:
 	var info_label: Label = get_tree().root.find_child("SaveInfoLabel", true, false) as Label
 	assert_object(info_label).is_not_null()
 	assert_str(info_label.text).is_not_empty()
-	assert_str(info_label.text).contains("RETURN_SETTLED")
+	assert_str(info_label.text).contains("回城结算")
 	assert_str(info_label.text).contains("3")
 
 func test_go_back_returns_to_previous_scene() -> void:
@@ -173,3 +173,54 @@ func test_pending_params_taken_once() -> void:
 	assert_int(params.get("day_jump", 0)).is_equal(5)
 	assert_bool(_scene_manager.take_pending_params().is_empty()).is_true()
 	await _AwaitSceneSwap()
+
+func test_go_failure_does_not_pollute_state() -> void:
+	## go 失败不污染状态（盲审批 3 B-1）：未知场景 id 拒绝后 current_id/
+	## previous_id/pending_params 保持原值（原实现先赋值后切换，失败会把
+	## current_id 推进到未实际进入的场景）
+	assert_int(_scene_manager.current_id).is_equal(-1)
+	assert_int(_scene_manager.go(999)).is_equal(ERR_INVALID_PARAMETER)
+	assert_int(_scene_manager.current_id).is_equal(-1)
+	assert_int(_scene_manager.previous_id).is_equal(-1)
+	assert_bool(_scene_manager.pending_params.is_empty()).is_true()
+
+func test_go_reports_scene_id_to_save_manager() -> void:
+	## 切换上报存档场景（盲审批 3 B-3）：new_game 后 go → SaveManager.current.
+	## scene_id 同步为目标场景名（预置异值证明覆写来自 go 上报）；无运行态
+	## 时静默不建档
+	_save_manager.new_game()
+	_save_manager.current.scene_id = &"battle_screen"
+	assert_int(_scene_manager.go(SCENE_GUILD_SHELL)).is_equal(OK)
+	assert_str(String(_save_manager.current.scene_id)).is_equal("guild_shell")
+	await _AwaitSceneSwap()
+	assert_int(_scene_manager.go(SCENE_TITLE)).is_equal(OK)
+	assert_str(String(_save_manager.current.scene_id)).is_equal("title")
+	await _AwaitSceneSwap()
+	assert_object(_save_manager.current).is_not_null()
+
+func test_go_rejected_while_switch_pending() -> void:
+	## 切换进行中拒重入（盲审批 3 B-4）：go 发起后（帧末替换落地前）二次 go
+	## 被拒（FAILED + 状态不被篡改）；替换落地（两帧）后 go 恢复可用
+	assert_int(_scene_manager.go(SCENE_GUILD_SHELL)).is_equal(OK)
+	assert_int(_scene_manager.current_id).is_equal(SCENE_GUILD_SHELL)
+	# 立即二次 go：切换尚未落地 → 拒绝（目标不切换、状态不变）
+	assert_int(_scene_manager.go(SCENE_TITLE)).is_equal(FAILED)
+	assert_int(_scene_manager.current_id).is_equal(SCENE_GUILD_SHELL)
+	await _AwaitSceneSwap()
+	# 帧末替换已落地：重入锁解除，go 恢复可用
+	assert_int(_scene_manager.go(SCENE_TITLE)).is_equal(OK)
+	assert_int(_scene_manager.current_id).is_equal(SCENE_TITLE)
+	await _AwaitSceneSwap()
+
+func test_guild_save_failure_keeps_screen() -> void:
+	## 存档失败反馈（S5-4）：无运行态（current 为 null）按「保存并返回标题」
+	## → autosave FAILED → 提示保存失败并留在公会壳（标题屏不出现）
+	_save_manager.current = null
+	var runner: GdUnitSceneRunner = scene_runner(GUILD_SCENE)
+	_PressButton(runner, "SaveAndBackButton")
+	await _AwaitSceneSwap()
+	# 未发起标题切换（场景树残留不作为判据——current_id 为准）
+	assert_int(_scene_manager.current_id).is_not_equal(SCENE_TITLE)
+	var warn_label: Label = get_tree().root.find_child("SaveWarnLabel", true, false) as Label
+	assert_object(warn_label).is_not_null()
+	assert_str(warn_label.text).contains("存档写入失败")

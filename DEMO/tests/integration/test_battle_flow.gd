@@ -461,11 +461,11 @@ func test_downed_unit_not_healable_or_targetable() -> void:
 	}
 	var on_grid := executor.execute(priest, heal_skill, warrior.grid_pos, ctx)
 	assert_bool(on_grid.success).is_false()
-	assert_str(String(on_grid.error)).is_equal("target_downed")
+	assert_str(String(on_grid.error)).is_equal(String(SkillExecutor.ERROR_TARGET_DOWNED))
 	context.grid.remove_unit(warrior.grid_pos)
 	var off_grid := executor.execute(priest, heal_skill, warrior.grid_pos, ctx)
 	assert_bool(off_grid.success).is_false()
-	assert_str(String(off_grid.error)).is_equal("invalid_target")
+	assert_str(String(off_grid.error)).is_equal(String(SkillExecutor.ERROR_INVALID_TARGET))
 
 func test_bewitched_unit_random_action() -> void:
 	## 整局⑤：蛊惑单位行动轮自动随机行动（随机移动 + 射程内随机普攻/待机）
@@ -488,6 +488,50 @@ func test_bewitched_unit_random_action() -> void:
 	assert_bool(warrior.has_moved or warrior.has_acted).is_true()
 	for entry: String in events:
 		assert_str(entry).is_not_empty()
+
+func test_round_settled_signal_carries_dot_report() -> void:
+	## round_settled 信号（盲审批 3 D-2）：敌方全员挂诅咒压到一跳血量、我方
+	## 被动——回合末结算后信号到达，携带回合号与 DOT 跳伤清单（敌 x3 逐条，
+	## 伤害与首跳扣减一致）；DOT 致胜收束（回合末判定生效）——每打完的
+	## 回合各一条信号
+	var context := _MakeContext(&"enc_m1_random_pack", 66)
+	var curse: StatusDef = context.status_lookup.call(&"DEBUFF_curse") as StatusDef
+	var hp_before: int = 0
+	for enemy: BattleUnit in context.enemies:
+		# 敌方意志 9 → 诅咒一跳 = round(9×0.5) = 5；压到一跳血量
+		enemy.current_hp = 5
+		hp_before += enemy.current_hp
+		# current_round=0 = 开局载入锚点（回合 1 前施加）→ 回合 1 末即首跳
+		context.status_manager.apply(enemy, curse, StatusInstance.SourceKind.SKILL,
+				&"test_round_settled", 3, 0, false)
+	var controller := _MakeController(context)
+	var stats: Dictionary = {}
+	var settled_rounds: Array[int] = []
+	var settled_reports: Array = []
+	controller.round_settled.connect(func(round_no: int, dot_damage: Array) -> void:
+		settled_rounds.append(round_no)
+		settled_reports.append(dot_damage))
+	_AttachStrategy(controller, context, stats, true)
+	controller.start_battle(context)
+	var result: BattleResult = await controller.battle_ended
+	assert_int(result.kind).is_equal(BattleResult.ResultKind.VICTORY)
+	# 开局载入锚点（回合 1 前施加）→ 回合 1 末即首跳全灭，战局收于回合 1
+	assert_int(result.rounds_used).is_equal(1)
+	# 每个打完的回合各一条 round_settled；首条（回合 1 末）恰含敌 x3 诅咒跳
+	assert_int(settled_rounds.size()).is_equal(result.rounds_used)
+	assert_int(settled_rounds[0]).is_equal(1)
+	var first_report: Array = settled_reports[0]
+	assert_int(first_report.size()).is_equal(3)
+	var total_dot: int = 0
+	for entry: Dictionary in first_report:
+		assert_object(entry[&"unit"]).is_not_null()
+		assert_int(entry[&"damage"]).is_greater(0)
+		total_dot += int(entry[&"damage"])
+	# 首跳合计 = 开局压定血量（诅咒外无其他伤害源；DOT 致倒地 HP 归零）
+	var hp_after: int = 0
+	for enemy: BattleUnit in context.enemies:
+		hp_after += enemy.current_hp
+	assert_int(total_dot).is_equal(hp_before - hp_after)
 
 func test_round_end_settlement_sequence() -> void:
 	## 整局⑥：回合末结算序列（DOT → 递减 → 兜底判定）——我方全员被动，
@@ -518,3 +562,74 @@ func test_round_end_settlement_sequence() -> void:
 	assert_int(result.downed_units.size()).is_equal(3)
 	# 敌方在 1-2 回合内确实行动过（移动/攻击事件——掷骰命中与否不作为判据）
 	assert_int(enemy_events.size()).is_greater(0)
+
+func test_move_after_skill_same_turn() -> void:
+	## 行动顺序任意（S3-03 拍板 A）：先攻击（has_acted 置位）后仍可移动；
+	## 双标记齐备自动结束行动轮；连移仍拒（has_moved）
+	var context := _MakeContext(&"enc_m1_random_pack", 21)
+	var controller := _MakeController(context)
+	var state: Dictionary = {&"moved": false, &"turn_ended": false}
+	controller.turn_started.connect(func(unit: BattleUnit) -> void:
+		if not unit.is_controllable() or controller.current_unit != unit:
+			return
+		if state[&"moved"]:
+			controller.request_end_unit_turn()
+			return
+		var enemies: Array = context.enemies.filter(func(enemy): return enemy.alive)
+		if enemies.is_empty():
+			controller.request_end_unit_turn()
+			return
+		# 先尝试普攻最近敌（射程内才受理；未中回退收束行动轮）
+		var nearest: BattleUnit = _NearestEnemy(unit, enemies)
+		if controller.request_skill(unit.base_attack_id, nearest.grid_pos):
+			assert_bool(unit.has_acted).is_true()
+			# 攻击后再移动（此前被 has_acted 前置拒绝——S3-03 后受理）
+			var reachable: Array[Vector2i] = context.grid.find_reachable(unit, unit.move_final())
+			for dest: Vector2i in reachable:
+				if controller.request_move(dest):
+					state[&"moved"] = true
+					break
+			# 连移拒绝（has_moved 仍在）
+			if state[&"moved"]:
+				assert_bool(controller.request_move(unit.grid_pos)).is_false()
+		controller.request_end_unit_turn()
+	)
+	controller.start_battle(context)
+	var result: BattleResult = await controller.battle_ended
+	assert_int(result.rounds_used).is_between(1, 50)
+	assert_bool(state[&"moved"]).is_true()
+
+func test_trap_death_stops_enemy_attack() -> void:
+	## 尸体攻击拦截（S3-01）：敌方移动踩我方陷阱致死 → 该行动轮不再攻击
+	## （原：死亡后残留攻击链继续执行技能——skill_executed 仍发射）
+	var context := _MakeContext(&"enc_m1_random_pack", 22)
+	var controller := _MakeController(context)
+	var warrior: BattleUnit = context.find_unit(&"warrior")
+	# 场景收敛：仅留 1 敌（其余撤场），置于 (2,0)；可达全域布 99 伤陷阱——
+	# 敌方 AI 首个行动轮无论移动裁决选哪格必踩致死
+	for index: int in range(1, context.enemies.size()):
+		var removed: BattleUnit = context.enemies[index]
+		removed.alive = false
+		context.grid.remove_unit(removed.grid_pos)
+	var enemy: BattleUnit = context.enemies[0]
+	context.grid.remove_unit(enemy.grid_pos)
+	enemy.grid_pos = Vector2i(2, 0)
+	context.grid.place_unit(Vector2i(2, 0), enemy)
+	enemy.current_hp = 1
+	# 敌可达全域布陷阱（移动裁决平手取遍历首——固定走廊会被平手路线绕开，
+	# 全域覆盖保证首个行动轮无论走向哪格必踩）
+	for cell: Vector2i in context.grid.find_reachable(enemy, enemy.move_final()):
+		context.grid.spawn_dynamic_tile(cell, &"tile_trap", 99, warrior.unit_id)
+	var stats: Dictionary = {}
+	var enemy_skill_events: Array = []
+	controller.skill_executed.connect(func(caster: BattleUnit, _result) -> void:
+		if caster.side == SkillDef.SkillSide.ENEMY:
+			enemy_skill_events.append(caster.unit_id))
+	_AttachStrategy(controller, context, stats, true)
+	controller.start_battle(context)
+	var result: BattleResult = await controller.battle_ended
+	# 唯一敌踩陷阱即灭 → 我方零输出下 VICTORY；其移动后死亡——攻击链
+	# 不得继续（skill_executed 零敌方事件；旧缺陷下死者仍发技能）
+	assert_int(result.kind).is_equal(BattleResult.ResultKind.VICTORY)
+	assert_bool(enemy.alive).is_false()
+	assert_int(enemy_skill_events.size()).is_equal(0)
