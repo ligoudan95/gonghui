@@ -124,6 +124,13 @@ static func build(params: BattleParams, game_data: Node) -> BattleContext:
 		var unit := UnitBuilder.build_ally(adv, cls, equip, context.cfg)
 		unit.slot_index = slot
 		unit.bind_battle(context.cfg, context.status_manager)
+		# M2 批 2：事件层 HP 覆写（损耗带入战斗）——clamp [1, max_hp] 越界告警
+		if params.hp_overrides.has(adv.unit_id):
+			var override_hp: int = int(params.hp_overrides[adv.unit_id])
+			if override_hp < 1 or override_hp > unit.max_hp:
+				push_warning("BattleSetup: HP 覆写越界 %d（%s，clamp [1,%d]）" % [
+					override_hp, adv.unit_id, unit.max_hp])
+			unit.current_hp = clampi(override_hp, 1, unit.max_hp)
 		var spawn: Vector2i = _ResolveSpawn(context, map_def, params.formation, slot)
 		unit.grid_pos = spawn
 		context.grid.place_unit(spawn, unit)

@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="EventNodeDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/reward_def.gd" id="1_doqln"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_outcome_def.gd" id="2_rcs7y"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_node_def.gd" id="3_feumo"]
+
+[sub_resource type="Resource" id="Resource_q31u6"]
+script = ExtResource("1_doqln")
+exp = 20
+
+[sub_resource type="Resource" id="Resource_34658"]
+script = ExtResource("2_rcs7y")
+reward = SubResource("Resource_q31u6")
+grant_quest_id = &"q_lost_miner_keepsake"
+texts = Dictionary[StringName, String]({
+&"crit_success": "日记的夹层里贴着一张矿区草图，老井的位置圈了三个圈；草图下还压着几枚没来得及花的工钱币。",
+&"failure": "日记可读，此路无失败。",
+&"success": "日记里写明了老井暗窖的位置。这桩事，该有人替他走一趟。"
+})
+
+[resource]
+script = ExtResource("3_feumo")
+id = &"evn_camp_n2"
+display_name = "完整日记"
+chain_id = &"chain_mine_camp"
+narrative_text = "纸页粘连，但关键的字都认得出：撤离那晚，托米没能从老井暗窖出来——他的工具包和这个月的工钱都还留在下面。最后一页只有一行：「谁捡到这本子，替我去村口，跟她说一声。」"
+outcome = SubResource("Resource_34658")
+comment = "【占位·试玩校准】案 18 §2.3 n2（C8 授予委托终端·20 经验）"

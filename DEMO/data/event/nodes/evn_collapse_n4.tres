@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="EventNodeDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/reward_def.gd" id="1_5unb2"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_outcome_def.gd" id="2_htyn1"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_node_def.gd" id="3_pl4ts"]
+
+[sub_resource type="Resource" id="Resource_wej1s"]
+script = ExtResource("1_5unb2")
+exp = 10
+gold = 5
+
+[sub_resource type="Resource" id="Resource_iegmd"]
+script = ExtResource("2_htyn1")
+reward = SubResource("Resource_wej1s")
+texts = Dictionary[StringName, String]({
+&"crit_failure": "头顶的碎石这时又簌簌滑落一片。众人抱头散开，还是蹭了一身伤。",
+&"failure": "没能完全清开通道，但人总算出来了——受了点轻伤，谢礼也薄了些。",
+&"success": "没能完全清开通道，但人总算出来了——受了点轻伤，谢礼也薄了些。"
+})
+
+[resource]
+script = ExtResource("3_pl4ts")
+id = &"evn_collapse_n4"
+display_name = "自己爬出"
+chain_id = &"chain_mine_collapse"
+narrative_text = "扒了半天，只清出一条窄缝。最后是老周自己挤出来的，胳膊蹭掉一片皮。他摆摆手表示不碍事，把干粮袋里最后半张饼掰给了你们。"
+outcome = SubResource("Resource_iegmd")
+comment = "【占位·试玩校准】案 18 §2.1 n4 终端（o1/o2 失败共向）"

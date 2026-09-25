@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="EventOptionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/reward_def.gd" id="1_4ai8x"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_modifier_def.gd" id="2_l1o67"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_option_def.gd" id="3_7rlnc"]
+
+[sub_resource type="Resource" id="Resource_ldek1"]
+script = ExtResource("1_4ai8x")
+
+[sub_resource type="Resource" id="Resource_fo4h3"]
+script = ExtResource("2_l1o67")
+text = "慌乱间蹭了一身伤。"
+reward_delta = SubResource("Resource_ldek1")
+party_hp_delta = -5
+
+[sub_resource type="Resource" id="Resource_83qd1"]
+script = ExtResource("1_4ai8x")
+gold = 15
+
+[sub_resource type="Resource" id="Resource_wlcgk"]
+script = ExtResource("2_l1o67")
+text = "塌开的石缝里还滚出几枚矿工掉落的铜币。"
+reward_delta = SubResource("Resource_83qd1")
+
+[resource]
+script = ExtResource("3_7rlnc")
+id = &"opt_collapse_2"
+display_name = "用撬棍顶起巨石"
+check_attr_id = &"strength"
+difficulty_tier = "困难"
+success_to = &"evn_collapse_n3"
+failure_to = &"evn_collapse_n4"
+crit_modifier = SubResource("Resource_wlcgk")
+crit_fail_modifier = SubResource("Resource_fo4h3")
+comment = "【占位·试玩校准】案 18 §2.x；撬巨石：+15 金 / 全队生命 −5"

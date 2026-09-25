@@ -53,6 +53,13 @@ const PANEL_DARK: Color = Color(0.07, 0.08, 0.09, 0.9)
 const TILE_FALLBACK: Color = Color(0.32, 0.36, 0.29)
 ## 徽章 HP 低血阈值兜底（= cfg_main.ui_badge_hp_low_threshold——R3-08）
 const BADGE_HP_LOW_THRESHOLD: float = 0.35
+## 事件四档反馈色兜底（M2——cfg ui_event_grade_*）
+const EVENT_GRADE_CRIT_SUCCESS: Color = Color(0.35, 0.85, 0.4)
+const EVENT_GRADE_SUCCESS: Color = Color(0.6, 0.8, 0.55)
+const EVENT_GRADE_FAILURE: Color = Color(0.9, 0.5, 0.4)
+const EVENT_GRADE_CRIT_FAILURE: Color = Color(0.8, 0.3, 0.3)
+## D20 演出滚动时长兜底（秒——M2）
+const D20_ROLL_SECONDS: float = 0.9
 ## 结算战败/撤退色兜底（R3-08）
 const RESULT_DEFEAT: Color = Color(0.95, 0.4, 0.35)
 const RESULT_RETREAT: Color = Color(0.7, 0.8, 0.95)

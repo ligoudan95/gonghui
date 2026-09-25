@@ -1,0 +1,46 @@
+[gd_resource type="Resource" script_class="EventNodeDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/reward_def.gd" id="1_5p83r"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_outcome_def.gd" id="2_h00kr"]
+[ext_resource type="Script" path="res://scripts/data_defs/battle_opening_def.gd" id="3_olehs"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_node_def.gd" id="4_s0obq"]
+
+[sub_resource type="Resource" id="Resource_232ow"]
+script = ExtResource("1_5p83r")
+exp = 15
+gold = 15
+
+[sub_resource type="Resource" id="Resource_i1xep"]
+script = ExtResource("2_h00kr")
+reward = SubResource("Resource_232ow")
+texts = Dictionary[StringName, String]({
+&"failure": "战后清点，巢穴里多少还有些值钱的玩意儿。",
+&"success": "打散这窝东西后，你们从巢穴里扒出一小堆亮闪闪的「收藏品」。"
+})
+
+[sub_resource type="Resource" id="Resource_nneuq"]
+script = ExtResource("3_olehs")
+pack_id = &"enc_m1_wisp_nest"
+first_strike_token = &"enemy_first"
+enemy_layout_token = &"clustered"
+initial_status_id = &"DEBUFF_exposed"
+post_battle = SubResource("Resource_i1xep")
+
+[sub_resource type="Resource" id="Resource_2i2aq"]
+script = ExtResource("2_h00kr")
+exit_kind = 1
+battle = SubResource("Resource_nneuq")
+texts = Dictionary[StringName, String]({
+&"crit_failure": "火星燎伤了眼睛，队伍一阵手忙脚乱。",
+&"failure": "散尽的火星燎在后颈上，你们慢了不止半拍。",
+&"success": "散尽的火星燎在后颈上，你们慢了不止半拍。"
+})
+
+[resource]
+script = ExtResource("4_s0obq")
+id = &"evn_wisp_n2"
+display_name = "被伏击"
+chain_id = &"chain_mine_wisp"
+narrative_text = "鬼火在你们眼前散作几点火星。四下忽然窸窣作响——巢穴就在脚下，而你们正好站在正中央。"
+outcome = SubResource("Resource_2i2aq")
+comment = "【占位·试玩校准】案 18 §2.2 n2（o1 失败·被伏击：敌先手+集结+暴露减益 18-C7）"

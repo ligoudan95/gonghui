@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="EventNodeDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/reward_def.gd" id="1_ywi3a"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_outcome_def.gd" id="2_q1vi4"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_node_def.gd" id="3_cffxf"]
+
+[sub_resource type="Resource" id="Resource_yw01t"]
+script = ExtResource("1_ywi3a")
+exp = 10
+
+[sub_resource type="Resource" id="Resource_yimje"]
+script = ExtResource("2_q1vi4")
+reward = SubResource("Resource_yw01t")
+texts = Dictionary[StringName, String]({
+&"crit_failure": "翻页时纸页散成碎片，毛边还在指腹上割了道小口。",
+&"failure": "线索残缺，但方向总算有了一个。",
+&"success": "线索残缺，但方向总算有了一个。"
+})
+
+[resource]
+script = ExtResource("3_cffxf")
+id = &"evn_camp_n3"
+display_name = "模糊日记"
+chain_id = &"chain_mine_camp"
+narrative_text = "纸页泡烂了大半，翻来覆去只认出半行字：「老井……下面……」。剩下的，都糊成了深色的印子。"
+outcome = SubResource("Resource_yimje")
+comment = "【占位·试玩校准】案 18 §2.3 n3 终端（o1 失败向）"

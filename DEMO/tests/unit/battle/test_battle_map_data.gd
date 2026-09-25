@@ -22,7 +22,7 @@ func test_domain_counts() -> void:
 	assert_int(_game_data.get_domain(&"battle/maps").size()).is_equal(2)
 	assert_int(_game_data.get_domain(&"equip").size()).is_equal(6)
 	var report: ValidationReport = DataValidator.run_all(_game_data)
-	assert_int(report.checked_count).is_equal(64)
+	assert_int(report.checked_count).is_equal(92)
 
 func test_tile_bindings() -> void:
 	## 地格绑定：草丛/高地/毒沼绑定对应状态（allowed_sources 含 TILE）；
@@ -94,7 +94,7 @@ func test_equip_values() -> void:
 func test_naming_registry_extended() -> void:
 	## 命名登记表：62 条（48 + 14），新资源全部登记且含域前缀规则注
 	var registry: NamingRegistry = _game_data.get_record(&"naming_registry")
-	assert_int(registry.entries.size()).is_equal(85)
+	assert_int(registry.entries.size()).is_equal(113)
 	var registered: Dictionary = {}
 	for entry: NamingEntry in registry.entries:
 		registered[entry.resource_id] = entry

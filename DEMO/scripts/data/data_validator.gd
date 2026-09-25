@@ -64,6 +64,12 @@ const DOMAIN_PREFIXES: Dictionary[StringName, Array] = {
 	&"battle/maps": [&"btm_"],
 	&"battle/tiles": [&"tile_"],
 	&"equip": [&"eqp_"],
+	&"event/chains": [&"chain_"],
+	&"event/nodes": [&"evn_"],
+	&"event/options": [&"opt_"],
+	&"event/singles": [&"sp_"],
+	&"event/hidden_marks": [&"hm_"],
+	&"quest/templates": [&"q_"],
 }
 
 static func run_all(game_data: Node) -> ValidationReport:
@@ -117,6 +123,14 @@ static func run_all(game_data: Node) -> ValidationReport:
 	_CheckCfgFallbacks(report, game_data)
 	# ---- 三轮复审新增（R1-5：AURA_3X3 技组合合法性）----
 	_CheckAuraCombo(report, game_data)
+	# ---- M2 批 1 新增（V-M2 八组：事件与检定域）----
+	_CheckEventRefGraph(report, game_data)
+	_CheckEventRefExit(report, game_data)
+	_CheckEventRefBattle(report, game_data)
+	_CheckEventRefQuest(report, game_data)
+	_CheckEventNumDomain(report, game_data)
+	_CheckEventFourTexts(report, game_data)
+	_CheckEventCounts(report, game_data)
 	return report
 
 # --------------------------------------------------------------------------
@@ -894,6 +908,12 @@ static func _CheckCfgDomains(report: ValidationReport, game_data: Node) -> void:
 		if int(cfg.get(divisor_name)) <= 0:
 			report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
 					"%s ≤ 0（除零 NaN 风险）" % divisor_name)
+	# M2 加严（检定幸运兜底一致性——案 17：骰 1 不兜而 Y/Z 同除数）：
+	# luck_floor_y 必须 == luck_floor_z_divisor，两参数漂移即报错
+	if cfg.luck_floor_y != cfg.luck_floor_z_divisor:
+		report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
+				"luck_floor_y(%d) != luck_floor_z_divisor(%d)——幸运兜底两参数须同值" % [
+					cfg.luck_floor_y, cfg.luck_floor_z_divisor])
 	if cfg.hit_clamp_min < 0.0 or cfg.hit_clamp_max > 1.0 or cfg.hit_clamp_min > cfg.hit_clamp_max:
 		report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
 				"命中钳制带 [%f, %f] 非法" % [cfg.hit_clamp_min, cfg.hit_clamp_max])
@@ -1040,6 +1060,10 @@ static func _CheckCfgFallbacks(report: ValidationReport, game_data: Node) -> voi
 		["ui_tile_fallback_color", UiTheme.TILE_FALLBACK],
 		["ui_result_defeat_color", UiTheme.RESULT_DEFEAT],
 		["ui_result_retreat_color", UiTheme.RESULT_RETREAT],
+		["ui_event_grade_crit_success_color", UiTheme.EVENT_GRADE_CRIT_SUCCESS],
+		["ui_event_grade_success_color", UiTheme.EVENT_GRADE_SUCCESS],
+		["ui_event_grade_failure_color", UiTheme.EVENT_GRADE_FAILURE],
+		["ui_event_grade_crit_failure_color", UiTheme.EVENT_GRADE_CRIT_FAILURE],
 		["ui_badge_hp_low_color", UiTheme.BADGE_HP_LOW],
 		["ui_badge_hp_ok_color", UiTheme.BADGE_HP_OK],
 		["ui_badge_bar_back_color", UiTheme.BADGE_BAR_BACK],
@@ -1103,6 +1127,10 @@ static func _CheckCfgFallbacks(report: ValidationReport, game_data: Node) -> voi
 		elif table_font != int(pair[1]):
 			report.add_error("V-B2-cfg-fallback", CoreConfig.CFG_MAIN_ID,
 					"%s 表值 %d != 兜底档位 %d（调表须同步兜底）" % [pair[0], table_font, int(pair[1])])
+	# M2 演出时长完备性（非负）
+	if float(cfg.get("ui_d20_roll_seconds")) < 0.0:
+		report.add_error("V-B2-cfg-fallback", CoreConfig.CFG_MAIN_ID,
+				"ui_d20_roll_seconds 为负")
 	# 版本标签/演出延时（非锚定值：仅完备性——非空/正数）
 	var raw_label: Variant = cfg.get("version_label")
 	if not (raw_label is String) or String(raw_label).is_empty():
@@ -1163,6 +1191,327 @@ static func _MoveBaseCap(game_data: Node) -> int:
 	var cfg: CoreConfig = game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
 	return cfg.move_base_cap if cfg != null and cfg.move_base_cap > 0 \
 			else BattleUnit.MOVE_BASE_CAP_FALLBACK
+
+# --------------------------------------------------------------------------
+# M2 事件与检定域（V-M2 八组）
+# --------------------------------------------------------------------------
+
+## 检定档名合法集（难度五档——与 cfg.difficulty_tiers 键集同源；运行时查表）
+static func _TierNames(cfg: CoreConfig) -> Array:
+	## 参数 cfg：总控配置
+	## 返回：合法难度档名数组
+	return cfg.difficulty_tiers.keys() if cfg != null else []
+
+static func _CheckEventRefGraph(report: ValidationReport, game_data: Node) -> void:
+	## V-M2-ref-graph：事件图引用——选项去向节点存在且**同链**（E10①）；
+	## 链入口存在且属本链；检定选项双去向非空；*_to 与 *_outcome 互斥；
+	## 孤儿选项报错（E10②）；检定链可达节点 outcome crit 档强制非空
+	## （E10③）；节点 outcome 与 option_ids 混排禁止（E10④）
+	## 参数：报告 / GameData
+	## 返回：无
+	var nodes: Dictionary = {}
+	for record: Resource in _DomainRecords(game_data, &"event/nodes"):
+		var node := record as EventNodeDef
+		nodes[node.id] = node
+	for record: Resource in _DomainRecords(game_data, &"event/chains"):
+		var chain := record as EventChainDef
+		var entry: EventNodeDef = nodes.get(chain.entry_node_id, null) as EventNodeDef
+		if entry == null:
+			report.add_error("V-M2-ref-graph", chain.id,
+					"入口节点 '%s' 不存在" % chain.entry_node_id)
+		elif entry.chain_id != chain.id:
+			report.add_error("V-M2-ref-graph", chain.id,
+					"入口节点 chain_id 与本链不一致（'%s'）" % chain.entry_node_id)
+	var options: Dictionary = {}
+	for record: Resource in _DomainRecords(game_data, &"event/options"):
+		var option := record as EventOptionDef
+		options[option.id] = option
+		if option.success_to != &"" and option.success_outcome != null:
+			report.add_error("V-M2-ref-graph", option.id,
+					"success_to 与 success_outcome 互斥（同侧只允许一族）")
+		if option.failure_to != &"" and option.failure_outcome != null:
+			report.add_error("V-M2-ref-graph", option.id,
+					"failure_to 与 failure_outcome 互斥")
+		var success_ok: bool = option.success_to != &"" or option.success_outcome != null
+		if not success_ok:
+			report.add_error("V-M2-ref-graph", option.id, "成功去向双空（死路）")
+		if option.kind == EventOptionDef.OptionKind.CHECK:
+			var failure_ok: bool = option.failure_to != &"" or option.failure_outcome != null
+			if not failure_ok:
+				report.add_error("V-M2-ref-graph", option.id,
+						"检定选项失败去向双空（失败也推进硬标准）")
+			if String(option.check_attr_id).is_empty() or option.difficulty_tier.is_empty():
+				report.add_error("V-M2-ref-graph", option.id,
+						"检定选项缺属性或难度档名")
+			elif not AttrKeys.seven_attrs().has(option.check_attr_id):
+				report.add_error("V-M2-ref-graph", option.id,
+						"检定属性 '%s' 不在七属性域" % option.check_attr_id)
+		elif option.failure_to != &"" or option.failure_outcome != null:
+			report.add_error("V-M2-ref-graph", option.id,
+					"纯选择不允许失败去向（无检定无分流）")
+		for target_id: StringName in [option.success_to, option.failure_to]:
+			if target_id == &"":
+				continue
+			var target: EventNodeDef = nodes.get(target_id, null) as EventNodeDef
+			if target == null:
+				report.add_error("V-M2-ref-graph", option.id,
+						"去向节点 '%s' 不存在" % target_id)
+	# 检定链可达档位表（E10③）：node_id -> {&"crit_success"/&"crit_failure": true}
+	# ——CHECK 选项 success_to 命中侧 crit_success 可达、failure_to 命中侧
+	# crit_failure 可达（PURE 选项去向无档位语义不计）
+	var crit_reach: Dictionary = {}
+	for option_id: StringName in options:
+		var option: EventOptionDef = options[option_id]
+		if option.kind != EventOptionDef.OptionKind.CHECK:
+			continue
+		for pair: Array in [[option.success_to, &"crit_success"],
+				[option.failure_to, &"crit_failure"]]:
+			var target_id: StringName = pair[0]
+			var side: StringName = pair[1]
+			if target_id == &"":
+				continue
+			if not crit_reach.has(target_id):
+				crit_reach[target_id] = {}
+			crit_reach[target_id][side] = true
+	# 节点侧：选项挂载存在（反向一致性）+ 去向同链（E10①）+ 混排禁止（E10④）
+	# + 检定可达 crit 档强制非空（E10③）+ 孤儿选项收集
+	var mounted_options: Dictionary = {}
+	for node_id: StringName in nodes:
+		var node: EventNodeDef = nodes[node_id]
+		if node.outcome != null and not node.option_ids.is_empty():
+			report.add_error("V-M2-ref-graph", node.id,
+					"outcome 与 option_ids 混排（终端节点不带选项）")
+		for option_id: StringName in node.option_ids:
+			mounted_options[option_id] = true
+			if not options.has(option_id):
+				report.add_error("V-M2-ref-graph", node.id,
+						"挂载选项 '%s' 不存在" % option_id)
+				continue
+			var mounted: EventOptionDef = options[option_id]
+			for target_id: StringName in [mounted.success_to, mounted.failure_to]:
+				if target_id == &"":
+					continue
+				var target: EventNodeDef = nodes.get(target_id, null) as EventNodeDef
+				if target != null and target.chain_id != node.chain_id:
+					# E10①：去向节点须与挂载节点同链（跨链去向 = 链图越界）
+					report.add_error("V-M2-ref-graph", mounted.id,
+							"去向节点 '%s' 与挂载节点不同链（'%s' != '%s'）" % [
+									target_id, target.chain_id, node.chain_id])
+		if node.outcome != null and crit_reach.has(node_id):
+			var sides: Dictionary = crit_reach[node_id]
+			for side: StringName in sides:
+				if String(node.outcome.texts.get(side, "")).is_empty():
+					report.add_error("V-M2-ref-graph", node.id,
+							"检定链可达节点 outcome 缺 '%s' 档文本（E10③）" % side)
+	# 孤儿选项（E10②）：无任何节点挂载
+	for option_id: StringName in options:
+		if not mounted_options.has(option_id):
+			report.add_error("V-M2-ref-graph", option_id,
+					"孤儿选项（无节点挂载——不可达）")
+
+static func _CheckEventRefExit(report: ValidationReport, game_data: Node) -> void:
+	## V-M2-ref-exit：出口类型值域——C/D 计数 == 0（DEMO 零实例口径）；
+	## B 出口必带 battle.pack_id 与 battle.post_battle
+	## 参数：报告 / GameData
+	## 返回：无
+	for outcome_pair: Array in _AllEventOutcomes(game_data):
+		var owner_id: StringName = outcome_pair[0]
+		var outcome: EventOutcomeDef = outcome_pair[1]
+		if outcome.exit_kind == EventOutcomeDef.ExitKind.C \
+				or outcome.exit_kind == EventOutcomeDef.ExitKind.D:
+			report.add_error("V-M2-ref-exit", owner_id,
+					"exit_kind=C/D（DEMO 零实例口径——拦截通路留引擎不留数据）")
+		if outcome.exit_kind == EventOutcomeDef.ExitKind.B:
+			if outcome.battle == null or String(outcome.battle.pack_id).is_empty():
+				report.add_error("V-M2-ref-exit", owner_id, "B 出口缺 battle.pack_id")
+			elif outcome.battle.post_battle == null:
+				report.add_error("V-M2-ref-exit", owner_id, "B 出口缺 battle.post_battle（战后出口）")
+
+static func _CheckEventRefBattle(report: ValidationReport, game_data: Node) -> void:
+	## V-M2-ref-battle：B 出口战斗引用——pack_id ∈ enemy_packs；先手/分布
+	## token 空串合法走默认、非空查值域（E11 放宽——对齐案 8「未填走默认」）；
+	## initial_status_id ∈ status/stats 且 allowed_sources 含 CHECKIN 且
+	## **禁控制类状态**（E2-10：定身/蛊惑经 CHECKIN 因 from_next_turn_only
+	## + duration 1 完全空转）
+	## 参数：报告 / GameData
+	## 返回：无
+	for outcome_pair: Array in _AllEventOutcomes(game_data):
+		var owner_id: StringName = outcome_pair[0]
+		var outcome: EventOutcomeDef = outcome_pair[1]
+		if outcome.battle == null:
+			continue
+		var battle := outcome.battle
+		if game_data.get_record(battle.pack_id) == null:
+			report.add_error("V-M2-ref-battle", owner_id,
+					"pack_id '%s' 不在 enemy_packs 域" % battle.pack_id)
+		if String(battle.first_strike_token) != "" \
+				and not [&"ally_first", &"enemy_first"].has(battle.first_strike_token):
+			report.add_error("V-M2-ref-battle", owner_id,
+					"first_strike_token '%s' 不在值域" % battle.first_strike_token)
+		if String(battle.enemy_layout_token) != "" \
+				and not [&"clustered", &"spread"].has(battle.enemy_layout_token):
+			report.add_error("V-M2-ref-battle", owner_id,
+					"enemy_layout_token '%s' 不在值域" % battle.enemy_layout_token)
+		if not String(battle.initial_status_id).is_empty():
+			var status: StatusDef = game_data.get_record(battle.initial_status_id) as StatusDef
+			if status == null:
+				report.add_error("V-M2-ref-battle", owner_id,
+						"initial_status_id '%s' 不在 status/stats 域" % battle.initial_status_id)
+			elif not status.allowed_sources.has(StatusDef.source_kind_token(
+					StatusInstance.SourceKind.CHECKIN)):
+				report.add_error("V-M2-ref-battle", owner_id,
+						"initial_status_id 的 allowed_sources 不含 CHECKIN")
+			elif status.control_kind != StatusDef.ControlKind.NONE:
+				# E2-10：控制类状态经 CHECKIN 载入不生效（from_next_turn_only +
+				# duration 1 开局即过期）——配置层拦截
+				report.add_error("V-M2-ref-battle", owner_id,
+						"initial_status_id '%s' 为控制类状态（CHECKIN 载入空转——禁用）" % [
+								battle.initial_status_id])
+
+static func _CheckEventRefQuest(report: ValidationReport, game_data: Node) -> void:
+	## V-M2-ref-quest：授予委托引用——grant_quest_id ∈ quest/templates 且
+	## 模板 acquire_channel == EVENT_GRANT（事件授予专用口径 18-C3）
+	## 参数：报告 / GameData
+	## 返回：无
+	for outcome_pair: Array in _AllEventOutcomes(game_data):
+		var owner_id: StringName = outcome_pair[0]
+		var outcome: EventOutcomeDef = outcome_pair[1]
+		if String(outcome.grant_quest_id).is_empty():
+			continue
+		var quest: QuestTemplateDef = game_data.get_record(outcome.grant_quest_id) as QuestTemplateDef
+		if quest == null:
+			report.add_error("V-M2-ref-quest", owner_id,
+					"grant_quest_id '%s' 不在 quest/templates 域" % outcome.grant_quest_id)
+		elif quest.acquire_channel != QuestTemplateDef.AcquireChannel.EVENT_GRANT:
+			report.add_error("V-M2-ref-quest", owner_id,
+					"授予委托 '%s' 的 acquire_channel != EVENT_GRANT" % quest.id)
+
+static func _CheckEventNumDomain(report: ValidationReport, game_data: Node) -> void:
+	## V-M2-num-domain：事件数值域——exp ∈ [10,20] / gold ∈ [5,30] / reputation
+	## ∈ [0,2] / cost_days ∈ {0,1} / party_hp_delta ∈ [−10,0] / 难度档名 ∈ cfg 键集
+	## 参数：报告 / GameData
+	## 返回：无
+	var cfg: CoreConfig = game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
+	var tier_names: Array = _TierNames(cfg)
+	for outcome_pair: Array in _AllEventOutcomes(game_data):
+		var owner_id: StringName = outcome_pair[0]
+		var outcome: EventOutcomeDef = outcome_pair[1]
+		if outcome.reward != null:
+			if outcome.reward.exp != 0 and (outcome.reward.exp < 10 or outcome.reward.exp > 20):
+				report.add_error("V-M2-num-domain", owner_id,
+						"exp %d 越界 [10,20]" % outcome.reward.exp)
+			if outcome.reward.gold != 0 and (outcome.reward.gold < 5 or outcome.reward.gold > 30):
+				report.add_error("V-M2-num-domain", owner_id,
+						"gold %d 越界 [5,30]" % outcome.reward.gold)
+			if outcome.reward.reputation < 0 or outcome.reward.reputation > 2:
+				report.add_error("V-M2-num-domain", owner_id,
+						"reputation %d 越界 [0,2]" % outcome.reward.reputation)
+	for record: Resource in _DomainRecords(game_data, &"event/options"):
+		var option := record as EventOptionDef
+		if option.cost_days != 0 and option.cost_days != 1:
+			report.add_error("V-M2-num-domain", option.id,
+					"cost_days %d 越界 {0,1}（DEMO 档）" % option.cost_days)
+		if not tier_names.is_empty() and not option.difficulty_tier.is_empty() \
+				and not tier_names.has(option.difficulty_tier):
+			report.add_error("V-M2-num-domain", option.id,
+					"难度档名 '%s' 不在 cfg 键集" % option.difficulty_tier)
+		for modifier: EventModifierDef in [option.crit_modifier, option.crit_fail_modifier]:
+			if modifier != null and (modifier.party_hp_delta < -10 or modifier.party_hp_delta > 0):
+				report.add_error("V-M2-num-domain", option.id,
+						"party_hp_delta %d 越界 [-10,0]" % modifier.party_hp_delta)
+	for record: Resource in _DomainRecords(game_data, &"event/singles"):
+		var single := record as SingleEventDef
+		if not tier_names.is_empty() and not single.difficulty_tier.is_empty() \
+				and not tier_names.has(single.difficulty_tier):
+			report.add_error("V-M2-num-domain", single.id,
+					"难度档名 '%s' 不在 cfg 键集" % single.difficulty_tier)
+		for modifier: EventModifierDef in [single.crit_modifier, single.crit_fail_modifier]:
+			if modifier != null and (modifier.party_hp_delta < -10 or modifier.party_hp_delta > 0):
+				report.add_error("V-M2-num-domain", single.id,
+						"party_hp_delta %d 越界 [-10,0]" % modifier.party_hp_delta)
+
+static func _CheckEventFourTexts(report: ValidationReport, game_data: Node) -> void:
+	## V-M2-four-texts：四档文本——success/failure 非空（全出口）；链内出口
+	## crit_success/crit_failure 必填、单点出口可空（案 18 §2.4 放宽）
+	## 参数：报告 / GameData
+	## 返回：无
+	# 四档严格域 = 检定选项的直接出口（双档分流配四档文本）；纯选择出口与
+	# 节点/单点出口仅要求 success/failure 非空（无检定无四档语义——B 演出
+	# 节点的 crit 档位由选项侧 modifier 承载）
+	for record: Resource in _DomainRecords(game_data, &"event/options"):
+		var option := record as EventOptionDef
+		var strict: bool = option.kind == EventOptionDef.OptionKind.CHECK
+		if option.success_outcome != null:
+			_ReportOutcomeTextGaps(option.id, option.success_outcome, strict, report)
+		if option.failure_outcome != null:
+			_ReportOutcomeTextGaps(option.id, option.failure_outcome, strict, report)
+	for record: Resource in _DomainRecords(game_data, &"event/nodes"):
+		var node := record as EventNodeDef
+		if node.outcome != null:
+			_ReportOutcomeTextGaps(node.id, node.outcome, false, report)
+	for record: Resource in _DomainRecords(game_data, &"event/singles"):
+		var single := record as SingleEventDef
+		if single.success_outcome != null:
+			_ReportOutcomeTextGaps(single.id, single.success_outcome, false, report)
+		if single.failure_outcome != null:
+			_ReportOutcomeTextGaps(single.id, single.failure_outcome, false, report)
+
+static func _ReportOutcomeTextGaps(owner_id: StringName, outcome: EventOutcomeDef,
+		chain_strict: bool, report: ValidationReport) -> void:
+	## 单出口文本档位检查（可测口）
+	## 参数 owner_id：归属资源 id；outcome：出口；chain_strict：链内严格（crit 必填）；
+	## report：报告
+	## 返回：无
+	for key: StringName in [&"success", &"failure"]:
+		if String(outcome.texts.get(key, "")).is_empty():
+			report.add_error("V-M2-four-texts", owner_id, "texts 缺 '%s' 档" % key)
+	if chain_strict:
+		for key: StringName in [&"crit_success", &"crit_failure"]:
+			if String(outcome.texts.get(key, "")).is_empty():
+				report.add_error("V-M2-four-texts", owner_id,
+						"链内出口缺 '%s' 档（四档必填）" % key)
+
+static func _CheckEventCounts(report: ValidationReport, game_data: Node) -> void:
+	## V-M2-counts：事件域计数带（cfg content_event_*——链 3/单点 3 恒定断言）
+	## 参数：报告 / GameData
+	## 返回：无
+	var cfg: CoreConfig = game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
+	if cfg == null:
+		return
+	var chain_count: int = _DomainRecords(game_data, &"event/chains").size()
+	if chain_count < cfg.content_event_chains_min or chain_count > cfg.content_event_chains_max:
+		report.add_error("V-M2-counts", &"<event/chains>",
+				"链计数 %d 越界 [%d,%d]" % [chain_count,
+						cfg.content_event_chains_min, cfg.content_event_chains_max])
+	var single_count: int = _DomainRecords(game_data, &"event/singles").size()
+	if single_count < cfg.content_event_singles_min or single_count > cfg.content_event_singles_max:
+		report.add_error("V-M2-counts", &"<event/singles>",
+				"单点计数 %d 越界 [%d,%d]" % [single_count,
+						cfg.content_event_singles_min, cfg.content_event_singles_max])
+
+static func _AllEventOutcomes(game_data: Node) -> Array:
+	## 全库事件出口枚举（节点 outcome / 选项 success/failure outcome / 单点
+	## 双 outcome——校验遍历共用口；元素 [owner_id, EventOutcomeDef]）
+	## 参数：GameData
+	## 返回：出口对列表
+	var pairs: Array = []
+	for record: Resource in _DomainRecords(game_data, &"event/nodes"):
+		var node := record as EventNodeDef
+		if node.outcome != null:
+			pairs.append([node.id, node.outcome])
+	for record: Resource in _DomainRecords(game_data, &"event/options"):
+		var option := record as EventOptionDef
+		if option.success_outcome != null:
+			pairs.append([option.id, option.success_outcome])
+		if option.failure_outcome != null:
+			pairs.append([option.id, option.failure_outcome])
+	for record: Resource in _DomainRecords(game_data, &"event/singles"):
+		var single := record as SingleEventDef
+		if single.success_outcome != null:
+			pairs.append([single.id, single.success_outcome])
+		if single.failure_outcome != null:
+			pairs.append([single.id, single.failure_outcome])
+	return pairs
 
 static func _AllDomains(game_data: Node) -> Array[StringName]:
 	## 全部数据域键（C-1 单源：从 GameData.DOMAIN_SCHEMA 键集派生——域清单

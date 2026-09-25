@@ -171,6 +171,19 @@ enum Mode {
 @export var ui_result_retreat_color: Color = Color(0, 0, 0, 0)
 ## 徽章 HP 低血阈值（R3-08：hp_ratio ≤ 本值转低血色——原 0.35 内联）
 @export var ui_badge_hp_low_threshold: float = 0.0
+## 事件链计数带（M2：DEMO 三链恒定断言——内容扩展同表维护）
+@export var content_event_chains_min: int = 0
+@export var content_event_chains_max: int = 0
+## 单点事件计数带（M2：三单点）
+@export var content_event_singles_min: int = 0
+@export var content_event_singles_max: int = 0
+## 事件四档反馈色（M2：大成功/成功/失败/大失败）
+@export var ui_event_grade_crit_success_color: Color = Color(0, 0, 0, 0)
+@export var ui_event_grade_success_color: Color = Color(0, 0, 0, 0)
+@export var ui_event_grade_failure_color: Color = Color(0, 0, 0, 0)
+@export var ui_event_grade_crit_failure_color: Color = Color(0, 0, 0, 0)
+## D20 演出滚动时长（秒——M2 event_panel；点按跳过）
+@export var ui_d20_roll_seconds: float = 0.0
 
 # ---- UI 徽章配色（B-1/B-2/B-3：unit_badge 全部内联色入表；默认透明 = 未回填）----
 @export var ui_badge_hp_low_color: Color = Color(0, 0, 0, 0)

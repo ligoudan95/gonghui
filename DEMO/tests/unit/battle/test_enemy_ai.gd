@@ -95,6 +95,34 @@ func _Ctx() -> Dictionary:
 	## 返回：ctx 字典
 	return {&"cfg": _cfg, &"skill_lookup": _skill_lookup}
 
+## 用例级远程技包装 lookup（_RangedRat 装配时置——单远程鼠/用例）
+var _ranged_lookup: Callable = Callable()
+
+func _RangedRat(unit_id: StringName, pos: Vector2i, range: int) -> BattleUnit:
+	## 构建远程技敌人（自定义射程注入——兜底用例的射程控制；包装 lookup
+	## 覆写技能解析，普攻位同技保证被选中）
+	## 参数 unit_id/pos/range：标识 / 所在格 / 注入射程
+	## 返回：已放置单位
+	var rat := _MakeEnemy(unit_id, "en_m1_mutant_rat.tres", pos)
+	var ranged := SkillDef.new()
+	ranged.id = &"skl_test_ranged_fb"
+	ranged.range = range
+	ranged.damage_type = SkillDef.DamageType.PHYSICAL
+	ranged.target_shape = SkillDef.TargetShape.SINGLE
+	_ranged_lookup = func(skill_id: StringName) -> Resource:
+		if skill_id == &"skl_test_ranged_fb":
+			return ranged
+		return _skill_lookup.call(skill_id)
+	rat.skill_ids = [&"skl_test_ranged_fb"]
+	rat.base_attack_id = &"skl_test_ranged_fb"
+	return rat
+
+func _RangedCtx() -> Dictionary:
+	## 远程技决策上下文（取 _RangedRat 装配的包装 lookup）
+	## 参数：无
+	## 返回：ctx 字典
+	return {&"cfg": _cfg, &"skill_lookup": _ranged_lookup}
+
 func _PlacedAllies() -> Array:
 	## 收集场上全部存活我方单位（怒吼门槛用）
 	## 参数：无
@@ -247,6 +275,63 @@ func test_ranged_los_matches_executor_rule() -> void:
 	var fireball: SkillDef = _skill_lookup.call(&"skl_mage_fireball") as SkillDef
 	assert_int(fireball.range).is_greater(1)
 	assert_bool(SkillExecutor.los_required(fireball)).is_true()
+
+func test_fallback_attack_adjacent_when_primary_walled() -> void:
+	## 移动裁决兜底 2（M2 试玩修复·场景①）：追击目标被友军围死（存活单位
+	## 互为障碍不可入、无更近可达格）→ 不干站，原地攻击旁边射程内其他目标
+	## （追击记忆随实际攻击对象更新——下回合四级链序直达）
+	var rat := _MakeEnemy(&"rat", "en_m1_mutant_rat.tres", Vector2i(4, 6))
+	var primary := _MakeAlly(&"primary", Vector2i(4, 4), 90)
+	_MakeAlly(&"wall_a", Vector2i(4, 5), 90)
+	_MakeAlly(&"wall_b", Vector2i(3, 4), 90)
+	_MakeAlly(&"wall_c", Vector2i(5, 4), 90)
+	var bystander := _MakeAlly(&"bystander", Vector2i(3, 6), 60)
+	rat.ai_context[&"last_target_id"] = primary.id
+	var action := EnemyAI.decide(rat, _grid, _PlacedAllies(), _Ctx())
+	assert_str(String(action.skill_id)).is_equal("skl_enemy_plague_bite")
+	assert_str(String(action.target_unit.id)).is_equal("bystander")
+	assert_vector(action.move_dest).is_equal(EnemyAI.NO_CELL)
+	assert_vector(action.attack_cell).is_equal(Vector2i(3, 6))
+	assert_str(String(rat.ai_context.get(&"last_target_id", &""))) \
+			.is_equal("bystander")
+
+func test_fallback_sidestep_restores_los() -> void:
+	## 移动裁决兜底 1（M2 试玩修复·场景②）：目标射程内但障碍断 LOS，且无
+	## 严格更近格（更近且有视线的格被友军占位）→ 等距侧移一格恢复视线并
+	## 攻击（白耗移动力换回攻击资格，优于干站）
+	var rat := _RangedRat(&"archer", Vector2i(0, 2), 5)
+	var target := _MakeAlly(&"los_target", Vector2i(4, 2), 50)
+	_MakeAlly(&"wall_x", Vector2i(2, 1), 90)
+	_MakeAlly(&"wall_y", Vector2i(3, 1), 90)
+	# 前提锚点：射程内（4 ≤ 5）但视线必经障碍 (2,2) 阻断；更近格 (2,1)/(3,1)
+	# 已被友军占位不可入
+	assert_bool(_grid.has_line_of_sight(rat.grid_pos, target.grid_pos)).is_false()
+	var reachable: Array[Vector2i] = _grid.find_reachable(rat, rat.move_final())
+	assert_bool(reachable.has(Vector2i(2, 1))).is_false()
+	assert_bool(reachable.has(Vector2i(3, 1))).is_false()
+	var action := EnemyAI.decide(rat, _grid, _PlacedAllies(), _RangedCtx())
+	assert_str(String(action.skill_id)).is_equal("skl_test_ranged_fb")
+	assert_str(String(action.target_unit.id)).is_equal("los_target")
+	# 等距侧移（(1,1)：与目标等距 4、视线通——reachable 序首个合格等距格）
+	assert_vector(action.move_dest).is_equal(Vector2i(1, 1))
+	assert_bool(_grid.has_line_of_sight(action.move_dest, target.grid_pos)).is_true()
+	assert_vector(action.attack_cell).is_equal(Vector2i(4, 2))
+
+func test_true_idle_when_no_attackable_target() -> void:
+	## 移动裁决兜底 3（M2 试玩修复·场景③）：锁定目标不可达（口袋地形零
+	## 可达格）且无任何射程内视线通目标 → 真待机（无移动无攻击——合理
+	## 终态保持，既有行为回归锚）
+	var rat := _RangedRat(&"archer", Vector2i(2, 3), 5)
+	var target := _MakeAlly(&"far", Vector2i(6, 3), 90)
+	# 前提锚点：(2,3) 四邻皆障碍 → 零可达格；目标射程内（4 ≤ 5）但视线
+	# 必经障碍 (3,3) 阻断
+	assert_int(_grid.find_reachable(rat, rat.move_final()).size()).is_equal(0)
+	assert_bool(_grid.has_line_of_sight(rat.grid_pos, target.grid_pos)).is_false()
+	var action := EnemyAI.decide(rat, _grid, [target], _RangedCtx())
+	assert_str(String(action.skill_id)).is_equal("skl_test_ranged_fb")
+	assert_str(String(action.target_unit.id)).is_equal("far")
+	assert_vector(action.move_dest).is_equal(EnemyAI.NO_CELL)
+	assert_vector(action.attack_cell).is_equal(EnemyAI.NO_CELL)
 
 func test_expected_damage_uses_standing_panel_mult() -> void:
 	## AI 期望伤害消费站位面板层（S3-06）：ctx 注入 status_manager 后——

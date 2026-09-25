@@ -33,3 +33,6 @@ var terrain_override: Dictionary = {}
 var formation: Array[Vector2i] = []
 ## 随机源注入口（测试确定性 / M2 复现场景；null = 现场随机种子）
 var rng: RandomNumberGenerator = null
+## 我方 HP 覆写（M2 批 2：事件层损耗带入战斗——{unit_id: int}；
+## BattleSetup 我方装配后应用，clamp [1, max_hp]）
+var hp_overrides: Dictionary = {}

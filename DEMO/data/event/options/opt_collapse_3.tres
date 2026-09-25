@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="EventOptionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/event_option_def.gd" id="1_mqlx7"]
+
+[resource]
+script = ExtResource("1_mqlx7")
+id = &"opt_collapse_3"
+display_name = "先支护再慢慢挖"
+kind = 1
+success_to = &"evn_collapse_n5"
+cost_days = 1
+comment = "【占位·试玩校准】案 18 §2.x；耗时 +1 天（案 8 #3 演示·全案唯一）"

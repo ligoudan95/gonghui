@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="EventOptionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/event_option_def.gd" id="1_kdjhs"]
+[ext_resource type="Script" path="res://scripts/data_defs/reward_def.gd" id="2_efld0"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_outcome_def.gd" id="3_pi07q"]
+
+[sub_resource type="Resource" id="Resource_8c207"]
+script = ExtResource("2_efld0")
+
+[sub_resource type="Resource" id="Resource_ng2wg"]
+script = ExtResource("3_pi07q")
+reward = SubResource("Resource_8c207")
+texts = Dictionary[StringName, String]({
+&"failure": "绕行成功。",
+&"plain": "委托的时限压在肩上。你们贴着岩壁，从塌方区边缘挤了过去。身后的呻吟声越来越远，谁都没有说话。",
+&"success": "绕行成功。"
+})
+
+[resource]
+script = ExtResource("1_kdjhs")
+id = &"opt_collapse_4"
+display_name = "贴壁绕过塌方区"
+kind = 1
+success_outcome = SubResource("Resource_ng2wg")
+comment = "【占位·试玩校准】案 18 §2.x；直接出口 E1（无奖励）"

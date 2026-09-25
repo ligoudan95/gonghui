@@ -1,0 +1,44 @@
+[gd_resource type="Resource" script_class="EventNodeDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/reward_def.gd" id="1_ypw2s"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_outcome_def.gd" id="2_4agq6"]
+[ext_resource type="Script" path="res://scripts/data_defs/battle_opening_def.gd" id="3_drb2u"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_node_def.gd" id="4_84umw"]
+
+[sub_resource type="Resource" id="Resource_pi60u"]
+script = ExtResource("1_ypw2s")
+exp = 15
+gold = 15
+
+[sub_resource type="Resource" id="Resource_v8b0d"]
+script = ExtResource("2_4agq6")
+reward = SubResource("Resource_pi60u")
+texts = Dictionary[StringName, String]({
+&"failure": "战后清点，巢穴里多少还有些值钱的玩意儿。",
+&"success": "打散这窝东西后，你们从巢穴里扒出一小堆亮闪闪的「收藏品」。"
+})
+
+[sub_resource type="Resource" id="Resource_ylo0q"]
+script = ExtResource("3_drb2u")
+pack_id = &"enc_m1_wisp_nest"
+first_strike_token = &"ally_first"
+enemy_layout_token = &"spread"
+post_battle = SubResource("Resource_v8b0d")
+
+[sub_resource type="Resource" id="Resource_8sy46"]
+script = ExtResource("2_4agq6")
+exit_kind = 1
+battle = SubResource("Resource_ylo0q")
+texts = Dictionary[StringName, String]({
+&"failure": "枪尖齐整，你们主动踏进了巢穴的领地。",
+&"success": "枪尖齐整，你们主动踏进了巢穴的领地。"
+})
+
+[resource]
+script = ExtResource("4_84umw")
+id = &"evn_wisp_n3"
+display_name = "列阵推进"
+chain_id = &"chain_mine_wisp"
+narrative_text = "鬼火在齐整的枪尖前徘徊了两圈，散了。火把的光惊动不了什么——深处巢穴里的东西，正等着你们自己走进去。"
+outcome = SubResource("Resource_8sy46")
+comment = "【占位·试玩校准】案 18 §2.2 n3（o3 纯选择·列阵：我先手+分散）；E2-9 登记：spread 槽位映射正确——8×8 图 4 出生位配合偏窄，M3 地图层再调"

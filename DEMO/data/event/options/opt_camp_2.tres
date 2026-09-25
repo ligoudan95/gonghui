@@ -1,0 +1,66 @@
+[gd_resource type="Resource" script_class="EventOptionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/reward_def.gd" id="1_pvn4u"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_modifier_def.gd" id="2_qyheu"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_outcome_def.gd" id="3_3ur82"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_option_def.gd" id="4_6dkrl"]
+
+[sub_resource type="Resource" id="Resource_hrdih"]
+script = ExtResource("1_pvn4u")
+
+[sub_resource type="Resource" id="Resource_n8ft6"]
+script = ExtResource("2_qyheu")
+text = "慌乱间蹭了一身伤。"
+reward_delta = SubResource("Resource_hrdih")
+party_hp_delta = -5
+
+[sub_resource type="Resource" id="Resource_ubl37"]
+script = ExtResource("1_pvn4u")
+gold = 20
+
+[sub_resource type="Resource" id="Resource_tbebc"]
+script = ExtResource("2_qyheu")
+reward_delta = SubResource("Resource_ubl37")
+
+[sub_resource type="Resource" id="Resource_g01au"]
+script = ExtResource("1_pvn4u")
+exp = 10
+gold = 5
+
+[sub_resource type="Resource" id="Resource_f763f"]
+script = ExtResource("3_3ur82")
+reward = SubResource("Resource_g01au")
+texts = Dictionary[StringName, String]({
+&"crit_failure": "撬棍打滑，凿穿了箱底——你们眼睁睁看着一小包钱币顺着石缝漏了下去，手心也震得发麻。",
+&"crit_success": "铁器里混着一根完好的钢钎。",
+&"failure": "锁芯锈死了。费尽力气撬开，只有半箱铁器，论斤称给废铁铺还能换几个钱。",
+&"success": "锁芯锈死了。费尽力气撬开，只有半箱铁器，论斤称给废铁铺还能换几个钱。"
+})
+
+[sub_resource type="Resource" id="Resource_cqf8r"]
+script = ExtResource("1_pvn4u")
+exp = 10
+gold = 30
+
+[sub_resource type="Resource" id="Resource_oct1o"]
+script = ExtResource("3_3ur82")
+reward = SubResource("Resource_cqf8r")
+texts = Dictionary[StringName, String]({
+&"crit_failure": "撬棍打滑，凿穿了箱底——你们眼睁睁看着一小包钱币顺着石缝漏了下去，手心也震得发麻。",
+&"crit_success": "油布下面还有一层夹底——另一包更沉的工钱币躺在里面。",
+&"failure": "锁芯锈死了。费尽力气撬开，只有半箱铁器，论斤称给废铁铺还能换几个钱。",
+&"success": "锁扣崩开。箱底垫着块油布——是矿工撤离前来不及带走的积蓄，一包包得整整齐齐。"
+})
+comment = "E3-14：成功侧 failure/crit_failure 为不可达防御位（此路无失败）——文案对齐失败侧；crit 修饰文案单源 crit_success 档（E3 双载体定论）"
+
+[resource]
+script = ExtResource("4_6dkrl")
+id = &"opt_camp_2"
+display_name = "撬开工具箱"
+check_attr_id = &"luck"
+difficulty_tier = "极易"
+success_outcome = SubResource("Resource_oct1o")
+failure_outcome = SubResource("Resource_f763f")
+crit_modifier = SubResource("Resource_tbebc")
+crit_fail_modifier = SubResource("Resource_n8ft6")
+comment = "【占位·试玩校准】案 18 §2.x；+20 金 / 全队生命 −5"

@@ -4,8 +4,8 @@
 ## scene_changed 信号；后续里程碑场景在 SceneId/SCENE_REGISTRY 追加。
 ## 加固（盲审批 3）：go 失败不污染状态（B-1）；切换进行中拒重入（B-4）；
 ## 切换成功上报 SaveManager.current.scene_id（B-3，下游报上游合规向）。
-## M2 登记注（R4-14）：战斗中切场景的读档恢复（battle_screen 直开路径）当前
-## 无战斗参数快照可恢复——M2 设计「出征参数快照进 payload」后方可闭环。
+## 战斗中存档快照登记注（后延归属拍板④）：战斗中 autosave 的出征参数快照
+## 归 M5 设计；结算面板委托结算归 M4；事件奖励只累计不入账归 M4。
 ## 数据来源：M0 批 4 方案；场景规格=案 15 §2.2（横屏 16:9 基准）。
 ## 依赖口径：不阻塞于 SaveManager（场景脚本自行决定存档时点）；
 ## change_scene_to_packed 为延迟切换（帧末生效），go 返回值为装载校验结果。
@@ -16,6 +16,7 @@ enum SceneId {
 	TITLE,
 	GUILD_SHELL,
 	BATTLE_SCREEN,
+	EVENT_SCREEN,
 }
 
 ## 切换完成信号（from_id=切换前场景、to_id=目标场景；发起切换即发，
@@ -29,6 +30,7 @@ const SCENE_REGISTRY: Dictionary = {
 	&"title": {&"id": SceneId.TITLE, &"path": "res://scenes/title/title_screen.tscn"},
 	&"guild_shell": {&"id": SceneId.GUILD_SHELL, &"path": "res://scenes/guild/guild_shell.tscn"},
 	&"battle_screen": {&"id": SceneId.BATTLE_SCREEN, &"path": "res://scenes/battle/battle_screen.tscn"},
+	&"event_screen": {&"id": SceneId.EVENT_SCREEN, &"path": "res://scenes/event/event_screen.tscn"},
 }
 
 ## 当前场景 id（未进入任何场景时 = -1）

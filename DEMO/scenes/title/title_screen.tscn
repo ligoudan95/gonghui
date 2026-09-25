@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://gvfc6crudcwu" path="res://scripts/scene_flow/title_screen.gd" id="1_title"]
 
-[node name="TitleScreen" type="Control"]
+[node name="TitleScreen" type="Control" unique_id=1530598350]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -11,7 +11,7 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_title")
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="Background" type="ColorRect" parent="." unique_id=1640287609]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -20,45 +20,46 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0.08, 0.09, 0.12, 1)
 
-[node name="Center" type="CenterContainer" parent="."]
+[node name="Center" type="CenterContainer" parent="." unique_id=1981393694]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_right = 6.0
+offset_bottom = 2.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="Layout" type="VBoxContainer" parent="Center"]
+[node name="Layout" type="VBoxContainer" parent="Center" unique_id=2081602253]
 layout_mode = 2
 theme_override_constants/separation = 24
 
-[node name="TitleLabel" type="Label" parent="Center/Layout"]
+[node name="TitleLabel" type="Label" parent="Center/Layout" unique_id=2142365542]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 64
 text = "传奇冒险公会"
 horizontal_alignment = 1
 
-[node name="VersionLabel" type="Label" parent="Center/Layout"]
+[node name="VersionLabel" type="Label" parent="Center/Layout" unique_id=710502124]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
-text = ""
 horizontal_alignment = 1
 
-[node name="StartButton" type="Button" parent="Center/Layout"]
+[node name="StartButton" type="Button" parent="Center/Layout" unique_id=615920246]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(240, 56)
 layout_mode = 2
 text = "开始"
 
-[node name="ContinueButton" type="Button" parent="Center/Layout"]
+[node name="ContinueButton" type="Button" parent="Center/Layout" unique_id=647601086]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(240, 56)
 layout_mode = 2
 text = "继续"
 
-[node name="HintLabel" type="Label" parent="Center/Layout"]
+[node name="HintLabel" type="Label" parent="Center/Layout" unique_id=1931386958]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 18

@@ -1,0 +1,50 @@
+[gd_resource type="Resource" script_class="EventOptionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/reward_def.gd" id="1_xyq1m"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_modifier_def.gd" id="2_3yqvx"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_option_def.gd" id="3_kadus"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_outcome_def.gd" id="4_benfa"]
+
+[sub_resource type="Resource" id="Resource_8fkvr"]
+script = ExtResource("1_xyq1m")
+
+[sub_resource type="Resource" id="Resource_agj8h"]
+script = ExtResource("2_3yqvx")
+text = "慌乱间蹭了一身伤。"
+reward_delta = SubResource("Resource_8fkvr")
+party_hp_delta = -5
+
+[sub_resource type="Resource" id="Resource_7nrkb"]
+script = ExtResource("1_xyq1m")
+gold = 10
+
+[sub_resource type="Resource" id="Resource_ng4oi"]
+script = ExtResource("2_3yqvx")
+reward_delta = SubResource("Resource_7nrkb")
+
+[sub_resource type="Resource" id="Resource_5ggb2"]
+script = ExtResource("1_xyq1m")
+exp = 15
+gold = 20
+
+[sub_resource type="Resource" id="Resource_auiwh"]
+script = ExtResource("4_benfa")
+reward = SubResource("Resource_5ggb2")
+texts = Dictionary[StringName, String]({
+&"crit_failure": "荧晶已到手。",
+&"crit_success": "荧晶根部还生着一小丛磷伞菇——药铺常年收这个，又添一笔。",
+&"failure": "荧晶已到手。",
+&"success": "跟到岔道深处，鬼火停在一片干燥的岩壁上——是矿脉上附生的荧晶群在幽幽发光。撬下几块，就是实打实的钱。"
+})
+
+[resource]
+script = ExtResource("3_kadus")
+id = &"opt_wisp_1"
+display_name = "屏住呼吸，跟上去"
+check_attr_id = &"perception"
+difficulty_tier = "普通"
+failure_to = &"evn_wisp_n2"
+success_outcome = SubResource("Resource_auiwh")
+crit_modifier = SubResource("Resource_ng4oi")
+crit_fail_modifier = SubResource("Resource_agj8h")
+comment = "【占位·试玩校准】案 18 §2.x；+10 金 / 全队生命 −5"

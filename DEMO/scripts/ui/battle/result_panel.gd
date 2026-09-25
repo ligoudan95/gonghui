@@ -63,7 +63,7 @@ func show_result(result: BattleResult, name_lookup: Callable = Callable(),
 			_title_label.text = "战斗胜利"
 			# B-3：金色高亮三处统一（序条/结算/徽章环共用 ui_highlight_gold_color）
 			_title_label.add_theme_color_override("font_color", victory_color)
-			_detail_label.text = "奖励结算（占位文案——M2 委托结算接入）"
+			_detail_label.text = "奖励结算（占位文案——M4 委托结算接入）"
 		BattleResult.ResultKind.DEFEAT:
 			_title_label.text = "战败·全队重伤休养"
 			_title_label.add_theme_color_override("font_color",

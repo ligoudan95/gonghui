@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="EventNodeDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/event_node_def.gd" id="1_x8bff"]
+
+[resource]
+script = ExtResource("1_x8bff")
+id = &"evn_camp_n1"
+display_name = "废弃营地"
+chain_id = &"chain_mine_camp"
+narrative_text = "一间废弃的矿工营地：床板翻倒，灶膛冷透，晾衣绳上还挂着半件烂衣裳。角落有一本被水泡胀的日记，床底塞着一只上锁的工具箱。奇怪的是——灶膛里的灰，像是新近被人踩过。"
+option_ids = Array[StringName]([&"opt_camp_1", &"opt_camp_2", &"opt_camp_3"])
+comment = "【占位·试玩校准】案 18 §2.3 入口节点"

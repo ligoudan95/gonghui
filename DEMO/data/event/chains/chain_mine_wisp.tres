@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="EventChainDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/event_chain_def.gd" id="1_ik86d"]
+
+[resource]
+script = ExtResource("1_ik86d")
+id = &"chain_mine_wisp"
+display_name = "矿道鬼火"
+entry_node_id = &"evn_wisp_n1"
+trigger_point_id = &"evp_mine_02"
+comment = "【占位·试玩校准】案 18 §2.2；矿道鬼火链（B 类出口演示：伏击/列阵）"

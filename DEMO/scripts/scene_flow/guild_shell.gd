@@ -104,6 +104,14 @@ func _on_back_pressed() -> void:
 	## 返回：无
 	_scene_manager().go(SceneManagerScript.SceneId.TITLE)
 
+func _on_event_entry_pressed() -> void:
+	## 事件原型入口（M2 演示宿主——M3 后随调试块一并评估去留）
+	## 参数：无
+	## 返回：无
+	var err: Error = _scene_manager().go(SceneManagerScript.SceneId.EVENT_SCREEN)
+	if err != OK:
+		push_warning("guild_shell: 进入事件演示屏失败（错误码 %d）" % err)
+
 func _on_debug_random_pressed() -> void:
 	## 调试入口①：随机遭遇战（8×8，enc_m1_random_pack）
 	## 参数：无

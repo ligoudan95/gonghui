@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="EventNodeDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/reward_def.gd" id="1_3u5hd"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_outcome_def.gd" id="2_atini"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_node_def.gd" id="3_lo3by"]
+
+[sub_resource type="Resource" id="Resource_g4xlo"]
+script = ExtResource("1_3u5hd")
+exp = 20
+gold = 15
+
+[sub_resource type="Resource" id="Resource_ljvid"]
+script = ExtResource("2_atini")
+reward = SubResource("Resource_g4xlo")
+texts = Dictionary[StringName, String]({
+&"crit_success": "巨石底下压着的正是矿工们来不及搬走的工具箱——上着锁，完好无损。",
+&"failure": "通道已开，此路无虞。",
+&"success": "通道整个敞开，人和工具都保住了。"
+})
+
+[resource]
+script = ExtResource("3_lo3by")
+id = &"evn_collapse_n3"
+display_name = "整通道敞开"
+chain_id = &"chain_mine_collapse"
+narrative_text = "撬棍吱嘎作响，巨石轰隆滚开，整条通道豁然敞亮。老周拍着屁股站起来，毫发无伤，连工具包都还背在背上。他把包里最沉的那块矿石塞给你们：「这个厚道！」"
+outcome = SubResource("Resource_ljvid")
+comment = "【占位·试玩校准】案 18 §2.1 n3 终端（o2 成功向）"

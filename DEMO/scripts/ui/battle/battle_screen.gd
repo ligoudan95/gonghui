@@ -48,6 +48,21 @@ func _ready() -> void:
 	var scene_manager: Node = get_node("/root/SceneManager")
 	var params: Dictionary = scene_manager.take_pending_params()
 	var battle_params: BattleParams = params.get(&"battle_params", null) as BattleParams
+	# M2 批 3：返回路由参数化（return_to 缺省公会壳保持 M1 行为；回传包
+	# 供 event_screen 战后续跑——expedition_run 引用+事件/节点锚点透传回带，
+	# 战后 battle_result 以**合并键**写入不整体替换（E3-01①断链修复））
+	_return_to = int(params.get(&"return_to", -1))
+	_return_payload = {
+		&"expedition_run": params.get(&"expedition_run", null),
+		&"event_id": params.get(&"event_id", &""),
+		&"battle_node_id": params.get(&"battle_node_id", &""),
+	}
+	# E2-4：回事件屏时出征锁由本屏接管持有（event_screen 路由战斗离树不
+	# 释放——锁随会话连续，消除路由空窗）
+	if _return_to == SceneManagerScript.SceneId.EVENT_SCREEN:
+		var save_manager: Node = get_node_or_null("/root/SaveManager")
+		if save_manager != null:
+			save_manager.set_expedition_lock(true)
 	controller = %BattleController as BattleController
 	%UnitInfoCard.setup(_StatusLookupOf(), _NameLookupOf())
 	if battle_params == null:
@@ -149,13 +164,7 @@ func _ConnectController() -> void:
 	)
 	controller.battle_ended.connect(_OnBattleEnded)
 	%BattleLog.setup(controller, context)
-	%ResultPanel.return_pressed.connect(func() -> void:
-		# R4-15：关键入口消费 go 返回值——切换失败可感知（日志层反馈）
-		var err: Error = get_node("/root/SceneManager").go(
-				SceneManagerScript.SceneId.GUILD_SHELL)
-		if err != OK:
-			push_warning("battle_screen: 返回公会壳失败（错误码 %d）" % err)
-	)
+	%ResultPanel.return_pressed.connect(_OnReturnPressed)
 
 # --------------------------------------------------------------------------
 # 信号驱动的 UI 刷新
@@ -229,6 +238,9 @@ func _OnBattleEnded(result: BattleResult) -> void:
 	## 解析——单源 BattleContext.display_name_of，批 4 C 组 M4）
 	## 参数 result：战斗结果
 	## 返回：无
+	# M2 批 3+E3-01①：回传包**合并键**写入（战斗结果并入既有 expedition_run/
+	# 锚点——整体替换会丢 run 引用断续跑链）
+	_return_payload[&"battle_result"] = result
 	%ResultPanel.show_result.call_deferred(result,
 			func(unit_id: StringName) -> String: return context.display_name_of(unit_id),
 			context.cfg)
@@ -574,6 +586,32 @@ func _LosRequiredOf(skill_id: StringName) -> bool:
 	## 返回：true = 射程 > 1 需视线
 	var skill: SkillDef = context.skill_lookup.call(skill_id) as SkillDef
 	return SkillExecutor.los_required(skill)
+
+## 返回目的地（return_to 参数注入；缺省 GUILD_SHELL——M1 行为不变）
+var _return_to: int = -1
+## 回传数据（战后 run 状态+锚点+战斗结果——event_screen 续跑消费）
+var _return_payload: Dictionary = {}
+
+func _exit_tree() -> void:
+	## 引擎回调：离树释放出征锁（E2-4：回事件屏时锁由 event_screen._ready
+	## 接管持有——本屏不释放，帧内连续无空窗；其余去向 = 会话结束释放）
+	## 参数：无
+	## 返回：无
+	if _return_to == SceneManagerScript.SceneId.EVENT_SCREEN:
+		return
+	var save_manager: Node = get_node_or_null("/root/SaveManager")
+	if save_manager != null:
+		save_manager.set_expedition_lock(false)
+
+func _OnReturnPressed() -> void:
+	## 返回按钮：路由 return_to（缺省公会壳）并回传战斗结果与运行态
+	## 参数：无
+	## 返回：无
+	# R4-15：关键入口消费 go 返回值——切换失败可感知（日志层反馈）
+	var target: int = _return_to if _return_to >= 0 else SceneManagerScript.SceneId.GUILD_SHELL
+	var err: Error = get_node("/root/SceneManager").go(target, _return_payload)
+	if err != OK:
+		push_warning("battle_screen: 返回目标场景失败（错误码 %d）" % err)
 
 func _RestoreMoveRangeIfUsable(unit: BattleUnit) -> void:
 	## 取消选择后回显移动范围（R3-05 拍板：仅未移动且未被控制时回显——

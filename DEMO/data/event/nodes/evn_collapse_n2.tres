@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="EventNodeDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/reward_def.gd" id="1_d78mu"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_outcome_def.gd" id="2_61sw7"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_node_def.gd" id="3_argql"]
+
+[sub_resource type="Resource" id="Resource_6kqjf"]
+script = ExtResource("1_d78mu")
+exp = 15
+gold = 10
+
+[sub_resource type="Resource" id="Resource_blu8n"]
+script = ExtResource("2_61sw7")
+reward = SubResource("Resource_6kqjf")
+texts = Dictionary[StringName, String]({
+&"crit_success": "老周犹豫了一下，又把藏在靴筒里的私房钱也掏了出来——「真是救命恩人。」",
+&"failure": "人已救出，无惊无险。",
+&"success": "及时救出了被困的矿工。他掏出贴身的钱袋致谢。"
+})
+
+[resource]
+script = ExtResource("3_argql")
+id = &"evn_collapse_n2"
+display_name = "窄缝救人"
+chain_id = &"chain_mine_collapse"
+narrative_text = "半个时辰后，石头堆里露出一张灰扑扑的脸。矿工老周咳嗽着爬出来，拍了半天胸口，才从怀里摸出一小把铜币：「救命之恩，别嫌少。」"
+outcome = SubResource("Resource_blu8n")
+comment = "【占位·试玩校准】案 18 §2.1 n2 终端（o1 成功向）"

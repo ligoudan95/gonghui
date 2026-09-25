@@ -31,6 +31,12 @@ var DOMAIN_SCHEMA: Dictionary[StringName, Array] = {
 	&"battle/maps": [BattleMapDef],
 	&"battle/tiles": [TileTypeDef],
 	&"equip": [EquipDef],
+	&"event/chains": [EventChainDef],
+	&"event/nodes": [EventNodeDef],
+	&"event/options": [EventOptionDef],
+	&"event/singles": [SingleEventDef],
+	&"event/hidden_marks": [HiddenMarkDef],
+	&"quest/templates": [QuestTemplateDef],
 	&"assets": [AssetRegistry],
 }
 

@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="EventChainDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/event_chain_def.gd" id="1_dutcv"]
+
+[resource]
+script = ExtResource("1_dutcv")
+id = &"chain_mine_collapse"
+display_name = "塌方救援"
+entry_node_id = &"evn_collapse_n1"
+trigger_point_id = &"evp_mine_01"
+comment = "【占位·试玩校准】案 18 §2.1；塌方救援链（耗时代价演示）"

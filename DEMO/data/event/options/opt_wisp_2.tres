@@ -1,0 +1,64 @@
+[gd_resource type="Resource" script_class="EventOptionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/reward_def.gd" id="1_o1mdw"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_modifier_def.gd" id="2_amb7m"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_outcome_def.gd" id="3_aqlqd"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_option_def.gd" id="4_rx81x"]
+
+[sub_resource type="Resource" id="Resource_fx7a4"]
+script = ExtResource("1_o1mdw")
+
+[sub_resource type="Resource" id="Resource_vogsd"]
+script = ExtResource("2_amb7m")
+text = "慌乱间蹭了一身伤。"
+reward_delta = SubResource("Resource_fx7a4")
+party_hp_delta = -5
+
+[sub_resource type="Resource" id="Resource_tot8d"]
+script = ExtResource("1_o1mdw")
+gold = 10
+
+[sub_resource type="Resource" id="Resource_lqvwp"]
+script = ExtResource("2_amb7m")
+reward_delta = SubResource("Resource_tot8d")
+
+[sub_resource type="Resource" id="Resource_f1g2a"]
+script = ExtResource("1_o1mdw")
+exp = 10
+
+[sub_resource type="Resource" id="Resource_lvrsf"]
+script = ExtResource("3_aqlqd")
+reward = SubResource("Resource_f1g2a")
+texts = Dictionary[StringName, String]({
+&"crit_failure": "孢子呛了满鼻，退了回来。",
+&"crit_success": "虚惊一场。",
+&"failure": "凑得太近，一团孢子呛得你们连打了十几个喷嚏。等眼泪鼻涕一起收场——咳，不过是真菌，虚惊一场。",
+&"success": "虚惊一场，认了个明白。"
+})
+
+[sub_resource type="Resource" id="Resource_urn7t"]
+script = ExtResource("1_o1mdw")
+exp = 15
+gold = 10
+
+[sub_resource type="Resource" id="Resource_trj04"]
+script = ExtResource("3_aqlqd")
+reward = SubResource("Resource_urn7t")
+texts = Dictionary[StringName, String]({
+&"crit_failure": "喷嚏声在矿道里荡出老长的回音。黑暗深处，有什么被惊醒后又重新趴了下去——你们后颈发凉，快步退了回来。",
+&"crit_success": "真菌丛里还裹着一枚矿工失落的钱币。",
+&"failure": "凑得太近，一团孢子呛得你们连打了十几个喷嚏。等眼泪鼻涕一起收场——咳，不过是真菌，虚惊一场。",
+&"success": "火光凑近，那团蓝焰纹丝不动。是磷光真菌，无害。掰一把揣进包里——又见这条道上地面干燥、没有兽迹，是个歇脚的好地方。"
+})
+
+[resource]
+script = ExtResource("4_rx81x")
+id = &"opt_wisp_2"
+display_name = "举着火把凑近细看"
+check_attr_id = &"intelligence"
+difficulty_tier = "容易"
+success_outcome = SubResource("Resource_trj04")
+failure_outcome = SubResource("Resource_lvrsf")
+crit_modifier = SubResource("Resource_lqvwp")
+crit_fail_modifier = SubResource("Resource_vogsd")
+comment = "【占位·试玩校准】案 18 §2.x；+10 金 / 全队生命 −5"

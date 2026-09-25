@@ -212,12 +212,23 @@ func _run() -> void:
 	state = BattleState.BATTLE_END
 
 func _do_round_start() -> void:
-	## 回合开始：回合号递增、重算行动序列（速度降序；同速我方优先→槽位序）、发信号
+	## 回合开始：回合号递增、重算行动序列（速度降序；同速我方优先→槽位序）。
+	## M2 批 2 first_strike 消费（案 8 §2.5）：回合 1 且开局先手口径非 NORMAL
+	## 时按阵营分组拼接（先手方全前、组内仍速度序）；回合 ≥2 维持全量重排
 	## 参数：无
 	## 返回：无
 	_context.round_no += 1
 	_context.turn_order = _context.units.filter(func(unit): return unit.alive)
 	_context.turn_order.sort_custom(_CompareTurnOrder)
+	if _context.round_no == 1 and _context.params != null 			and _context.params.first_strike != BattleParams.FirstStrike.NORMAL:
+		var allies: Array = []
+		var enemies: Array = []
+		for unit: BattleUnit in _context.turn_order:
+			if unit.side == SkillDef.SkillSide.ALLY:
+				allies.append(unit)
+			else:
+				enemies.append(unit)
+		_context.turn_order = enemies + allies 				if _context.params.first_strike == BattleParams.FirstStrike.ENEMY_FIRST 				else allies + enemies
 	round_started.emit(_context.round_no)
 
 func _run_unit_turn(unit: BattleUnit) -> void:

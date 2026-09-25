@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="EventOptionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/reward_def.gd" id="1_yn7ki"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_modifier_def.gd" id="2_aciu1"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_option_def.gd" id="3_cex11"]
+
+[sub_resource type="Resource" id="Resource_8e0um"]
+script = ExtResource("1_yn7ki")
+
+[sub_resource type="Resource" id="Resource_dcx0v"]
+script = ExtResource("2_aciu1")
+text = "慌乱间蹭了一身伤。"
+reward_delta = SubResource("Resource_8e0um")
+party_hp_delta = -5
+
+[sub_resource type="Resource" id="Resource_aqar8"]
+script = ExtResource("1_yn7ki")
+gold = 15
+
+[sub_resource type="Resource" id="Resource_8cowc"]
+script = ExtResource("2_aciu1")
+text = "塌开的石缝里还滚出几枚矿工掉落的铜币。"
+reward_delta = SubResource("Resource_aqar8")
+
+[resource]
+script = ExtResource("3_cex11")
+id = &"opt_collapse_1"
+display_name = "徒手扒开碎石"
+check_attr_id = &"constitution"
+difficulty_tier = "容易"
+success_to = &"evn_collapse_n2"
+failure_to = &"evn_collapse_n4"
+crit_modifier = SubResource("Resource_8cowc")
+crit_fail_modifier = SubResource("Resource_dcx0v")
+comment = "【占位·试玩校准】案 18 §2.x；徒手救人：+15 金 / 全队生命 −5"

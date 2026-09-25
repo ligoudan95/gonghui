@@ -38,7 +38,7 @@ func test_registry_nine_entries_resolvable() -> void:
 func test_run_all_clean_with_registry() -> void:
 	## 全库校验应零错误零警告（registry 加入 assets 域后计数带不变，仍 63）
 	var report: ValidationReport = DataValidator.run_all(_game_data)
-	assert_int(report.checked_count).is_equal(64)
+	assert_int(report.checked_count).is_equal(92)
 	assert_int(report.errors.size()).is_equal(0)
 	assert_int(report.warnings.size()).is_equal(0)
 	assert_bool(report.is_ok()).is_true()

@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="SingleEventDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/single_event_def.gd" id="1_7d0pl"]
+[ext_resource type="Script" path="res://scripts/data_defs/reward_def.gd" id="2_jdrll"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_outcome_def.gd" id="3_7bpmo"]
+
+[sub_resource type="Resource" id="Resource_dggj0"]
+script = ExtResource("2_jdrll")
+exp = 10
+
+[sub_resource type="Resource" id="Resource_e3hgy"]
+script = ExtResource("3_7bpmo")
+reward = SubResource("Resource_dggj0")
+texts = Dictionary[StringName, String]({
+&"failure": "旅人走了。",
+&"plain": "旅人走了。这句话，你们记下了。（情报：北边那面墙敲一敲）",
+&"success": "旅人走了。这句话，你们记下了。"
+})
+
+[resource]
+script = ExtResource("1_7d0pl")
+id = &"sp_village_traveler"
+display_name = "井边的旅人"
+narrative_text = "水井边坐着个斗篷旅人，脚边斜靠着一柄裹布的长枪。见你们过来，他举了举锡杯：「下矿的？听一句劝——这矿里的墙，不都是实心的。北边那面，敲一敲。」说完他把杯子扣在井沿上，走了。"
+success_outcome = SubResource("Resource_e3hgy")
+comment = "【占位·试玩校准】案 18 §2.4 无检定单档结算（暗门铺垫）"

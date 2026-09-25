@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="EventNodeDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/event_node_def.gd" id="1_hhndl"]
+
+[resource]
+script = ExtResource("1_hhndl")
+id = &"evn_wisp_n1"
+display_name = "岔道鬼火"
+chain_id = &"chain_mine_wisp"
+narrative_text = "岔道口浮着一团幽蓝的火。不摇不晃，就那么悬在半人高的地方，明一下，暗一下——像是有什么东西在里面眨眼睛。"
+option_ids = Array[StringName]([&"opt_wisp_1", &"opt_wisp_2", &"opt_wisp_3"])
+comment = "【占位·试玩校准】案 18 §2.2 入口节点"

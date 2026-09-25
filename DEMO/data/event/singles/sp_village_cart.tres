@@ -1,0 +1,62 @@
+[gd_resource type="Resource" script_class="SingleEventDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/reward_def.gd" id="1_bn1j8"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_modifier_def.gd" id="2_43go2"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_outcome_def.gd" id="3_3elby"]
+[ext_resource type="Script" path="res://scripts/data_defs/single_event_def.gd" id="4_crjc4"]
+
+[sub_resource type="Resource" id="Resource_vj85n"]
+script = ExtResource("1_bn1j8")
+
+[sub_resource type="Resource" id="Resource_yj6mx"]
+script = ExtResource("2_43go2")
+text = "（无额外实效，从简——单点安全区放宽）"
+reward_delta = SubResource("Resource_vj85n")
+
+[sub_resource type="Resource" id="Resource_jd3w0"]
+script = ExtResource("1_bn1j8")
+reputation = 1
+
+[sub_resource type="Resource" id="Resource_lpcgr"]
+script = ExtResource("2_43go2")
+reward_delta = SubResource("Resource_jd3w0")
+
+[sub_resource type="Resource" id="Resource_bepl8"]
+script = ExtResource("1_bn1j8")
+exp = 10
+
+[sub_resource type="Resource" id="Resource_0iida"]
+script = ExtResource("3_3elby")
+reward = SubResource("Resource_bepl8")
+texts = Dictionary[StringName, String]({
+&"failure": "车没抬动，几个人反倒溅了一身泥。老农哈哈笑着摆手：「心意领了，娃们，等村里的小伙子收工再说。」",
+&"success": "车抬起来了。"
+})
+
+[sub_resource type="Resource" id="Resource_ehqgm"]
+script = ExtResource("1_bn1j8")
+exp = 10
+reputation = 1
+
+[sub_resource type="Resource" id="Resource_032rr"]
+script = ExtResource("3_3elby")
+reward = SubResource("Resource_ehqgm")
+texts = Dictionary[StringName, String]({
+&"crit_failure": "用力过猛，车没动，人先叠进了泥里。老农一边拉人一边笑得直不起腰，末了还是塞了两个南瓜。",
+&"crit_success": "顺手把撞歪的辕木也敲正了。老农非要再塞一袋腌菜：「冬天就粥，顶好！」",
+&"failure": "车没抬动，几个人反倒溅了一身泥。老农哈哈笑着摆手：「心意领了，娃们，等村里的小伙子收工再说。」",
+&"success": "一声号子，车轮「咔哒」弹回辙上。老农乐得直拍腿，硬塞给你们两个大南瓜，又朝协会的方向拱了拱手。"
+})
+
+[resource]
+script = ExtResource("4_crjc4")
+id = &"sp_village_cart"
+display_name = "陷进泥里的板车"
+narrative_text = "进村的土路上，老农的板车深深地陷进泥里，一车南瓜摇摇欲坠。老农看见你们胸口协会的徽记，眼睛一下子亮了。"
+check_attr_id = &"strength"
+difficulty_tier = "容易"
+crit_modifier = SubResource("Resource_lpcgr")
+crit_fail_modifier = SubResource("Resource_yj6mx")
+success_outcome = SubResource("Resource_032rr")
+failure_outcome = SubResource("Resource_0iida")
+comment = "【占位·试玩校准】案 18 §2.4 村子单点·力量容易(8)"

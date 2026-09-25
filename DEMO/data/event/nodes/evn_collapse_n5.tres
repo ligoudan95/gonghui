@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="EventNodeDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/reward_def.gd" id="1_dbhuu"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_outcome_def.gd" id="2_1m7ve"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_node_def.gd" id="3_3sdk8"]
+
+[sub_resource type="Resource" id="Resource_xyqep"]
+script = ExtResource("1_dbhuu")
+exp = 15
+gold = 15
+
+[sub_resource type="Resource" id="Resource_wsyl3"]
+script = ExtResource("2_1m7ve")
+reward = SubResource("Resource_xyqep")
+texts = Dictionary[StringName, String]({
+&"failure": "稳妥完成，无惊无险。",
+&"success": "稳妥的代价是多花一天，换来的是完整的谢礼与一张草图。（情报：北壁有空响）"
+})
+
+[resource]
+script = ExtResource("3_3sdk8")
+id = &"evn_collapse_n5"
+display_name = "支护稳救"
+chain_id = &"chain_mine_collapse"
+narrative_text = "找来坑木、垫上石楔，支护、清石、再支护——多花了一整天，稳稳当当把人请了出来。老周千恩万谢，就着火把画了张他记得的旧矿道草图，末了指了指北边：「那一带的墙，敲起来有空响，你们留心。」"
+outcome = SubResource("Resource_wsyl3")
+comment = "【占位·试玩校准】案 18 §2.1 n5 终端（o3 纯选择·耗时 +1 天）；E12：纯选择去向无检定档——crit 档死键已清（原存钱点文案不可达）"

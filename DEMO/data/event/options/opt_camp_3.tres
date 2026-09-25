@@ -1,0 +1,67 @@
+[gd_resource type="Resource" script_class="EventOptionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/reward_def.gd" id="1_kobqn"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_modifier_def.gd" id="2_q25u6"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_outcome_def.gd" id="3_85l34"]
+[ext_resource type="Script" path="res://scripts/data_defs/event_option_def.gd" id="4_m4ipc"]
+
+[sub_resource type="Resource" id="Resource_ayjba"]
+script = ExtResource("1_kobqn")
+
+[sub_resource type="Resource" id="Resource_pv6f6"]
+script = ExtResource("2_q25u6")
+text = "慌乱间蹭了一身伤。"
+reward_delta = SubResource("Resource_ayjba")
+party_hp_delta = -5
+
+[sub_resource type="Resource" id="Resource_613f5"]
+script = ExtResource("1_kobqn")
+reputation = 1
+
+[sub_resource type="Resource" id="Resource_yy40b"]
+script = ExtResource("2_q25u6")
+reward_delta = SubResource("Resource_613f5")
+
+[sub_resource type="Resource" id="Resource_0f63i"]
+script = ExtResource("1_kobqn")
+exp = 10
+gold = 5
+
+[sub_resource type="Resource" id="Resource_y2gum"]
+script = ExtResource("3_85l34")
+reward = SubResource("Resource_0f63i")
+texts = Dictionary[StringName, String]({
+&"crit_failure": "烟没顺着烟道走，倒灌回来熏得众人眼泪横流，咳了半天才顺过气。",
+&"crit_success": "歇脚时顺手把营地收拾利索了。",
+&"failure": "喊了半天没人应。火堆倒把潮气烘干了，就地歇了歇脚，捡了些可卖的铁器。",
+&"success": "喊了半天没人应。火堆倒把潮气烘干了，就地歇了歇脚，捡了些可卖的铁器。"
+})
+
+[sub_resource type="Resource" id="Resource_47cls"]
+script = ExtResource("1_kobqn")
+exp = 10
+gold = 15
+reputation = 1
+
+[sub_resource type="Resource" id="Resource_j8oj0"]
+script = ExtResource("3_85l34")
+reward = SubResource("Resource_47cls")
+texts = Dictionary[StringName, String]({
+&"crit_failure": "烟没顺着烟道走，倒灌回来熏得众人眼泪横流，咳了半天才顺过气。",
+&"crit_success": "老矿工临走前指了指北边：「那面墙后头有风。我埋伙食钱的时候听见过。」",
+&"failure": "喊了半天没人应。火堆倒把潮气烘干了，就地歇了歇脚，捡了些可卖的铁器。",
+&"success": "火光刚旺，草席底下就窸窸窣窣拱出来一个跛脚的老矿工——他守着营地不敢挪窝，怕的就是「下面那些东西」。安顿好他，他非要把随身的旧披风留给你们：「卖了吧，别嫌破。」"
+})
+comment = "E3-14：成功侧 failure/crit_failure 为不可达防御位（此路无失败）——文案对齐失败侧；crit 修饰文案单源 crit_success 档（E3 双载体定论）"
+
+[resource]
+script = ExtResource("4_m4ipc")
+id = &"opt_camp_3"
+display_name = "生起火，喊两嗓子试探"
+check_attr_id = &"willpower"
+difficulty_tier = "容易"
+success_outcome = SubResource("Resource_j8oj0")
+failure_outcome = SubResource("Resource_y2gum")
+crit_modifier = SubResource("Resource_yy40b")
+crit_fail_modifier = SubResource("Resource_pv6f6")
+comment = "【占位·试玩校准】案 18 §2.x；声望 +1 / 全队生命 −5"

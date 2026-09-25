@@ -2,10 +2,13 @@
 ## 职责：敌方单位的单回合决策——目标四级链（可击杀 > 追击记忆 > 血量最低
 ## （持平最近）> 兜底最近）、技能选择（精英怒吼首用义务/穷追优先；杂兵资源
 ## 优先耗尽转普攻）、移动（距目标曼哈顿最近的可达可停留格，已在射程不移动；
-## 盲审批 3 D-4：射程 >1 技能的攻击位候选加视线过滤——与执行器同口径）。
-## 数据来源：案 9 §2.5（目标链第七轮口径）；17 案 §3.8 敌方技能表 +
-## 17-C16 P1（怒吼每场首次条件满足必用 1 次、此后穷追猛打优先；条件首次
-## 满足但精力不足 → 义务作废不顺延）。
+## 盲审批 3 D-4：射程 >1 技能的攻击位候选加视线过滤——与执行器同口径；
+## 移动裁决三级兜底（M2 试玩修复）：无**严格更近**可达格时——①等距侧移
+## 恢复射程+视线 → ②按四级链序换打当前位置可及的其他目标 → ③真待机，
+## 消除「无法更近即完全瘫痪干站」缺陷）。
+## 数据来源：案 9 §2.5（目标链第七轮口径 + 无可用目标兜底取最近）；17 案
+## §3.8 敌方技能表 + 17-C16 P1（怒吼每场首次条件满足必用 1 次、此后穷追
+## 猛打优先；条件首次满足但精力不足 → 义务作废不顺延）。
 ## 纯逻辑约束：不触任何 autoload——cfg/skill_lookup 经 ctx 注入；
 ## 决策记忆（roar_used/last_target_id）挂 self_unit.ai_context（跨回合随单位实例存续）。
 ## ctx 字典键：&"cfg"（CoreConfig）/ &"skill_lookup"（Callable：StringName -> SkillDef）。
@@ -41,6 +44,8 @@ class AIAction:
 static func decide(self_unit: Object, grid: BattleGrid, player_units: Array,
 		ctx: Dictionary) -> AIAction:
 	## 敌方单回合决策主入口：技能选择 →（非怒吼）目标四级链 → 移动裁决
+	## （含三级兜底：无严格更近格时——等距侧移恢复攻击 → 换打当前位置
+	## 可及目标 → 真待机；M2 试玩修复「无法更近即完全瘫痪干站」）
 	## 参数 self_unit：决策单位（BattleUnit）；grid：战场；player_units：我方单位全集；
 	## ctx：{cfg, skill_lookup, status_manager（S3-06：期望伤害消费站位面板层，
 	## 缺省回退 1.0——headless 简化上下文兼容）}
@@ -70,30 +75,63 @@ static func decide(self_unit: Object, grid: BattleGrid, player_units: Array,
 	self_unit.ai_context[&"last_target_id"] = target.id
 	# ---- 移动裁决（盲审批 3 D-4：攻击位候选加 LOS 过滤——与执行器
 	# 前置校验同口径经 SkillExecutor.los_required 单源判定，远程技不再
-	# 走进被障碍挡视线的格子白耗一回合）----
+	# 走进被障碍挡视线的格子白耗一回合；M2 试玩修复：三级兜底——无严格
+	# 更近可达格时不再完全瘫痪干站）----
 	var needs_los: bool = SkillExecutor.los_required(skill)
+	var range_final: int = SkillExecutor.effective_range(skill)
 	var distance: int = BattleGrid.manhattan(self_unit.grid_pos, target.grid_pos)
-	if distance <= SkillExecutor.effective_range(skill) \
+	if distance <= range_final \
 			and (not needs_los or grid.has_line_of_sight(self_unit.grid_pos, target.grid_pos)):
 		action.attack_cell = target.grid_pos
 		return action
 	var reachable: Array[Vector2i] = grid.find_reachable(self_unit, self_unit.move_final())
 	var best: Vector2i = NO_CELL
 	var best_distance: int = distance
+	# 兜底 1 候选：等距且移动后可攻击（射程内+视线通）的侧移格——首次命中
+	# 即记（reachable 按 y/x 排序，确定性取首个）
+	var side_cell: Vector2i = NO_CELL
 	for cell: Vector2i in reachable:
 		var cell_distance: int = BattleGrid.manhattan(cell, target.grid_pos)
 		if cell_distance >= best_distance:
+			if side_cell == NO_CELL and cell_distance == distance \
+					and cell_distance <= range_final \
+					and (not needs_los or grid.has_line_of_sight(cell, target.grid_pos)):
+				side_cell = cell
 			continue
 		if needs_los and not grid.has_line_of_sight(cell, target.grid_pos):
 			continue
 		best = cell
 		best_distance = cell_distance
 	if best == NO_CELL:
+		# 兜底 1（等距侧移）：无严格更近格时，等距格中「移动后进入射程且
+		# 视线通」的侧移——白耗移动力换回攻击资格，优于干站（场景②：绕出
+		# 视线死角恢复攻击）
+		if side_cell != NO_CELL:
+			action.move_dest = side_cell
+			action.attack_cell = target.grid_pos
+			return action
+		# 兜底 2（换打可及目标）：主目标不可达（友军堵路互为障碍/地形死角
+		# ——场景①③）时，候选里按四级链序找「当前位置射程内且视线通」的
+		# 其他目标原地攻击——案 9 §2.5 无可用目标兜底口径；技能不变（普攻/
+		# 伤害技对任意我方均合法，怒吼分支无目标不受影响）；追击记忆随实际
+		# 攻击对象更新
+		var attackable: Array = candidates.filter(func(unit: Object) -> bool:
+			return BattleGrid.manhattan(self_unit.grid_pos, unit.grid_pos) <= range_final \
+					and (not needs_los \
+							or grid.has_line_of_sight(self_unit.grid_pos, unit.grid_pos)))
+		if not attackable.is_empty():
+			var fallback: Object = _ChooseTarget(self_unit, skill, attackable, cfg,
+					status_manager)
+			action.target_unit = fallback
+			action.attack_cell = fallback.grid_pos
+			self_unit.ai_context[&"last_target_id"] = fallback.id
+			return action
+		# 兜底 3（真待机）：全场无射程内视线通目标——合理终态
 		return action
 	action.move_dest = best
 	# 移动后目标进入射程才攻击，否则只移动待机（LOS 已由候选过滤保证）
 	# R2-7：射程判定经 effective_range 单源收口
-	if best_distance <= SkillExecutor.effective_range(skill):
+	if best_distance <= range_final:
 		action.attack_cell = target.grid_pos
 	return action
 

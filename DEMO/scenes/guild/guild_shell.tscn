@@ -120,6 +120,12 @@ layout_mode = 2
 focus_mode = 2
 text = "奇术师"
 
+[node name="EventEntryButton" type="Button" parent="Center/Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(0, 48)
+text = "事件原型入口（M2 演示）"
+
 [node name="DebugBattleRow" type="HBoxContainer" parent="Center/Layout"]
 layout_mode = 2
 alignment = 1
@@ -148,5 +154,6 @@ horizontal_alignment = 1
 
 [connection signal="pressed" from="Center/Layout/SaveAndBackButton" to="." method="_on_save_and_back_pressed"]
 [connection signal="pressed" from="Center/Layout/BackButton" to="." method="_on_back_pressed"]
+[connection signal="pressed" from="Center/Layout/EventEntryButton" to="." method="_on_event_entry_pressed"]
 [connection signal="pressed" from="Center/Layout/DebugBattleRow/DebugRandomButton" to="." method="_on_debug_random_pressed"]
 [connection signal="pressed" from="Center/Layout/DebugBattleRow/DebugLairButton" to="." method="_on_debug_lair_pressed"]

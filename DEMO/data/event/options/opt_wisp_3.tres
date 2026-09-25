@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="EventOptionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/event_option_def.gd" id="1_t1ag4"]
+
+[resource]
+script = ExtResource("1_t1ag4")
+id = &"opt_wisp_3"
+display_name = "列阵戒备，稳步推进"
+kind = 1
+success_to = &"evn_wisp_n3"
+comment = "【占位·试玩校准】案 18 §2.x；主动求战线（我方先手+分散）"

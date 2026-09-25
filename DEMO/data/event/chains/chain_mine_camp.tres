@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="EventChainDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/event_chain_def.gd" id="1_l44qp"]
+
+[resource]
+script = ExtResource("1_l44qp")
+id = &"chain_mine_camp"
+display_name = "废弃矿工营地"
+entry_node_id = &"evn_camp_n1"
+trigger_point_id = &"evp_mine_03"
+comment = "【占位·试玩校准】案 18 §2.3；废弃营地链（C8 授予委托演示）"

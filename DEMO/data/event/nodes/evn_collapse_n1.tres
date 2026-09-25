@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="EventNodeDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/event_node_def.gd" id="1_h5wgh"]
+
+[resource]
+script = ExtResource("1_h5wgh")
+id = &"evn_collapse_n1"
+display_name = "塌方现场"
+chain_id = &"chain_mine_collapse"
+narrative_text = "前方的矿道塌了半边，碎石堆得一人多高。屏住呼吸——石头后面，传来一阵压得很低的呻吟。有人被埋在里面。"
+option_ids = Array[StringName]([&"opt_collapse_1", &"opt_collapse_2", &"opt_collapse_3", &"opt_collapse_4"])
+comment = "【占位·试玩校准】案 18 §2.1 入口节点"
