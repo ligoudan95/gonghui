@@ -17,6 +17,7 @@ enum SceneId {
 	GUILD_SHELL,
 	BATTLE_SCREEN,
 	EVENT_SCREEN,
+	EXPLORE_SCREEN,
 }
 
 ## 切换完成信号（from_id=切换前场景、to_id=目标场景；发起切换即发，
@@ -31,6 +32,7 @@ const SCENE_REGISTRY: Dictionary = {
 	&"guild_shell": {&"id": SceneId.GUILD_SHELL, &"path": "res://scenes/guild/guild_shell.tscn"},
 	&"battle_screen": {&"id": SceneId.BATTLE_SCREEN, &"path": "res://scenes/battle/battle_screen.tscn"},
 	&"event_screen": {&"id": SceneId.EVENT_SCREEN, &"path": "res://scenes/event/event_screen.tscn"},
+	&"explore_screen": {&"id": SceneId.EXPLORE_SCREEN, &"path": "res://scenes/explore/explore_screen.tscn"},
 }
 
 ## 当前场景 id（未进入任何场景时 = -1）

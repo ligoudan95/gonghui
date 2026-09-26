@@ -3,8 +3,9 @@
 ## 四档修饰叠加/耗时）、出口解析（A 奖励+授予+解锁、B 战斗参数组装、C/D
 ## 拦截）、敌方分布映射（clustered/spread → 槽位序列）。
 ## 数据来源：案 8《事件与检定》（引擎机制）；案 18（DEMO 内容消费）。
-## 纯逻辑约束：不触任何 autoload——cfg/lookup/rng 全注入；C/D 拦截经
-## enabled_flags 注入（解锁标记/消耗状态由宿主提供，不查单例）；
+## 纯逻辑约束：不触任何 autoload——cfg/lookup/rng 全注入；C/D 拦截口径：
+## enabled_flags 消费为 M4+ 挂点、当前恒拦截（2026-09-26 拍板——DEMO 零
+## C/D 数据实例，拦截通路留引擎不留数据）；
 ## 逻辑层零文案（拦截/授予等反馈语义经视图标记回带，文本由 UI 层拼接）。
 class_name EventRunner
 extends RefCounted
@@ -20,13 +21,26 @@ class EventView:
 	var pending_outcome: EventOutcomeDef = null
 	## 检定档位（CheckResult.Grade 快照；-1 = 无检定——UI 四档反馈条消费 E5）
 	var check_grade: int = -1
+	## 检定骰面明细（2026-09-25 试玩反馈②：UI 反馈行拼装「掷出 N ＋ M ＝ T
+	## （难度档 线）」——check_grade >= 0 时有效；die 为幸运兜底 Z 垫骰后的
+	## 有效骰面（骰 1 不垫＝1），算式三要素自洽）
+	var check_die: int = 0
+	## 检定属性调整值（modifier）
+	var check_modifier: int = 0
+	## 检定合计（modifier + 有效骰面）
+	var check_total: int = 0
+	## 检定难度档名（数据侧中文档名——选项标注同源）
+	var check_tier_label: String = ""
+	## 检定难度判定线（cfg.difficulty_tiers 查表值）
+	var check_tier_line: int = 0
 	## 本次结算奖励增量（&"exp"/&"gold"/&"reputation"——UI 数值行拼装；
 	## B 出口战前不计入（奖励战后 post_battle 入账——E2-8））
 	var reward_gained: Dictionary = {}
 	## 本次结算队伍 HP 变化（负 = 损耗——UI 数值行；B 战前演出视图同带 E5）
 	var hp_delta: int = 0
-	## 当前去向节点 id（引擎单源回带——宿主战后续跑锚点消费；
-	## 非节点视图（直接出口/单点）为空——E6）
+	## 当前去向节点 id（引擎单源回带——宿主战后续跑锚点消费；链内视图 =
+	## evn_ 节点 id；单点视图 = sp_ 事件 id 自身（W2-2——B 路由锚点统一可回带）；
+	## 纯选项视图（未离开当前节点）为空——E6）
 	var node_id: StringName = &""
 	## 授予委托标记（E8：UI 固定句式反馈行消费；granted_is_new = false 时
 	## 播补叙文本——18-C6 防重）
@@ -42,8 +56,9 @@ var _lookup: Callable = Callable()
 ## 随机源（setup 注入）
 var _rng: RandomNumberGenerator = null
 ## 已终局事件集（E7：choose_option 结算视图已产出——同 run 同事件重复调用
-## 拒绝，防重复入账；键 = ExpeditionRun 实例 → {event_id: true}——按 run
-## 隔离，同 runner 驱动多 run（测试/并行会话）互不串扰）
+## 拒绝，防重复入账；键 = run.get_instance_id() → {event_id: true}——W2-8：
+## 对象键在 run 释放后仍占键位（哈希表保强引用隐患），instance_id 轻量且
+## 按 run 隔离语义不变，同 runner 驱动多 run 互不串扰）
 var _finalized_events: Dictionary = {}
 
 func setup(cfg: CoreConfig, lookup: Callable, rng: RandomNumberGenerator) -> void:
@@ -73,6 +88,9 @@ func start_event(event_id: StringName, run: ExpeditionRun) -> EventView:
 			return view
 		view.narrative = single.narrative_text
 		view.pending_outcome = null
+		# W2-2：单点视图同样回带锚点 id（sp_ 自身——宿主 B 路由战后续跑分叉
+		# 消费；链节点为 evn_，单点缺失锚点会让战后 post_battle 无从定位）
+		view.node_id = event_id
 		# 单点视图：无检定事件挂单档出口（UI 直接结算）；有检定挂虚拟检定选项
 		if String(single.check_attr_id).is_empty():
 			# 无检定单档：立即结算（叙述+出口奖励一并落账）
@@ -126,14 +144,14 @@ func choose_option(event_id: StringName, option_id: StringName, actor: Adventure
 				or check.grade == CheckResult.Grade.CRIT_SUCCESS
 		is_crit_success = check.grade == CheckResult.Grade.CRIT_SUCCESS
 		is_crit_failure = check.grade == CheckResult.Grade.CRIT_FAILURE
-		view.check_grade = check.grade
+		_FillCheckDetail(view, check, option.difficulty_tier)
 	elif single != null and not String(single.check_attr_id).is_empty():
 		var check: CheckResult = _RollCheck(actor, single.check_attr_id, single.difficulty_tier)
 		is_success = check.grade == CheckResult.Grade.SUCCESS \
 				or check.grade == CheckResult.Grade.CRIT_SUCCESS
 		is_crit_success = check.grade == CheckResult.Grade.CRIT_SUCCESS
 		is_crit_failure = check.grade == CheckResult.Grade.CRIT_FAILURE
-		view.check_grade = check.grade
+		_FillCheckDetail(view, check, single.difficulty_tier)
 	# 四档修饰（按档取：crit 成功/失败侧；success/failure 侧无修饰）
 	var modifier: EventModifierDef = null
 	var modifier_owner: Resource = option if option != null else single
@@ -144,6 +162,8 @@ func choose_option(event_id: StringName, option_id: StringName, actor: Adventure
 			modifier = modifier_owner.crit_fail_modifier
 	# 单点事件：直接出口结算（无节点去向）
 	if single != null:
+		# W2-2：单点战后续跑锚点回带（sp_ id——B 出口单点战后续跑分叉消费）
+		view.node_id = event_id
 		var single_outcome: EventOutcomeDef = single.success_outcome if is_success \
 				else single.failure_outcome
 		_ResolveOutcome(view, single_outcome, is_crit_success, is_crit_failure,
@@ -190,26 +210,24 @@ func build_battle_params(outcome: EventOutcomeDef, run: ExpeditionRun) -> Battle
 	params.enemy_spawn_override = _LayoutSlotsOf(outcome.battle.enemy_layout_token)
 	if not String(outcome.battle.initial_status_id).is_empty():
 		var status: StatusDef = _Lookup(outcome.battle.initial_status_id) as StatusDef
-		var duration: int = status.default_duration if status != null else 1
-		for adv: AdventurerData in run.party:
-			if run.downed.get(adv, false):
-				continue
-			params.initial_statuses.append({
-				&"status_id": outcome.battle.initial_status_id,
-				&"target": adv.unit_id,
-				&"duration": duration,
-			})
-	# HP 覆写键转换：运行态内部以 AdventurerData 对象为键——战斗参数侧
-	# 统一 unit_id 字符串键（BattleSetup 按 unit_id 查）；倒地成员不带入
-	var hp_map: Dictionary = {}
-	for adv: AdventurerData in run.party:
-		if run.downed.get(adv, false):
-			continue
-		if not run.hp.has(adv):
-			# E2-11 护栏：缺键告警（按 1 兜底——宿主漏初始化可感知）
-			push_warning("EventRunner: run.hp 缺键（%s）——按 1 兜底" % adv.unit_id)
-		hp_map[adv.unit_id] = run.hp.get(adv, 1)
-	params.hp_overrides = hp_map
+		if status == null:
+			# W2-10：查无告警 + 跳过追加（V-M2-ref-battle 数据侧已拦截——
+			# 此处运行时兜底不静默空转；数据侧修复后本分支不可达）
+			push_warning("EventRunner: initial_status_id '%s' 查无——跳过开局载入" %
+					outcome.battle.initial_status_id)
+		else:
+			var duration: int = status.default_duration
+			for adv: AdventurerData in run.party:
+				if run.downed.get(adv, false):
+					continue
+				params.initial_statuses.append({
+					&"status_id": outcome.battle.initial_status_id,
+					&"target": adv.unit_id,
+					&"duration": duration,
+				})
+	# HP 覆写键转换：单源方法（M3 收口——ExpeditionRun.build_hp_overrides：
+	# 倒地过滤 + 对象键 → unit_id 键 + 缺键告警兜底；与遭遇战路由共用）
+	params.hp_overrides = run.build_hp_overrides()
 	return params
 
 func _RollCheck(actor: AdventurerData, attr_id: StringName,
@@ -220,22 +238,42 @@ func _RollCheck(actor: AdventurerData, attr_id: StringName,
 	if actor == null:
 		var failed := CheckResult.new()
 		failed.grade = CheckResult.Grade.CRIT_FAILURE
+		# 骰面明细自洽兜底（无 actor 无调整值：掷出 1 ＋ 0 ＝ 1——空名单防死锁
+		# 档，UI 反馈行算式不破）
+		failed.effective_die = 1
+		failed.modifier = 0
+		failed.total = 1
 		return failed
 	return CheckRoller.roll(actor.attrs, attr_id, tier_name, _cfg, _rng)
 
+func _FillCheckDetail(view: EventView, check: CheckResult, tier_name: String) -> void:
+	## 检定骰面明细回写视图（2026-09-25 试玩反馈②：档位 + 骰面/调整值/合计/
+	## 难度档与判定线——UI 反馈行拼装消费；die 取幸运兜底后有效骰面保算式
+	## 自洽）
+	## 参数 view：目标视图；check：检定结果；tier_name：难度档名
+	## 返回：无
+	view.check_grade = check.grade
+	view.check_die = check.effective_die
+	view.check_modifier = check.modifier
+	view.check_total = check.total
+	view.check_tier_label = tier_name
+	view.check_tier_line = CheckRoller.tier_line_of(tier_name, _cfg)
+
 func _IsFinalized(run: ExpeditionRun, event_id: StringName) -> bool:
-	## 终局标记查询（E7 内部口——run 隔离）
+	## 终局标记查询（E7 内部口——run 隔离，键 = instance_id）
 	## 参数 run：出征运行态；event_id：事件 id
 	## 返回：true = 该 run 内该事件已终局
-	return _finalized_events.has(run) and _finalized_events[run].has(event_id)
+	var run_key: int = run.get_instance_id()
+	return _finalized_events.has(run_key) and _finalized_events[run_key].has(event_id)
 
 func _MarkFinalized(run: ExpeditionRun, event_id: StringName) -> void:
-	## 终局标记写入（E7 内部口——结算视图产出后调用）
+	## 终局标记写入（E7 内部口——结算视图产出后调用，键 = instance_id）
 	## 参数 run：出征运行态；event_id：事件 id
 	## 返回：无
-	if not _finalized_events.has(run):
-		_finalized_events[run] = {}
-	_finalized_events[run][event_id] = true
+	var run_key: int = run.get_instance_id()
+	if not _finalized_events.has(run_key):
+		_finalized_events[run_key] = {}
+	_finalized_events[run_key][event_id] = true
 
 func _ResolveOutcome(view: EventView, outcome: EventOutcomeDef, is_crit_success: bool,
 		is_crit_failure: bool, modifier: EventModifierDef, run: ExpeditionRun) -> void:
@@ -247,20 +285,20 @@ func _ResolveOutcome(view: EventView, outcome: EventOutcomeDef, is_crit_success:
 	## 返回：无（view 回写文本/反馈增量）
 	if outcome == null:
 		return
-	# C/D 拦截（DEMO 零数据实例——引擎通路：解锁标记/消耗状态未满足即拦截）
+	# C/D 拦截（enabled_flags 消费为 M4+ 挂点、当前恒拦截——2026-09-26 拍板：
+	# DEMO 零数据实例，解锁标记/消耗状态的注入消费口留引擎不留数据）
 	if outcome.exit_kind == EventOutcomeDef.ExitKind.C or outcome.exit_kind == EventOutcomeDef.ExitKind.D:
 		view.intercepted = true
 		view.pending_outcome = outcome
 		return
 	# 基础结算文本（按档取：plain → success/failure → crit 档）；终端节点
-	# 叙述已先行入 view——结算文本**追加**不覆写（E2：叙述+结算均可见）
+	# 叙述已先行入 view——结算文本**追加**不覆写（E2：叙述+结算均可见）；
+	# W2-7：默认档即 plain——原「plain 非空且无奖励时取 plain」elif 为死代码已删
 	var text_key: StringName = &"plain"
 	if is_crit_success:
 		text_key = &"crit_success"
 	elif is_crit_failure:
 		text_key = &"crit_failure"
-	elif not outcome.texts.get(&"plain", "").is_empty() and outcome.reward == null:
-		text_key = &"plain"
 	var settle_text: String = outcome.texts.get(text_key, outcome.texts.get(
 			&"success" if not is_crit_failure else &"failure", ""))
 	if not settle_text.is_empty():

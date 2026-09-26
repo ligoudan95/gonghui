@@ -22,7 +22,8 @@ func _ready() -> void:
 
 func _ApplyFontTiers() -> void:
 	## tscn 内嵌字号档位覆写（B-7）：游戏名（64→display）/ VersionLabel
-	## （20→body）/ HintLabel（18→normal）
+	## （20→body）/ HintLabel（18→normal）；W3-08：开始/继续按钮补齐
+	## （按钮统一 normal 档，三屏收口）
 	## 参数：无
 	## 返回：无
 	var game_data: Node = get_node_or_null("/root/GameData")
@@ -33,6 +34,9 @@ func _ApplyFontTiers() -> void:
 			UiTheme.font_of(cfg, &"ui_font_size_body", UiTheme.FONT_BODY))
 	%HintLabel.add_theme_font_size_override("font_size",
 			UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
+	var button_font: int = UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL)
+	%StartButton.add_theme_font_size_override("font_size", button_font)
+	%ContinueButton.add_theme_font_size_override("font_size", button_font)
 
 func _save_manager() -> Node:
 	## 取 SaveManager 自动加载单例（节点路径方式，环境无关）

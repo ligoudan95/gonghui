@@ -1,0 +1,141 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/scene_flow/explore_screen.gd" id="1_explore"]
+
+[node name="ExploreScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_explore")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.08, 0.09, 0.08, 1)
+
+[node name="Layout" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 8.0
+offset_right = -16.0
+offset_bottom = -8.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 34
+text = "探索"
+horizontal_alignment = 1
+
+[node name="GoalBanner" type="Label" parent="Layout"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "委托目标已达成——从村口出口回去交付。"
+horizontal_alignment = 1
+
+[node name="StatusLabel" type="Label" parent="Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = ""
+horizontal_alignment = 1
+
+[node name="BoardHost" type="Control" parent="Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+mouse_filter = 2
+
+[node name="HintLabel" type="Label" parent="Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = ""
+horizontal_alignment = 1
+
+[node name="BottomBox" type="HBoxContainer" parent="Layout"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 12
+
+[node name="RetreatButton" type="Button" parent="Layout/BottomBox"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(220, 48)
+text = "撤退回城"
+
+[node name="PanelHost" type="CenterContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+z_index = 100
+
+[node name="SettlementPanel" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -360.0
+offset_top = -160.0
+offset_right = 360.0
+offset_bottom = 160.0
+grow_horizontal = 2
+grow_vertical = 2
+z_index = 100
+
+[node name="SettleBox" type="VBoxContainer" parent="SettlementPanel"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="SettlementTitle" type="Label" parent="SettlementPanel/SettleBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 34
+text = ""
+horizontal_alignment = 1
+
+[node name="SettlementBody" type="Label" parent="SettlementPanel/SettleBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = ""
+horizontal_alignment = 1
+
+[node name="SettlementButton" type="Button" parent="SettlementPanel/SettleBox"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(220, 48)
+text = "回城"
+
+[node name="RetreatConfirm" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+dialog_text = "撤退 = 委托失败（本次出征进度不保留）。确定撤退吗？"
+ok_button_text = "撤退"
+cancel_button_text = "继续探索"

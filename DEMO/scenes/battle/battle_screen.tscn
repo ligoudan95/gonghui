@@ -187,6 +187,8 @@ horizontal_alignment = 1
 [node name="RetreatConfirm" type="ConfirmationDialog" parent="."]
 unique_name_in_owner = true
 dialog_text = "确认撤退？撤退将按委托失败结算。"
+ok_button_text = "撤退"
+cancel_button_text = "继续战斗"
 
 [connection signal="gui_input" from="BoardLayer" to="." method="_on_board_gui_input"]
 [connection signal="pressed" from="BottomBar/BottomLayout/AttackButton" to="." method="_on_attack_button_pressed"]

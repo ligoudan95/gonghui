@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="TargetPointDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/target_point_def.gd" id="1_7i71x"]
+
+[resource]
+script = ExtResource("1_7i71x")
+id = &"tp_mine_west_camp"
+display_name = "西巷旧营地"
+cell = Vector2i(1, 7)
+comment = "【占位·试玩校准】tp_<区域>_<语义>：目标点（西巷巡查点）"

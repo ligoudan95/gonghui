@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ExploreTileDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/explore_tile_def.gd" id="1_mhmld"]
+
+[resource]
+script = ExtResource("1_mhmld")
+id = &"etile_path"
+display_name = "隐秘通道"
+fill_color = Color(0.55, 0.45, 0.25, 1)
+accent_color = Color(0.85, 0.7, 0.35, 1)
+style = 1
+comment = "【占位·试玩校准】etile_<语义>：探索地格（暗门揭示后的捷径——reveal_tile_id 目标）"

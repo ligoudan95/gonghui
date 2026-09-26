@@ -14,9 +14,11 @@ var _game_data: Node
 ## 热重载用例的 cfg_main 原文缓存（R5-10 最小加固：after 兜底还原——用例
 ## 中途断言失败时防止磁盘留脏，代价仅一次文件写）
 var _original_cfg_text: String = ""
+## 热重载用例的 map_m1 原文缓存（W4-11 同口径兜底还原）
+var _original_map_text: String = ""
 
 func after() -> void:
-	## 套件后置：热重载用例兜底还原（_original_cfg_text 非空 = 用例中断未还原）
+	## 套件后置：热重载用例兜底还原（原文缓存非空 = 用例中断未还原）
 	## 参数：无
 	## 返回：无
 	if not _original_cfg_text.is_empty():
@@ -25,6 +27,12 @@ func after() -> void:
 		restorer.store_string(_original_cfg_text)
 		restorer.close()
 		_original_cfg_text = ""
+	if not _original_map_text.is_empty():
+		var map_restorer: FileAccess = FileAccess.open(
+				"res://data/map/maps/map_m1_village_mine.tres", FileAccess.WRITE)
+		map_restorer.store_string(_original_map_text)
+		map_restorer.close()
+		_original_map_text = ""
 
 func before() -> void:
 	## 套件前置：实例化 GameData 脚本节点并显式初始化（扫描全数据域）
@@ -94,6 +102,41 @@ func test_reload_domain() -> void:
 	assert_str(String(emitted_domains[0])).is_equal("core")
 	assert_int(_game_data.get_domain(&"core").size()).is_equal(2)
 	assert_int(_game_data.issues.size()).is_equal(0)
+
+func test_w411_reload_map_domain_updates_values_and_keeps_instance() -> void:
+	## W4-11（2026-09-26 审计）：map/maps 域热重载用例（复制 core 域模式）——
+	## 改盘 base_expedition_days → reload_domain(map/maps) → 内存值更新 +
+	## 旧实例同址刷新（take_over）；还原磁盘 → 再 reload → 值还原。after 兜底还原
+	var map_path: String = "res://data/map/maps/map_m1_village_mine.tres"
+	_original_map_text = FileAccess.open(map_path, FileAccess.READ).get_as_text()
+	var before: ExploreMapDef = _game_data.get_record(&"map_m1_village_mine") as ExploreMapDef
+	assert_int(before.base_expedition_days).is_equal(1)
+	# ①改盘：探针字段 1 → 2 写回
+	var probe_line: String = "base_expedition_days = 1"
+	var mutated_line: String = "base_expedition_days = 2"
+	assert_bool(_original_map_text.contains(probe_line)).is_true()
+	DirAccess.copy_absolute(map_path, "user://map_m1_backup.tres")
+	var writer: FileAccess = FileAccess.open(map_path, FileAccess.WRITE)
+	writer.store_string(_original_map_text.replace(probe_line, mutated_line))
+	writer.close()
+	# ②热重载：内存值更新 + 同址刷新（引用不撕裂）
+	_game_data.reload_domain(&"map/maps")
+	var reloaded: ExploreMapDef = _game_data.get_record(&"map_m1_village_mine") as ExploreMapDef
+	assert_int(reloaded.base_expedition_days).is_equal(2)
+	assert_object(reloaded).is_same(before) \
+			.override_failure_message("map 域热重载须同址刷新旧引用——实例被替换即撕裂")
+	assert_int(_game_data.get_domain(&"map/maps").size()).is_equal(1)
+	assert_int(_game_data.issues.size()).is_equal(0)
+	# ③还原：盘还原 → 再 reload → 值还原且实例仍同址
+	var restorer: FileAccess = FileAccess.open(map_path, FileAccess.WRITE)
+	restorer.store_string(_original_map_text)
+	restorer.close()
+	_game_data.reload_domain(&"map/maps")
+	assert_int((_game_data.get_record(&"map_m1_village_mine") as ExploreMapDef)
+			.base_expedition_days).is_equal(1)
+	assert_object(_game_data.get_record(&"map_m1_village_mine")).is_same(before)
+	DirAccess.remove_absolute("user://map_m1_backup.tres")
+	_original_map_text = ""
 
 ## 全量计数断言占位见同目录 test_data_full_count_placeholder.gd
 ## （gdUnit4 无单测级 skip，占位断言独立成套件用套件级 do_skip 标记）

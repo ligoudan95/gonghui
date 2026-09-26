@@ -5,7 +5,11 @@
 ## 数据来源：data/ 全域 .tres；规则口径=M0 批 2 方案（12 条规则展开为 14 个检查位）
 ## + M1 批 1 方案（V-M1-* 六条：地格状态绑定/地图布局/出生位/技能地格引用/
 ## 队伍地图引用加严/战斗域计数）+ 插队任务（V-M1-ref-asset：AssetRegistry
-## 非空条目 path 必须文件存在——案 16 资源引用规范的落盘校验位）。
+## 非空条目 path 必须文件存在——案 16 资源引用规范的落盘校验位）
+## + 第四轮审计补强（2026-09-26：W4-15 V-M3-quest-reward 奖励量级带 /
+## W5-6 V-M3-map-connectivity 图连通性 / W2-13 fog-region 一致性 /
+## W4-06 chain-point 反向断言 / W2-6 普攻重复挂载 / W2-9 空敌清单 /
+## W4-13 空揭示表 / W4-03 cfg 值域与 base_expedition_days 加严）。
 ## 用法：DataValidator.run_all(game_data)——game_data 为 GameData 自动加载单例或其实例。
 class_name DataValidator
 extends RefCounted
@@ -70,6 +74,13 @@ const DOMAIN_PREFIXES: Dictionary[StringName, Array] = {
 	&"event/singles": [&"sp_"],
 	&"event/hidden_marks": [&"hm_"],
 	&"quest/templates": [&"q_"],
+	# ---- M3 探索层六域 ----
+	&"map/maps": [&"map_"],
+	&"map/tiles": [&"etile_"],
+	&"map/interact_points": [&"evp_"],
+	&"map/target_points": [&"tp_"],
+	&"map/encounter_weights": [&"encw_"],
+	&"world/regions": [&"reg_"],
 }
 
 static func run_all(game_data: Node) -> ValidationReport:
@@ -131,6 +142,23 @@ static func run_all(game_data: Node) -> ValidationReport:
 	_CheckEventNumDomain(report, game_data)
 	_CheckEventFourTexts(report, game_data)
 	_CheckEventCounts(report, game_data)
+	# ---- M3 批 1 新增（V-M3 十一组：探索层域）+ V-5（2026-09-26 审计新增）----
+	_CheckExploreMapLayout(report, game_data)
+	_CheckExploreMapRegionCount(report, game_data)
+	_CheckExploreMapPoints(report, game_data)
+	_CheckExploreFogLit(report, game_data)
+	_CheckExploreRefPointEvent(report, game_data)
+	_CheckExploreRefChainPoint(report, game_data)
+	_CheckExploreRefQuestGoal(report, game_data)
+	_CheckExploreRefRegion(report, game_data)
+	_CheckExploreSecretReveal(report, game_data)
+	_CheckExploreHiddenMark(report, game_data)
+	_CheckExploreEncwDomain(report, game_data)
+	_CheckExploreTreasureDomain(report, game_data)
+	_CheckExploreCounts(report, game_data)
+	# ---- 第四轮审计新增（2026-09-26：W4-15 委托奖励量级带 / W5-6 图连通性）----
+	_CheckQuestRewardDomain(report, game_data)
+	_CheckExploreMapConnectivity(report, game_data)
 	return report
 
 # --------------------------------------------------------------------------
@@ -233,6 +261,14 @@ static func _CheckEnumDomains(report: ValidationReport, game_data: Node) -> void
 		_CheckEnumRange(report, tile.id, "TileTypeDef.kind", tile.kind, TileTypeDef.Kind.size() - 1)
 		_CheckEnumRange(report, tile.id, "TileTypeDef.trigger", tile.trigger, TileTypeDef.Trigger.size() - 1)
 		_CheckEnumRange(report, tile.id, "TileTypeDef.style", tile.style, TileTypeDef.Style.size() - 1)
+	# M3 探索层枚举值域（探索地格样式 / 交互点类别与触发方式）
+	for record: Resource in _DomainRecords(game_data, &"map/tiles"):
+		var etile := record as ExploreTileDef
+		_CheckEnumRange(report, etile.id, "ExploreTileDef.style", etile.style, ExploreTileDef.Style.size() - 1)
+	for record: Resource in _DomainRecords(game_data, &"map/interact_points"):
+		var point := record as InteractPointDef
+		_CheckEnumRange(report, point.id, "InteractPointDef.kind", point.kind, InteractPointDef.Kind.size() - 1)
+		_CheckEnumRange(report, point.id, "InteractPointDef.trigger", point.trigger, InteractPointDef.Trigger.size() - 1)
 	# V-A-class-attr（批 C M8）：法穿换算源表驱动字段必填且 ∈ 七属性
 	for record: Resource in _DomainRecords(game_data, &"class/classes"):
 		var cls := record as ClassDef
@@ -290,7 +326,8 @@ static func _CheckRefSkillAttr(report: ValidationReport, game_data: Node) -> voi
 						"伤害技权重和 %f 越界 1.0±0.01" % weight_sum)
 
 static func _CheckRefSkillOwner(report: ValidationReport, game_data: Node) -> void:
-	## V-M0-ref-skill-owner：owner 必须是已存在的职业/敌人 id；
+	## V-M0-ref-skill-owner：owner 必须是已存在的职业/敌人 id（W4-04：as 类型
+	## 断言——全域撞 id 的异类记录不放行，模式照 _CheckExploreRefPointEvent）；
 	## skl_atk_enemy_common 的空 owner 为全库唯一放行；owner 为职业时 side 必须 ALLY
 	## 参数：报告 / GameData
 	## 返回：无
@@ -302,11 +339,12 @@ static func _CheckRefSkillOwner(report: ValidationReport, game_data: Node) -> vo
 						"owner 为空（仅 %s 放行——敌方通用普攻无单一归属者）" %
 						str(OWNER_EMPTY_WHITELIST))
 			continue
-		var owner: Resource = game_data.get_record(skill.owner_id)
-		if owner == null:
+		var owner_class: ClassDef = game_data.get_record(skill.owner_id) as ClassDef
+		var owner_enemy: EnemyDef = game_data.get_record(skill.owner_id) as EnemyDef
+		if owner_class == null and owner_enemy == null:
 			report.add_error("V-M0-ref-skill-owner", skill.id,
-					"owner '%s' 不存在（非 cls_/en_ 域 id）" % skill.owner_id)
-		elif owner is ClassDef and skill.side != SkillDef.SkillSide.ALLY:
+					"owner '%s' 不存在或非职业/敌人表" % skill.owner_id)
+		elif owner_class != null and skill.side != SkillDef.SkillSide.ALLY:
 			report.add_error("V-M0-ref-skill-owner", skill.id,
 					"owner 为职业但 side != ALLY")
 
@@ -330,34 +368,45 @@ static func _CheckRefClassAttack(report: ValidationReport, game_data: Node) -> v
 					"普攻权重表唯一键 != 职业资源换算源属性 '%s'" % cls.resource_source_attr)
 
 static func _CheckRefEnemySkill(report: ValidationReport, game_data: Node) -> void:
-	## V-M0-ref-enemy-skill：敌人技能引用闭合（skill_ids/common 均存在）；
+	## V-M0-ref-enemy-skill：敌人技能引用闭合（skill_ids/common 均存在且为
+	## 技能表——W4-04 as 类型断言）；skill_ids 不得重复挂通用普攻（W2-6——
+	## 普攻位已单列 common_attack_skill_id，清单重复挂载导致 AI 技能选择双计）；
 	## owner 为敌人的技能 side 必须 ENEMY
 	## 参数：报告 / GameData
 	## 返回：无
 	for record: Resource in _DomainRecords(game_data, &"battle/enemies"):
 		var enemy := record as EnemyDef
 		for skill_id: StringName in enemy.skill_ids:
-			if game_data.get_record(skill_id) == null:
+			if game_data.get_record(skill_id) as SkillDef == null:
 				report.add_error("V-M0-ref-enemy-skill", enemy.id,
-						"技能引用 '%s' 不存在" % skill_id)
-		if game_data.get_record(enemy.common_attack_skill_id) == null:
+						"技能引用 '%s' 不存在或非技能表" % skill_id)
+		if game_data.get_record(enemy.common_attack_skill_id) as SkillDef == null:
 			report.add_error("V-M0-ref-enemy-skill", enemy.id,
-					"通用普攻引用 '%s' 不存在" % enemy.common_attack_skill_id)
+					"通用普攻引用 '%s' 不存在或非技能表" % enemy.common_attack_skill_id)
+		if enemy.skill_ids.has(enemy.common_attack_skill_id):
+			report.add_error("V-M0-ref-enemy-skill", enemy.id,
+					"skill_ids 不应重复挂载通用普攻 '%s'（普攻位单列）" % enemy.common_attack_skill_id)
 	for record: Resource in _DomainRecords(game_data, &"class/skills"):
 		var skill := record as SkillDef
-		var owner: Resource = game_data.get_record(skill.owner_id) if not String(skill.owner_id).is_empty() else null
-		if owner is EnemyDef and skill.side != SkillDef.SkillSide.ENEMY:
+		var owner_enemy: EnemyDef = game_data.get_record(skill.owner_id) as EnemyDef \
+				if not String(skill.owner_id).is_empty() else null
+		if owner_enemy != null and skill.side != SkillDef.SkillSide.ENEMY:
 			report.add_error("V-M0-ref-enemy-skill", skill.id,
 					"owner 为敌人但 side != ENEMY")
 
 static func _CheckRefPack(report: ValidationReport, game_data: Node) -> void:
-	## V-M0-ref-pack：队伍条目敌人引用闭合；数量区间 1≤min≤max≤4
-	## （battle_map_ref 校验自 M1 批 1 起移入 V-M1-ref-pack-map 加严规则）
+	## V-M0-ref-pack：队伍条目敌人引用闭合；数量区间 1≤min≤max≤4；
+	## W2-9：enemy_ids 非空（空候选 + count ≥1 会让装配侧 randi_range(0,-1)
+	## 越界吞敌）（battle_map_ref 校验自 M1 批 1 起移入 V-M1-ref-pack-map 加严规则）
 	## 参数：报告 / GameData
 	## 返回：无
 	for record: Resource in _DomainRecords(game_data, &"battle/enemy_packs"):
 		var pack := record as EnemyPackDef
 		for entry: PackEntry in pack.entries:
+			if entry.enemy_ids.is_empty():
+				report.add_error("V-M0-ref-pack", pack.id,
+						"条目 enemy_ids 为空（空候选装配越界——count ≥1 无兵可抽）")
+				continue
 			for enemy_id: StringName in entry.enemy_ids:
 				if game_data.get_record(enemy_id) == null:
 					report.add_error("V-M0-ref-pack", pack.id,
@@ -623,19 +672,22 @@ static func _CheckCountBand(report: ValidationReport, game_data: Node, scope: St
 				"%s计数 %d 越界 [%d, %d]" % [label, count, band.x, band.y])
 
 static func _CountBand(game_data: Node, field_prefix: String, fallback: int) -> Vector2i:
-	## 取 cfg_main 的计数带（<prefix>_min/<prefix>_max；值 ≤0 视为未设回退）
+	## 取 cfg_main 的计数带（<prefix>_min/<prefix>_max）；W4-07 语义统一：
+	## 字段**已设置且 ≥0** 即采用（负值 = 未设回退；字段缺失 null = 未设回退）——
+	## 显式 0 是合法下界不再是「未设」，与 V-M0-cfg-domain 的 band 合法性
+	## （min ≥ 0 且 min ≤ max）口径闭环；cfg 资源整体缺失回退 [fallback, fallback]
 	## 参数 game_data：GameData；field_prefix：cfg 字段前缀；fallback：回退定值
 	## 返回：Vector2i(min, max)
 	var cfg: CoreConfig = game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
 	var band_min: int = fallback
 	var band_max: int = fallback
 	if cfg != null:
-		var cfg_min: int = int(cfg.get(field_prefix + "_min"))
-		var cfg_max: int = int(cfg.get(field_prefix + "_max"))
-		if cfg_min > 0:
-			band_min = cfg_min
-		if cfg_max > 0:
-			band_max = cfg_max
+		var raw_min: Variant = cfg.get(field_prefix + "_min")
+		var raw_max: Variant = cfg.get(field_prefix + "_max")
+		if raw_min != null and int(raw_min) >= 0:
+			band_min = int(raw_min)
+		if raw_max != null and int(raw_max) >= 0:
+			band_max = int(raw_max)
 	return Vector2i(band_min, band_max)
 
 static func _CheckRefAssetPath(report: ValidationReport, game_data: Node) -> void:
@@ -882,14 +934,15 @@ static func _CheckOwnerClosure(report: ValidationReport, game_data: Node) -> voi
 		var skill := record as SkillDef
 		if String(skill.owner_id).is_empty():
 			continue
-		var owner: Resource = game_data.get_record(skill.owner_id)
-		if owner is EnemyDef:
-			var enemy := owner as EnemyDef
-			if not enemy.skill_ids.has(skill.id) \
-					and enemy.common_attack_skill_id != skill.id:
+		# W4-04：as 类型断言半边补齐（全域撞 id 的异类记录不放行）
+		var owner_enemy: EnemyDef = game_data.get_record(skill.owner_id) as EnemyDef
+		var owner_class: ClassDef = game_data.get_record(skill.owner_id) as ClassDef
+		if owner_enemy != null:
+			if not owner_enemy.skill_ids.has(skill.id) \
+					and owner_enemy.common_attack_skill_id != skill.id:
 				report.add_error("V-B2-owner", skill.id,
-						"owner 为敌人 '%s' 但其技能清单未回含本技能" % enemy.id)
-		elif owner is ClassDef and skill.tier == 0 and not base_attack_ids.has(skill.id):
+						"owner 为敌人 '%s' 但其技能清单未回含本技能" % owner_enemy.id)
+		elif owner_class != null and skill.tier == 0 and not base_attack_ids.has(skill.id):
 			report.add_warning("V-B2-owner", skill.id,
 					"owner 为职业的 tier=0 技能未被任何职业普攻位引用（运行时不可达）")
 
@@ -933,10 +986,12 @@ static func _CheckCfgDomains(report: ValidationReport, game_data: Node) -> void:
 		if not cfg.enabled_systems.has(sys_key):
 			report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
 					"enabled_systems 缺少系统键 '%s'（须全覆盖）" % sys_key)
-	# 批 B/M 公式参数基本值域
+	# 批 B/M 公式参数基本值域（W4-03 补：vision_radius / secret_door_trigger_radius /
+	# crit_success_line_min / luck_floor_z_base——M3 探索层与检定域新入表字段）
 	for positive_name: String in ["hp_base", "hp_con_mult", "pool_base", "pool_mult",
 			"move_base_cap", "agility_move_bonus_line", "ai_roar_ally_count_line",
-			"recruit_band_min", "recruit_band_max"]:
+			"recruit_band_min", "recruit_band_max", "vision_radius",
+			"secret_door_trigger_radius", "crit_success_line_min", "luck_floor_z_base"]:
 		if int(cfg.get(positive_name)) <= 0:
 			report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
 					"%s ≤ 0" % positive_name)
@@ -955,7 +1010,9 @@ static func _CheckCfgDomains(report: ValidationReport, game_data: Node) -> void:
 	for band_name: String in ["content_skill_attacks", "content_class_skills",
 			"content_enemy_skills", "content_enemy_common", "content_status",
 			"content_enemies", "content_packs", "content_maps", "content_tiles",
-			"content_equip"]:
+			"content_equip", "content_map_count", "content_interact_points",
+			"content_target_points", "content_encounter_weights",
+			"content_event_chains", "content_event_singles"]:
 		var band_min: int = int(cfg.get(band_name + "_min"))
 		var band_max: int = int(cfg.get(band_name + "_max"))
 		if band_min < 0 or band_min > band_max:
@@ -1028,9 +1085,10 @@ static func _CheckCfgFallbacks(report: ValidationReport, game_data: Node) -> voi
 		if table_value != int(pair[1]):
 			report.add_error("V-B2-cfg-fallback", CoreConfig.CFG_MAIN_ID,
 					"%s 表值 %d != 兜底常量 %d（调表须同步兜底）" % [pair[0], table_value, int(pair[1])])
-	# float 域（近似比较；R3-08：徽章低血阈值入列）
+	# float 域（近似比较；R3-08：徽章低血阈值入列；M3：探索步进演出时长入列）
 	var float_pairs: Array = [
 		["ui_badge_hp_low_threshold", UiTheme.BADGE_HP_LOW_THRESHOLD],
+		["ui_explore_move_step_seconds", UiTheme.EXPLORE_MOVE_STEP_SECONDS],
 		["crit_mult_base", BattleRules.CRIT_MULT_BASE_FALLBACK],
 		["crit_base", BattleRules.CRIT_BASE_FALLBACK],
 		["crit_luck_weight", BattleRules.CRIT_LUCK_WEIGHT_FALLBACK],
@@ -1096,6 +1154,13 @@ static func _CheckCfgFallbacks(report: ValidationReport, game_data: Node) -> voi
 		["ui_downed_modulate_color", UiTheme.DOWNED_MODULATE],
 		["ui_highlight_gold_color", UiTheme.HIGHLIGHT_GOLD],
 		["ui_panel_dark_color", UiTheme.PANEL_DARK],
+		# M3 探索层配色（表值须回填且 == UiTheme 兜底常量）
+		["ui_fog_unseen_color", UiTheme.FOG_UNSEEN],
+		["ui_fog_dim_color", UiTheme.FOG_DIM],
+		["ui_explore_party_color", UiTheme.EXPLORE_PARTY],
+		["ui_explore_target_active_color", UiTheme.EXPLORE_TARGET_ACTIVE],
+		["ui_explore_target_dim_color", UiTheme.EXPLORE_TARGET_DIM],
+		["ui_explore_goal_banner_color", UiTheme.EXPLORE_GOAL_BANNER],
 	]
 	for pair: Array in color_pairs:
 		var raw_color: Variant = cfg.get(pair[0])
@@ -1341,7 +1406,7 @@ static func _CheckEventRefBattle(report: ValidationReport, game_data: Node) -> v
 		if outcome.battle == null:
 			continue
 		var battle := outcome.battle
-		if game_data.get_record(battle.pack_id) == null:
+		if game_data.get_record(battle.pack_id) as EnemyPackDef == null:
 			report.add_error("V-M2-ref-battle", owner_id,
 					"pack_id '%s' 不在 enemy_packs 域" % battle.pack_id)
 		if String(battle.first_strike_token) != "" \
@@ -1512,6 +1577,470 @@ static func _AllEventOutcomes(game_data: Node) -> Array:
 		if single.failure_outcome != null:
 			pairs.append([single.id, single.failure_outcome])
 	return pairs
+
+# --------------------------------------------------------------------------
+# M3 探索层域（V-M3 十一组 + 计数带）
+# --------------------------------------------------------------------------
+
+static func _CheckExploreMapLayout(report: ValidationReport, game_data: Node) -> void:
+	## V-M3-map-layout：探索图布局——rows 行数 == size.y / 每行行长 == size.x /
+	## 布局字符 ∈ legend / legend 值为已存在的探索地格 id / legend 必含 '.'；
+	## W4-03：base_expedition_days ≥ 1（耗时基准唯一权威——0/负值会让
+	## total_days 归零起步，探索白嫖）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"map/maps"):
+		var map_def := record as ExploreMapDef
+		if not map_def.legend.has(&"."):
+			report.add_error("V-M3-map-layout", map_def.id,
+					"legend 缺 '.' 图例项（空格地格未定义）")
+		if map_def.base_expedition_days < 1:
+			report.add_error("V-M3-map-layout", map_def.id,
+					"base_expedition_days %d < 1（耗时基准非法）" % map_def.base_expedition_days)
+		if map_def.rows.size() != map_def.size.y:
+			report.add_error("V-M3-map-layout", map_def.id,
+					"rows 行数 %d != size.y %d" % [map_def.rows.size(), map_def.size.y])
+		for row_index: int in map_def.rows.size():
+			var row: String = map_def.rows[row_index]
+			if row.length() != map_def.size.x:
+				report.add_error("V-M3-map-layout", map_def.id,
+						"第 %d 行行长 %d != size.x %d" % [row_index, row.length(), map_def.size.x])
+				continue
+			for row_char: String in row:
+				if not map_def.legend.has(StringName(row_char)):
+					report.add_error("V-M3-map-layout", map_def.id,
+							"布局字符 '%s' 不在 legend" % row_char)
+		for legend_char: StringName in map_def.legend:
+			var tile_id: StringName = map_def.legend[legend_char]
+			if game_data.get_record(tile_id) == null:
+				report.add_error("V-M3-map-layout", map_def.id,
+						"legend 值 '%s'（字符 '%s'）不是已存在的探索地格 id" % [tile_id, legend_char])
+
+static func _CheckExploreMapRegionCount(report: ValidationReport, game_data: Node) -> void:
+	## V-M3-map-region-count（V-5 2026-09-26 审计）：region_ids 数量 ≤ 2——
+	## DEMO 口径冻结（两段语义：全亮行段 [0] + 其余 [1]，ExploreMapState.
+	## region_index_of 的下标推导与遭遇权重查表均按此假设）；超界报错
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"map/maps"):
+		var map_def := record as ExploreMapDef
+		if map_def.region_ids.size() > 2:
+			report.add_error("V-M3-map-region-count", map_def.id,
+					"region_ids 数量 %d 超出 DEMO 冻结口径 ≤ 2（两段下标推导假设被破坏）"
+					% map_def.region_ids.size())
+
+static func _CheckExploreMapPoints(report: ValidationReport, game_data: Node) -> void:
+	## V-M3-map-points：点位坐标——交互点/目标点界内 + 非障碍 + 全域坐标查重
+	## （含 start_cell——同格双语义拦截）；DEMO 单图口径：多图时点位归属字段
+	## 未定（M4 多图时点表须加 map_ref），>1 图报 warning 后跳过界内校验
+	## 参数：报告 / GameData
+	## 返回：无
+	var maps: Array[Resource] = _DomainRecords(game_data, &"map/maps")
+	if maps.is_empty():
+		return
+	if maps.size() > 1:
+		# W4-02：warning 后即 return（原仅警告不返回——maps[0] 单图口径在多图
+		# 数据下越权校验他图点位坐标）
+		report.add_warning("V-M3-map-points", &"<map/maps>",
+				"多图点位归属字段未定（%d 图）——跳过界内/障碍校验" % maps.size())
+		return
+	var map_def: ExploreMapDef = maps[0] as ExploreMapDef
+	var seen_cells: Dictionary = {}
+	if in_bounds_cell(map_def, map_def.start_cell):
+		_RegisterPointCell(report, seen_cells, map_def.id, map_def.start_cell)
+		# M1（质检补）：出生格非障碍断言——出生在墙上 = 进图即死格
+		_CheckExplorePointCell(report, game_data, map_def, map_def.id, map_def.start_cell)
+	else:
+		report.add_error("V-M3-map-points", map_def.id,
+				"start_cell (%d, %d) 越界" % [map_def.start_cell.x, map_def.start_cell.y])
+	for record: Resource in _DomainRecords(game_data, &"map/interact_points"):
+		var point := record as InteractPointDef
+		_CheckExplorePointCell(report, game_data, map_def, point.id, point.cell)
+		_RegisterPointCell(report, seen_cells, point.id, point.cell)
+	for record: Resource in _DomainRecords(game_data, &"map/target_points"):
+		var target := record as TargetPointDef
+		_CheckExplorePointCell(report, game_data, map_def, target.id, target.cell)
+		_RegisterPointCell(report, seen_cells, target.id, target.cell)
+
+static func in_bounds_cell(map_def: ExploreMapDef, cell: Vector2i) -> bool:
+	## 探索图界内判定（校验器内部口）
+	## 参数 map_def：探索图定义；cell：查询格
+	## 返回：true = 界内
+	return cell.x >= 0 and cell.x < map_def.size.x \
+			and cell.y >= 0 and cell.y < map_def.size.y
+
+static func _CheckExplorePointCell(report: ValidationReport, game_data: Node,
+		map_def: ExploreMapDef, owner_id: StringName, cell: Vector2i) -> void:
+	## 单点位界内 + 非障碍检查（V-M3-map-points 内部口）
+	## 参数 report/game_data/map_def/owner_id/cell：报告 / GameData / 图 / 归属 / 坐标
+	## 返回：无
+	if not in_bounds_cell(map_def, cell):
+		report.add_error("V-M3-map-points", owner_id,
+				"坐标 (%d, %d) 越界" % [cell.x, cell.y])
+		return
+	var char_key: StringName = StringName(String(map_def.rows[cell.y][cell.x]))
+	var tile: ExploreTileDef = game_data.get_record(
+			map_def.legend.get(char_key, &"")) as ExploreTileDef
+	if tile == null or not tile.walkable:
+		report.add_error("V-M3-map-points", owner_id,
+				"坐标 (%d, %d) 位于不可通行地格" % [cell.x, cell.y])
+
+static func _RegisterPointCell(report: ValidationReport, seen_cells: Dictionary,
+		owner_id: StringName, cell: Vector2i) -> void:
+	## 点位坐标查重登记（V-M3-map-points 内部口——同格双语义拦截）
+	## 参数 report/seen_cells/owner_id/cell：报告 / 已占格表 / 归属 / 坐标
+	## 返回：无
+	if seen_cells.has(cell):
+		report.add_error("V-M3-map-points", owner_id,
+				"坐标 (%d, %d) 与 '%s' 重复" % [cell.x, cell.y, seen_cells[cell]])
+	else:
+		seen_cells[cell] = owner_id
+
+static func _CheckExploreFogLit(report: ValidationReport, game_data: Node) -> void:
+	## V-M3-fog-lit：fog_lit_rows ⊆ [0, size.y)（越界行号 = 无效全亮段）；
+	## L8：fog_enabled 须 true（关闭迷雾的消费通路未接——M4 接线前拦截）；
+	## W2-13：fog_lit_rows 非空 ↔ region_ids 恰 2（两段语义互为前提——
+	## ExploreMapState.region_index_of 的下标推导按全亮行段 [0] + 其余 [1]，
+	## 单边缺失即语义撕裂）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"map/maps"):
+		var map_def := record as ExploreMapDef
+		if not map_def.fog_enabled:
+			report.add_error("V-M3-fog-lit", map_def.id,
+					"fog_enabled = false（关闭迷雾通路未接——M4 接线前恒 true）")
+		for row: int in map_def.fog_lit_rows:
+			if row < 0 or row >= map_def.size.y:
+				report.add_error("V-M3-fog-lit", map_def.id,
+						"fog_lit_rows 行号 %d 越界 [0, %d)" % [row, map_def.size.y])
+		var has_lit_rows: bool = not map_def.fog_lit_rows.is_empty()
+		if has_lit_rows and map_def.region_ids.size() != 2:
+			report.add_error("V-M3-fog-lit", map_def.id,
+					"fog_lit_rows 非空但 region_ids 数 %d != 2（两段语义断裂）" %
+					map_def.region_ids.size())
+		elif not has_lit_rows and map_def.region_ids.size() == 2:
+			report.add_error("V-M3-fog-lit", map_def.id,
+					"region_ids 恰 2 但 fog_lit_rows 为空（全亮行段缺定义——两段语义断裂）")
+
+static func _CheckExploreRefPointEvent(report: ValidationReport, game_data: Node) -> void:
+	## V-M3-ref-point-event：交互点事件引用——CHAIN -> chains 域 / SINGLE、
+	## SECRET_DOOR -> singles 域 / BATTLE -> enemy_packs 域存在（L3：类型
+	## 断言——全域撞 id 的异类记录拦截）；TREASURE/EXIT ref 须空；
+	## L4：trigger × kind 合法组合矩阵（CHAIN/SINGLE/BATTLE=ENTER、
+	## TREASURE/EXIT=TAP、SECRET_DOOR=NEAR）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"map/interact_points"):
+		var point := record as InteractPointDef
+		# L4：组合矩阵
+		var expected_trigger: int = -1
+		match point.kind:
+			InteractPointDef.Kind.CHAIN, InteractPointDef.Kind.SINGLE, \
+					InteractPointDef.Kind.BATTLE:
+				expected_trigger = InteractPointDef.Trigger.ENTER
+			InteractPointDef.Kind.TREASURE, InteractPointDef.Kind.EXIT:
+				expected_trigger = InteractPointDef.Trigger.TAP
+			InteractPointDef.Kind.SECRET_DOOR:
+				expected_trigger = InteractPointDef.Trigger.NEAR
+		if point.trigger != expected_trigger:
+			report.add_error("V-M3-ref-point-event", point.id,
+					"kind=%d × trigger=%d 非法组合（期望 trigger=%d）" % [
+							point.kind, point.trigger, expected_trigger])
+		match point.kind:
+			InteractPointDef.Kind.CHAIN:
+				var chain: EventChainDef = game_data.get_record(point.ref_id) as EventChainDef
+				if chain == null:
+					report.add_error("V-M3-ref-point-event", point.id,
+							"CHAIN 引用链 '%s' 不存在或非链表" % point.ref_id)
+			InteractPointDef.Kind.SINGLE, InteractPointDef.Kind.SECRET_DOOR:
+				var single: SingleEventDef = game_data.get_record(point.ref_id) as SingleEventDef
+				if single == null:
+					report.add_error("V-M3-ref-point-event", point.id,
+							"%d 类引用单点事件 '%s' 不存在" % [point.kind, point.ref_id])
+			InteractPointDef.Kind.BATTLE:
+				var pack: EnemyPackDef = game_data.get_record(point.ref_id) as EnemyPackDef
+				if pack == null:
+					report.add_error("V-M3-ref-point-event", point.id,
+							"BATTLE 引用敌方队伍 '%s' 不存在或非队伍表" % point.ref_id)
+			InteractPointDef.Kind.TREASURE, InteractPointDef.Kind.EXIT:
+				if String(point.ref_id) != "":
+					report.add_error("V-M3-ref-point-event", point.id,
+							"kind=%d（TREASURE/EXIT）不应携带 ref_id '%s'" % [point.kind, point.ref_id])
+
+static func _CheckExploreRefChainPoint(report: ValidationReport, game_data: Node) -> void:
+	## V-M3-ref-chain-point（M2 挂起①激活 + W4-06 反向补齐）：链
+	## trigger_point_id 非空 -> 交互点存在 + kind == CHAIN + ref_id 回指本链
+	## （双向一致）；反向（W4-06 收紧）：kind=CHAIN 的交互点其 ref_id 指向的
+	## 链 trigger_point_id 须回指本点——空值报错（被挂链漏填触发点 = 板面
+	## 无入口，链不可达）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"event/chains"):
+		var chain := record as EventChainDef
+		if String(chain.trigger_point_id) == "":
+			continue
+		var point: InteractPointDef = game_data.get_record(chain.trigger_point_id) as InteractPointDef
+		if point == null:
+			report.add_error("V-M3-ref-chain-point", chain.id,
+					"触发点 '%s' 不在 map/interact_points 域" % chain.trigger_point_id)
+		elif point.kind != InteractPointDef.Kind.CHAIN:
+			report.add_error("V-M3-ref-chain-point", chain.id,
+					"触发点 '%s' kind != CHAIN" % point.id)
+		elif point.ref_id != chain.id:
+			report.add_error("V-M3-ref-chain-point", chain.id,
+					"触发点 '%s' 的 ref_id '%s' 未回指本链（双向不一致）" % [
+							point.id, point.ref_id])
+	# W4-06 反向断言：CHAIN 点 -> 链 trigger_point_id 回指（空报错收紧）
+	for record: Resource in _DomainRecords(game_data, &"map/interact_points"):
+		var point := record as InteractPointDef
+		if point.kind != InteractPointDef.Kind.CHAIN:
+			continue
+		var chain: EventChainDef = game_data.get_record(point.ref_id) as EventChainDef
+		if chain == null:
+			continue
+		if chain.trigger_point_id != point.id:
+			report.add_error("V-M3-ref-chain-point", point.id,
+					"引用链 '%s' 的 trigger_point_id '%s' 未回指本点（空/错指——板面链不可达）" % [
+							chain.id, chain.trigger_point_id])
+
+static func _CheckExploreRefQuestGoal(report: ValidationReport, game_data: Node) -> void:
+	## V-M3-ref-quest-goal（M2 挂起②③激活）：委托判据引用——goal_param 非空且
+	## EXPLORE -> target_points 域 / CLEAR -> enemy_packs 域存在（X3-11 域收紧：
+	## 按域成员判定而非全域 get_record——跨域撞 id 不放行）；L5：ESCORT/COLLECT
+	## DEMO 不支持（无判据消费通路）；map_id/region_id 非空时按域可解析
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"quest/templates"):
+		var quest := record as QuestTemplateDef
+		if quest.goal_type != QuestTemplateDef.GoalType.CLEAR \
+				and quest.goal_type != QuestTemplateDef.GoalType.EXPLORE:
+			# L5：DEMO 判据消费通路仅 CLEAR/EXPLORE（GoalTracker 双通道）
+			report.add_error("V-M3-ref-quest-goal", quest.id,
+					"goal_type=%d（DEMO 仅支持 CLEAR/EXPLORE）" % quest.goal_type)
+		if String(quest.goal_param).is_empty():
+			report.add_error("V-M3-ref-quest-goal", quest.id,
+					"goal_param 为空（判据无参数 = 死委托）")
+		elif quest.goal_type == QuestTemplateDef.GoalType.EXPLORE \
+				and not _InDomain(game_data, &"map/target_points", quest.goal_param):
+			report.add_error("V-M3-ref-quest-goal", quest.id,
+					"EXPLORE 判据参数 '%s' 不在 map/target_points 域" % quest.goal_param)
+		elif quest.goal_type == QuestTemplateDef.GoalType.CLEAR \
+				and not _InDomain(game_data, &"battle/enemy_packs", quest.goal_param):
+			report.add_error("V-M3-ref-quest-goal", quest.id,
+					"CLEAR 判据参数 '%s' 不在 battle/enemy_packs 域" % quest.goal_param)
+		if not String(quest.map_id).is_empty() \
+				and not _InDomain(game_data, &"map/maps", quest.map_id):
+			report.add_error("V-M3-ref-quest-goal", quest.id,
+					"map_id '%s' 不可解析（map/maps 域）" % quest.map_id)
+		if not String(quest.region_id).is_empty() \
+				and not _InDomain(game_data, &"world/regions", quest.region_id):
+			report.add_error("V-M3-ref-quest-goal", quest.id,
+					"region_id '%s' 不可解析（world/regions 域）" % quest.region_id)
+
+static func _InDomain(game_data: Node, domain: StringName, record_id: StringName) -> bool:
+	## 域成员判定（X3-11 收口口——按域 id 列表而非全域索引）
+	## 参数 game_data/domain/record_id：GameData / 域键 / 记录 id
+	## 返回：true = 该域含此 id
+	return game_data.get_domain_ids(domain).has(record_id)
+
+static func _CheckExploreRefRegion(report: ValidationReport, game_data: Node) -> void:
+	## V-M3-ref-region：区域引用——map.region_ids 与 encw.region_id 均须为
+	## world/regions 域已有记录（W4-04：as 类型断言——全域撞 id 不放行）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"map/maps"):
+		var map_def := record as ExploreMapDef
+		for region_id: StringName in map_def.region_ids:
+			if game_data.get_record(region_id) as RegionDef == null:
+				report.add_error("V-M3-ref-region", map_def.id,
+						"区域引用 '%s' 不在 world/regions 域" % region_id)
+	for record: Resource in _DomainRecords(game_data, &"map/encounter_weights"):
+		var weight := record as EncounterWeightDef
+		if game_data.get_record(weight.region_id) as RegionDef == null:
+			report.add_error("V-M3-ref-region", weight.id,
+					"区域引用 '%s' 不在 world/regions 域" % weight.region_id)
+
+static func _CheckExploreSecretReveal(report: ValidationReport, game_data: Node) -> void:
+	## V-M3-secret-reveal：暗门揭示配置——reveal_cells 非空（W4-13：空表 =
+	## 死配置——检定成功后无处揭示）+ reveal_cells 界内 + reveal_tile_id
+	## 可解析且可通行（揭示格必为捷径——障碍揭示格是死配置）+ 引用单点事件
+	## 的成功出口 unlock_flag 非空（揭示状态经 unlock_flag 消费——闭环锚点）；
+	## W4-02：多图与 map-points 同口径（warning 后跳过，不做 maps[0] 越权校验）
+	## 参数：报告 / GameData
+	## 返回：无
+	var maps: Array[Resource] = _DomainRecords(game_data, &"map/maps")
+	if maps.is_empty():
+		return
+	if maps.size() > 1:
+		report.add_warning("V-M3-secret-reveal", &"<map/maps>",
+				"多图点位归属字段未定（%d 图）——跳过暗门揭示界内校验" % maps.size())
+		return
+	var map_def: ExploreMapDef = maps[0] as ExploreMapDef
+	for record: Resource in _DomainRecords(game_data, &"map/interact_points"):
+		var point := record as InteractPointDef
+		if point.kind != InteractPointDef.Kind.SECRET_DOOR:
+			continue
+		if point.reveal_cells.is_empty():
+			report.add_error("V-M3-secret-reveal", point.id,
+					"reveal_cells 为空（暗门揭示无目标格——死配置）")
+			continue
+		for cell: Vector2i in point.reveal_cells:
+			if not in_bounds_cell(map_def, cell):
+				report.add_error("V-M3-secret-reveal", point.id,
+						"揭示格 (%d, %d) 越界" % [cell.x, cell.y])
+				continue
+		var reveal_tile: ExploreTileDef = game_data.get_record(point.reveal_tile_id) as ExploreTileDef
+		if reveal_tile == null:
+			report.add_error("V-M3-secret-reveal", point.id,
+					"reveal_tile_id '%s' 不可解析（map/tiles 域）" % point.reveal_tile_id)
+		elif not reveal_tile.walkable:
+			report.add_error("V-M3-secret-reveal", point.id,
+					"reveal_tile_id '%s' 不可通行（捷径格必须可通行）" % point.reveal_tile_id)
+		var single: SingleEventDef = game_data.get_record(point.ref_id) as SingleEventDef
+		if single == null or single.success_outcome == null \
+				or String(single.success_outcome.unlock_flag).is_empty():
+			report.add_error("V-M3-secret-reveal", point.id,
+					"引用单点事件 '%s' 的成功出口缺 unlock_flag（揭示消费闭环断链）" % point.ref_id)
+
+static func _CheckExploreHiddenMark(report: ValidationReport, game_data: Node) -> void:
+	## V-M3-hidden-mark：隐藏标记闭环——hm.unlock_flag 必须与事件域某出口的
+	## unlock_flag 匹配（登记了无消费方的标记 = 死配置）
+	## 参数：报告 / GameData
+	## 返回：无
+	var event_flags: Dictionary = {}
+	for outcome_pair: Array in _AllEventOutcomes(game_data):
+		var outcome: EventOutcomeDef = outcome_pair[1]
+		if not String(outcome.unlock_flag).is_empty():
+			event_flags[outcome.unlock_flag] = outcome_pair[0]
+	for record: Resource in _DomainRecords(game_data, &"event/hidden_marks"):
+		var mark := record as HiddenMarkDef
+		if String(mark.unlock_flag).is_empty():
+			report.add_error("V-M3-hidden-mark", mark.id, "unlock_flag 为空")
+		elif not event_flags.has(mark.unlock_flag):
+			report.add_error("V-M3-hidden-mark", mark.id,
+					"unlock_flag '%s' 无事件出口承载（闭环断链）" % mark.unlock_flag)
+
+static func _CheckExploreEncwDomain(report: ValidationReport, game_data: Node) -> void:
+	## V-M3-encw-domain：遭遇权重量域——chance ∈ [0,1] / random_max ≥ 1 /
+	## random_pack_id 可解析（battle/enemy_packs 域——W4-04 as 类型断言）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"map/encounter_weights"):
+		var weight := record as EncounterWeightDef
+		if weight.encounter_chance < 0.0 or weight.encounter_chance > 1.0:
+			report.add_error("V-M3-encw-domain", weight.id,
+					"encounter_chance %f 越界 [0, 1]" % weight.encounter_chance)
+		if weight.random_max < 1:
+			report.add_error("V-M3-encw-domain", weight.id,
+					"random_max %d < 1" % weight.random_max)
+		if game_data.get_record(weight.random_pack_id) as EnemyPackDef == null:
+			report.add_error("V-M3-encw-domain", weight.id,
+					"random_pack_id '%s' 不在 battle/enemy_packs 域" % weight.random_pack_id)
+
+static func _CheckExploreTreasureDomain(report: ValidationReport, game_data: Node) -> void:
+	## V-M3-treasure-domain：宝箱金域——TREASURE 点金域 ∈ [20,40] 且
+	## min ≤ max（DEMO 带宽——案 18 §2 口径）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"map/interact_points"):
+		var point := record as InteractPointDef
+		if point.kind != InteractPointDef.Kind.TREASURE:
+			continue
+		if point.gold_min < 20 or point.gold_max > 40 or point.gold_min > point.gold_max:
+			report.add_error("V-M3-treasure-domain", point.id,
+					"金域 [%d, %d] 非法（要求 20 ≤ min ≤ max ≤ 40）" % [
+							point.gold_min, point.gold_max])
+
+static func _CheckExploreCounts(report: ValidationReport, game_data: Node) -> void:
+	## V-M3-count：探索域计数带（cfg content_map_count/content_interact_points/
+	## content_target_points/content_encounter_weights 四组——warning 级）
+	## 参数：报告 / GameData
+	## 返回：无
+	_CheckCountBand(report, game_data, "<map/maps>", "content_map_count",
+			"探索图", game_data.get_domain_ids(&"map/maps").size(), 1, "V-M3-count")
+	_CheckCountBand(report, game_data, "<map/interact_points>", "content_interact_points",
+			"交互点", game_data.get_domain_ids(&"map/interact_points").size(), 11, "V-M3-count")
+	_CheckCountBand(report, game_data, "<map/target_points>", "content_target_points",
+			"目标点", game_data.get_domain_ids(&"map/target_points").size(), 6, "V-M3-count")
+	_CheckCountBand(report, game_data, "<map/encounter_weights>", "content_encounter_weights",
+			"遭遇权重", game_data.get_domain_ids(&"map/encounter_weights").size(), 2, "V-M3-count")
+
+static func _CheckQuestRewardDomain(report: ValidationReport, game_data: Node) -> void:
+	## V-M3-quest-reward（W4-15）：委托模板奖励量级带宽校验——exp ∈ [40, 120] /
+	## gold ∈ [50, 300] / reputation ∈ [0, 10] / reward 非空。
+	## 带宽声明（DEMO 经济档，2026-09-26 审计自定）：当前两行委托均为
+	## 80 exp / 150 金 / 5 声望（案 18 §2.3/§2.6 定稿），带宽按 ±50% 容差取整
+	## 收口——数值改表越带即拦截，防单行手滑数量级错误（如 1500 金）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"quest/templates"):
+		var quest := record as QuestTemplateDef
+		if quest.reward == null:
+			report.add_error("V-M3-quest-reward", quest.id,
+					"reward 为空（委托无奖励——结算申报空转）")
+			continue
+		if quest.reward.exp < 40 or quest.reward.exp > 120:
+			report.add_error("V-M3-quest-reward", quest.id,
+					"exp %d 越界 [40, 120]（DEMO 经济带宽）" % quest.reward.exp)
+		if quest.reward.gold < 50 or quest.reward.gold > 300:
+			report.add_error("V-M3-quest-reward", quest.id,
+					"gold %d 越界 [50, 300]（DEMO 经济带宽）" % quest.reward.gold)
+		if quest.reward.reputation < 0 or quest.reward.reputation > 10:
+			report.add_error("V-M3-quest-reward", quest.id,
+					"reputation %d 越界 [0, 10]（DEMO 经济带宽）" % quest.reward.reputation)
+
+static func _CheckExploreMapConnectivity(report: ValidationReport, game_data: Node) -> void:
+	## V-M3-map-connectivity（W5-6）：探索图连通性——start_cell 出发四向 BFS
+	## （可通行地格）可达全部交互点/目标点（不达 = 板面点位永不可触达——
+	## 暗门捷径格不在此列：其为墙格揭示后开放，非点位承载格）；多图口径与
+	## map-points 同（W4-02：warning 后跳过）
+	## 参数：报告 / GameData
+	## 返回：无
+	var maps: Array[Resource] = _DomainRecords(game_data, &"map/maps")
+	if maps.is_empty() or maps.size() > 1:
+		return
+	var map_def: ExploreMapDef = maps[0] as ExploreMapDef
+	# 可通行格闭包（legend -> 地格 walkable——不建 ExploreMapState，校验器
+	# 侧最小 BFS；揭示覆写不参与：暗门捷径属运行时解锁非基础连通义务；
+	# 行长错位保护：短行越界列跳过——行长合法域归 V-M3-map-layout 拦截）
+	var walkable_cells: Dictionary = {}
+	for row_index: int in map_def.size.y:
+		if row_index >= map_def.rows.size():
+			break
+		for col: int in mini(map_def.size.x, map_def.rows[row_index].length()):
+			var char_key: StringName = StringName(String(map_def.rows[row_index][col]))
+			var tile_id: StringName = map_def.legend.get(char_key, &"")
+			var tile: ExploreTileDef = game_data.get_record(tile_id) as ExploreTileDef
+			if tile != null and tile.walkable:
+				walkable_cells[Vector2i(col, row_index)] = true
+	# BFS 自 start_cell（start 不可通行时全部点位报不可达——同口径暴露）
+	var reachable: Dictionary = {}
+	var frontier: Array[Vector2i] = []
+	if walkable_cells.has(map_def.start_cell):
+		reachable[map_def.start_cell] = true
+		frontier.append(map_def.start_cell)
+	while not frontier.is_empty():
+		var current: Vector2i = frontier.pop_front()
+		for direction: Vector2i in [Vector2i.UP, Vector2i.DOWN,
+				Vector2i.LEFT, Vector2i.RIGHT]:
+			var next: Vector2i = current + direction
+			if reachable.has(next) or not walkable_cells.has(next):
+				continue
+			reachable[next] = true
+			frontier.append(next)
+	# 全点位可达断言（交互点 + 目标点）
+	for record: Resource in _DomainRecords(game_data, &"map/interact_points"):
+		var point := record as InteractPointDef
+		if not reachable.has(point.cell):
+			report.add_error("V-M3-map-connectivity", point.id,
+					"点位 (%d, %d) 自 start_cell 不可达（基础连通断裂）" % [
+							point.cell.x, point.cell.y])
+	for record: Resource in _DomainRecords(game_data, &"map/target_points"):
+		var target := record as TargetPointDef
+		if not reachable.has(target.cell):
+			report.add_error("V-M3-map-connectivity", target.id,
+					"点位 (%d, %d) 自 start_cell 不可达（基础连通断裂）" % [
+							target.cell.x, target.cell.y])
 
 static func _AllDomains(game_data: Node) -> Array[StringName]:
 	## 全部数据域键（C-1 单源：从 GameData.DOMAIN_SCHEMA 键集派生——域清单

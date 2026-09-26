@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="InteractPointDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/interact_point_def.gd" id="1_wg3wa"]
+
+[resource]
+script = ExtResource("1_wg3wa")
+id = &"evp_mine_01"
+display_name = "塌方救援"
+cell = Vector2i(1, 6)
+ref_id = &"chain_mine_collapse"
+comment = "【占位·试玩校准】evp_<区域>_<序>：交互点（链入口——塌方区）"

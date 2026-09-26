@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="RegionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/region_def.gd" id="1_gmeu6"]
+
+[resource]
+script = ExtResource("1_gmeu6")
+id = &"reg_mine"
+display_name = "矿洞一层"
+description = "哥布林盘踞的旧矿洞，深处有巢穴。"
+comment = "【占位·试玩校准】reg_<语义>：世界区域（M3；探索图雾行段）"

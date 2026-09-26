@@ -333,6 +333,60 @@ func test_true_idle_when_no_attackable_target() -> void:
 	assert_vector(action.move_dest).is_equal(EnemyAI.NO_CELL)
 	assert_vector(action.attack_cell).is_equal(EnemyAI.NO_CELL)
 
+func test_fallback4_forces_attack_when_closer_cell_exists() -> void:
+	## 移动裁决兜底 4（M3 试玩修复·用户场景复现）：主目标（追击记忆·远处）
+	## 存在严格更近可达格——此前版本走到「移动+待机」直接返回，**跳过换打
+	## 检查**（兜底 2 仅在完全不可达时触发），贴身可及目标被无视干站着——
+	## 用户观察「有能攻击的人却不去攻击」的根因。修复后：移动后位置无可及
+	## 目标时，放弃移动原地攻击当前位置可及目标（追击记忆随实际攻击对象更新）
+	var rat := _MakeEnemy(&"rat", "en_m1_mutant_rat.tres", Vector2i(3, 4), 5)
+	var primary := _MakeAlly(&"primary", Vector2i(0, 0), 90)
+	var adjacent := _MakeAlly(&"adjacent", Vector2i(3, 5), 90)
+	rat.ai_context[&"last_target_id"] = primary.id
+	# 前提锚点：主目标 (0,0) 西北侧——西向接近路被固有障碍 (2,4)/(3,3)/(1,3)
+	# 封死（可达集全在东侧），range 1 攻击位不可入；但存在严格更近可达格
+	# (4,1)（距主目标 5 > range 1——移动后仍不可及，旧版在此「移动+待机」）
+	_MakeAlly(&"wall", Vector2i(1, 0), 90)
+	var reachable: Array[Vector2i] = _grid.find_reachable(rat, rat.move_final())
+	assert_bool(reachable.has(Vector2i(4, 1))).is_true()
+	var action := EnemyAI.decide(rat, _grid, _PlacedAllies(), _Ctx())
+	# 精力 5 → 普攻（射程 1）；贴身 adjacent 当前位置可及 → 原地攻击不移动
+	assert_str(String(action.skill_id)).is_equal("skl_atk_enemy_common")
+	assert_str(String(action.target_unit.id)).is_equal("adjacent")
+	assert_vector(action.move_dest).is_equal(EnemyAI.NO_CELL)
+	assert_vector(action.attack_cell).is_equal(Vector2i(3, 5))
+	assert_str(String(rat.ai_context.get(&"last_target_id", &""))) \
+			.is_equal("adjacent")
+
+func test_fallback4_ranged_variant_same_contract() -> void:
+	## 兜底 4·远程变体：同构契约（射程 2 远程技 + 主目标远处有更近格）——
+	## 移动后位置（(1,2) 视角）无可及目标 → 原地攻击贴身目标（射程内 + 相邻
+	## LOS 通），不绕开可打目标纯走位
+	var rat := _RangedRat(&"archer", Vector2i(3, 4), 2)
+	var primary := _MakeAlly(&"primary", Vector2i(0, 0), 90)
+	var adjacent := _MakeAlly(&"adjacent", Vector2i(3, 5), 90)
+	rat.ai_context[&"last_target_id"] = primary.id
+	var action := EnemyAI.decide(rat, _grid, _PlacedAllies(), _RangedCtx())
+	assert_str(String(action.skill_id)).is_equal("skl_test_ranged_fb")
+	assert_str(String(action.target_unit.id)).is_equal("adjacent")
+	assert_vector(action.move_dest).is_equal(EnemyAI.NO_CELL)
+	assert_vector(action.attack_cell).is_equal(Vector2i(3, 5))
+
+func test_attackable_at_filters_by_view_cell() -> void:
+	## _AttackableAt 单源单测（兜底 2/4 共用）：指定视角格过滤「射程内且视线
+	## 通（近战免）」候选并按四级链序取；视角格无可及目标返 null
+	var rat := _MakeEnemy(&"rat", "en_m1_mutant_rat.tres", Vector2i(3, 4))
+	var near := _MakeAlly(&"near", Vector2i(3, 5), 90)
+	var far := _MakeAlly(&"far", Vector2i(0, 0), 90)
+	var melee: SkillDef = _skill_lookup.call(&"skl_atk_enemy_common") as SkillDef
+	# 当前位置视角：near 距 1 可及（四级链序单选）
+	var picked: Object = EnemyAI._AttackableAt(rat, rat.grid_pos, melee,
+			[near, far], _grid, _cfg, null)
+	assert_str(String(picked.id)).is_equal("near")
+	# 远视角格 (5,4)：near 距 3 / far 距 9 均超射程 → null
+	assert_object(EnemyAI._AttackableAt(rat, Vector2i(5, 4), melee,
+			[near, far], _grid, _cfg, null)).is_null()
+
 func test_expected_damage_uses_standing_panel_mult() -> void:
 	## AI 期望伤害消费站位面板层（S3-06）：ctx 注入 status_manager 后——
 	## 敌站高地（面板 ×1.2）期望伤害高于平地；缺省（null）回退 1.0

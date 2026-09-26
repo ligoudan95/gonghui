@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="InteractPointDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/interact_point_def.gd" id="1_sljw2"]
+
+[resource]
+script = ExtResource("1_sljw2")
+id = &"evp_village_02"
+display_name = "井边的旅人"
+cell = Vector2i(5, 0)
+kind = 1
+ref_id = &"sp_village_traveler"
+comment = "【占位·试玩校准】evp_<区域>_<序>：交互点（村子单点——暗门铺垫）"

@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="TargetPointDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/target_point_def.gd" id="1_fmlw7"]
+
+[resource]
+script = ExtResource("1_fmlw7")
+id = &"tp_mine_track_yard"
+display_name = "轨道调车场"
+cell = Vector2i(11, 13)
+comment = "【占位·试玩校准】tp_<区域>_<语义>：目标点（调车场勘验点）"

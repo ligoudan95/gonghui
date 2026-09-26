@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ExploreTileDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/explore_tile_def.gd" id="1_ab7i5"]
+
+[resource]
+script = ExtResource("1_ab7i5")
+id = &"etile_village_ground"
+display_name = "村中土路"
+fill_color = Color(0.3, 0.38, 0.24, 1)
+comment = "【占位·试玩校准】etile_<语义>：探索地格（村子段地面）"

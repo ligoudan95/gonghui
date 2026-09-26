@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="InteractPointDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/interact_point_def.gd" id="1_l8xpf"]
+
+[resource]
+script = ExtResource("1_l8xpf")
+id = &"evp_mine_02"
+display_name = "矿道鬼火"
+cell = Vector2i(3, 8)
+ref_id = &"chain_mine_wisp"
+comment = "【占位·试玩校准】evp_<区域>_<序>：交互点（链入口——岔道）"

@@ -1,5 +1,5 @@
-## 战棋 UI 流集成测试（M1 批 3，GdUnitSceneRunner）
-## 覆盖：battle_screen 经调试入口加载（guild_shell → 随机遭遇按钮 → 场景切换）、
+## 战棋 UI 流集成测试（M1 批 3，GdUnitSceneRunner；B-22 后入口改直构参数）
+## 覆盖：battle_screen 经直构参数加载（BattleParams 默认 4 职业 → 场景切换）、
 ## 信号流冒烟（round_started/turn_started 到达——轮询式驱动到回合 2 佐证）、
 ## request_move 走通（我方单位移动生效）、battle_screen 直开无参优雅降级、
 ## 地格 hover 描述契约（特殊/障碍格 PASS + tooltip 入表文案；普通格不显示）。
@@ -7,8 +7,9 @@
 extends GdUnitTestSuite
 
 ## 场景路径
-const GUILD_SCENE: String = "res://scenes/guild/guild_shell.tscn"
 const BATTLE_SCENE: String = "res://scenes/battle/battle_screen.tscn"
+## SceneId.BATTLE_SCREEN（B-22：调试入口拆除——测试直构参数进战斗屏）
+const SCENE_BATTLE: int = 2
 ## 信号等待帧上限（超时防死等）
 const MAX_WAIT_FRAMES: int = 300
 
@@ -23,14 +24,31 @@ func before_test() -> void:
 	var no_params: Dictionary = {}
 	scene_manager.pending_params = no_params
 
-func test_guild_debug_entry_opens_battle_screen() -> void:
-	## 调试入口全链路：公会壳 → 默认 4 职业勾选 → 随机遭遇按钮 →
-	## BATTLE_SCREEN 挂载 + 战斗装配成立（徽章/上下文/控制器就绪）
-	var runner: GdUnitSceneRunner = scene_runner(GUILD_SCENE)
-	var button: Button = runner.find_child("DebugRandomButton", true, false) as Button
-	assert_object(button).is_not_null()
-	button.pressed.emit()
+func _EnterRandomBattle() -> void:
+	## B-22：公会壳调试入口拆除——直构 BattleParams（默认 4 职业，等价原
+	## 调试链路）经 SceneManager 进 BATTLE_SCREEN
+	## 参数：无
+	## 返回：无（协程——等场景切换落地）
+	var game_data: Node = get_tree().root.get_node("GameData")
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var party: Array[AdventurerData] = []
+	for pair: Array in [[&"warrior", &"cls_warrior"], [&"rogue", &"cls_rogue"],
+			[&"mage", &"cls_mage"], [&"priest", &"cls_priest"]]:
+		var cls: ClassDef = game_data.get_record(pair[1]) as ClassDef
+		var attrs: Dictionary[StringName, int] = AttrRoller.roll_fixed_four(cls, rng)
+		party.append(AdventurerData.create_debug(pair[0], pair[1], attrs, game_data))
+	var params := BattleParams.new()
+	params.pack_id = &"enc_m1_random_pack"
+	params.party = party
+	get_tree().root.get_node("SceneManager").go(SCENE_BATTLE,
+			{&"battle_params": params})
 	await _AwaitSceneSwap()
+
+func test_battle_entry_opens_battle_screen() -> void:
+	## 入口全链路：直构参数（默认 4 职业）→ BATTLE_SCREEN 挂载 +
+	## 战斗装配成立（徽章/上下文/控制器就绪）
+	await _EnterRandomBattle()
 	var battle: Control = get_tree().root.find_child("BattleScreen", true, false) as Control
 	assert_object(battle).is_not_null()
 	assert_object(battle.controller).is_not_null()
@@ -47,10 +65,7 @@ func test_signal_flow_and_request_move() -> void:
 	## 信号流冒烟 + 指令走通：调试入口进战斗 → 轮询等首轮我方指令窗 →
 	## 连接信号 → 自动打完整回合（我方全部结束行动轮）→ 回合 2 的
 	## round_started 到达佐证信号流；随后 request_move 生效（单位位置变更）
-	var runner: GdUnitSceneRunner = scene_runner(GUILD_SCENE)
-	var button: Button = runner.find_child("DebugRandomButton", true, false) as Button
-	button.pressed.emit()
-	await _AwaitSceneSwap()
+	await _EnterRandomBattle()
 	var battle: Control = get_tree().root.find_child("BattleScreen", true, false) as Control
 	assert_object(battle).is_not_null()
 	battle.controller.delay_seconds = 0.0
@@ -129,10 +144,7 @@ func test_tile_tooltip_contract() -> void:
 	## 地格 hover 描述契约（2026-09-24 试玩反馈）：特殊/障碍格 PASS + tooltip
 	## （地格名 + 效果描述——文案取 tile 表 description，铁律①零硬编码）；
 	## 普通格 IGNORE 不显示（避免打扰）
-	var runner: GdUnitSceneRunner = scene_runner(GUILD_SCENE)
-	var button: Button = runner.find_child("DebugRandomButton", true, false) as Button
-	button.pressed.emit()
-	await _AwaitSceneSwap()
+	await _EnterRandomBattle()
 	var battle: Control = get_tree().root.find_child("BattleScreen", true, false) as Control
 	assert_object(battle).is_not_null()
 	var board: BattleBoard = battle.get_node("%BoardLayer") as BattleBoard
@@ -162,10 +174,7 @@ func test_tile_tooltip_contract() -> void:
 func test_skill_button_tooltip_contract() -> void:
 	## 技能按钮 hover 描述契约（2026-09-24 二轮反馈）：首个我方指令窗内
 	## 普攻钮 tooltip 含消耗/射程/预计伤害行（数值走 §3.4 同源公式，文案入表）
-	var runner: GdUnitSceneRunner = scene_runner(GUILD_SCENE)
-	var button: Button = runner.find_child("DebugRandomButton", true, false) as Button
-	button.pressed.emit()
-	await _AwaitSceneSwap()
+	await _EnterRandomBattle()
 	var battle: Control = get_tree().root.find_child("BattleScreen", true, false) as Control
 	assert_object(battle).is_not_null()
 	battle.controller.delay_seconds = 0.0
@@ -189,10 +198,7 @@ func test_action_bar_refresh_after_skill_executed() -> void:
 	## （帧末 deferred——真实时序下信号发射时 has_acted 尚未置位）——行动权
 	## 耗尽后普攻/技能钮置灰、行动结束/撤退保持可用（不写死全灰）；
 	## 未行动时技能钮可用（防过度置灰回归）
-	var runner: GdUnitSceneRunner = scene_runner(GUILD_SCENE)
-	var button: Button = runner.find_child("DebugRandomButton", true, false) as Button
-	button.pressed.emit()
-	await _AwaitSceneSwap()
+	await _EnterRandomBattle()
 	var battle: Control = get_tree().root.find_child("BattleScreen", true, false) as Control
 	assert_object(battle).is_not_null()
 	battle.controller.delay_seconds = 0.0
@@ -253,10 +259,7 @@ func test_out_of_range_tap_keeps_selection() -> void:
 	## 超射程点击契约（2026-09-24 八轮反馈）：技能模式下点射程外存活敌格
 	## → 选择保留 + 日志提示（不再静默取消——「像没打中」的反馈缺失）；
 	## 点纯空区域维持原取消语义
-	var runner: GdUnitSceneRunner = scene_runner(GUILD_SCENE)
-	var button: Button = runner.find_child("DebugRandomButton", true, false) as Button
-	button.pressed.emit()
-	await _AwaitSceneSwap()
+	await _EnterRandomBattle()
 	var battle: Control = get_tree().root.find_child("BattleScreen", true, false) as Control
 	assert_object(battle).is_not_null()
 	battle.controller.delay_seconds = 0.0
@@ -288,10 +291,7 @@ func test_target_tips_contract() -> void:
 	## 含「预计伤害/命中率」（数值与 BattleRules 链同源复算一致——减免后
 	## 伤害 + 含站位状态命中）；面板 IGNORE 不遮点击；点空格取消 → tips
 	## 与选择态同步清理
-	var runner: GdUnitSceneRunner = scene_runner(GUILD_SCENE)
-	var button: Button = runner.find_child("DebugRandomButton", true, false) as Button
-	button.pressed.emit()
-	await _AwaitSceneSwap()
+	await _EnterRandomBattle()
 	var battle: Control = get_tree().root.find_child("BattleScreen", true, false) as Control
 	assert_object(battle).is_not_null()
 	battle.controller.delay_seconds = 0.0
@@ -355,10 +355,7 @@ func test_los_blocked_range_rendering_and_tap() -> void:
 	## 视线通格红显（无标记）、断格（障碍 (2,2) 后方 (3-5,2)）带 los_blocked
 	## 元标记 + 斜杠子节点；②点断格不进确认态（_pending_cell 保持哨兵）+
 	## 选择态保留；点通格正常进确认
-	var runner: GdUnitSceneRunner = scene_runner(GUILD_SCENE)
-	var button: Button = runner.find_child("DebugRandomButton", true, false) as Button
-	button.pressed.emit()
-	await _AwaitSceneSwap()
+	await _EnterRandomBattle()
 	var battle: Control = get_tree().root.find_child("BattleScreen", true, false) as Control
 	assert_object(battle).is_not_null()
 	battle.controller.delay_seconds = 0.0
@@ -426,10 +423,7 @@ func test_target_tips_hidden_on_target_switch() -> void:
 	## 换目标 tips 不残留（盲审批 3 D-3）：进确认态（tips 显示）后点射程内
 	## 空格（无可显示数据的新目标位）→ tips 立即隐藏且不残留旧目标数据；
 	## 再点敌方目标格 → tips 重新显示（换目标 show 正常）；断格路径同理隐藏
-	var runner: GdUnitSceneRunner = scene_runner(GUILD_SCENE)
-	var button: Button = runner.find_child("DebugRandomButton", true, false) as Button
-	button.pressed.emit()
-	await _AwaitSceneSwap()
+	await _EnterRandomBattle()
 	var battle: Control = get_tree().root.find_child("BattleScreen", true, false) as Control
 	assert_object(battle).is_not_null()
 	battle.controller.delay_seconds = 0.0
@@ -483,10 +477,7 @@ func test_batch_a_table_driven_contract() -> void:
 	## 批 A 表驱动链路契约（H1/H2/H3）：①地格渲染读表——改 fill_color 重建
 	## 即变（表驱动零改码）；②sprite 读取链——_SpriteIdOf（查表）→ _TextureOf
 	## （registry→load）非空；③UI 预计伤害与执行链同源同值（undead 惩击 ×1.5）
-	var runner: GdUnitSceneRunner = scene_runner(GUILD_SCENE)
-	var button: Button = runner.find_child("DebugRandomButton", true, false) as Button
-	button.pressed.emit()
-	await _AwaitSceneSwap()
+	await _EnterRandomBattle()
 	var battle: Control = get_tree().root.find_child("BattleScreen", true, false) as Control
 	assert_object(battle).is_not_null()
 	battle.controller.delay_seconds = 0.0
@@ -537,10 +528,7 @@ func test_ally_skill_tap_on_enemy_rejected() -> void:
 	## 治疗技点敌方格（S4-1）：ALLY 技点敌方单位格 → 不进确认态（pending
 	## 保持哨兵）+ 日志「目标非法」提示；恒 false 死代码已删（敌方分支内
 	## 直接拦截）
-	var runner: GdUnitSceneRunner = scene_runner(GUILD_SCENE)
-	var button: Button = runner.find_child("DebugRandomButton", true, false) as Button
-	button.pressed.emit()
-	await _AwaitSceneSwap()
+	await _EnterRandomBattle()
 	var battle: Control = get_tree().root.find_child("BattleScreen", true, false) as Control
 	assert_object(battle).is_not_null()
 	battle.controller.delay_seconds = 0.0
@@ -602,10 +590,7 @@ func test_ally_skill_tap_on_enemy_rejected() -> void:
 func test_attack_button_toggles_and_move_after_action() -> void:
 	## 普攻钮 toggle（S4-7）+ 行动后仍可移动（S3-03 UI）：普攻钮再点取消
 	## 回移动范围；已行动后移动范围照常显示（has_moved 短路才隐藏路径预览）
-	var runner: GdUnitSceneRunner = scene_runner(GUILD_SCENE)
-	var button: Button = runner.find_child("DebugRandomButton", true, false) as Button
-	button.pressed.emit()
-	await _AwaitSceneSwap()
+	await _EnterRandomBattle()
 	var battle: Control = get_tree().root.find_child("BattleScreen", true, false) as Control
 	assert_object(battle).is_not_null()
 	battle.controller.delay_seconds = 0.0
@@ -633,3 +618,115 @@ func test_attack_button_toggles_and_move_after_action() -> void:
 			.override_failure_message("行动后移动应受理（S3-03 顺序任意）")
 	assert_bool(unit.has_moved).is_true()
 	battle.controller.abort_battle()
+
+
+func _AwaitFirstCommandWindow(battle: Control) -> BattleUnit:
+	## 辅助：轮询等待首个我方指令窗（战斗 _ready 同步开战），返回行动单位
+	## 参数 battle：战斗屏
+	## 返回：当前行动单位（超时 null——由调用方断言）
+	var waited: int = 0
+	while (battle.controller.current_unit == null \
+			or not battle.controller.awaiting_command) and waited < MAX_WAIT_FRAMES:
+		await get_tree().process_frame
+		waited += 1
+	return battle.controller.current_unit
+
+func _FarEmptyCell(battle: Control, unit: BattleUnit) -> Vector2i:
+	## 辅助：取界内「不可达且无占位」空格（取消路径测试的噪音点击目标）
+	## 参数 battle：战斗屏；unit：行动单位
+	## 返回：格坐标（找不到返回 (-1,-1)——由调用方断言）
+	var reachable: Array[Vector2i] = battle.context.grid.find_reachable(unit, unit.move_final())
+	for y: int in battle.context.grid.size.y:
+		for x: int in battle.context.grid.size.x:
+			var cell: Vector2i = Vector2i(x, y)
+			if not reachable.has(cell) and battle.context.grid.get_unit_at(cell) == null:
+				return cell
+	return Vector2i(-1, -1)
+
+func test_first_turn_move_range_shown_at_battle_start() -> void:
+	## 反馈②③修复锚①（开局首单位显示断言）：进战斗 → 首个指令窗即盗贼
+	## （敏捷 15-17 全场最快——速度排序排第一）→ 移动范围覆盖层已画且
+	## 数量 == find_reachable（渲染链 _OnTurnStarted→show_move_range 无丢失）
+	await _EnterRandomBattle()
+	var battle: Control = get_tree().root.find_child("BattleScreen", true, false) as Control
+	assert_object(battle).is_not_null()
+	battle.controller.delay_seconds = 0.0
+	var unit: BattleUnit = await _AwaitFirstCommandWindow(battle)
+	assert_object(unit).is_not_null()
+	assert_str(String(unit.unit_id)).is_equal("rogue") \
+			.override_failure_message("盗贼敏捷全场最高应排行动首位")
+	assert_bool(unit.is_controllable()).is_true()
+	var board: BattleBoard = battle.get_node("%BoardLayer") as BattleBoard
+	var reachable: Array[Vector2i] = battle.context.grid.find_reachable(unit, unit.move_final())
+	assert_int(reachable.size()).is_greater(0)
+	assert_int(board._move_overlays.size()).is_equal(reachable.size()) \
+			.override_failure_message("开局首单位移动范围应完整显示")
+	battle.controller.abort_battle()
+
+func test_move_range_restored_after_cancel_taps() -> void:
+	## 反馈②③修复锚②（取消后回显——R3-05 口径扩展）：指令窗内三类取消路径
+	## （点不可达空格 / 出格点按 / 技能模式点空区域）均回显移动范围——
+	## 「跳过演出」连点漏入指令窗不再永久隐藏范围层
+	await _EnterRandomBattle()
+	var battle: Control = get_tree().root.find_child("BattleScreen", true, false) as Control
+	assert_object(battle).is_not_null()
+	battle.controller.delay_seconds = 0.0
+	var unit: BattleUnit = await _AwaitFirstCommandWindow(battle)
+	assert_object(unit).is_not_null()
+	var board: BattleBoard = battle.get_node("%BoardLayer") as BattleBoard
+	var far_cell: Vector2i = _FarEmptyCell(battle, unit)
+	assert_vector(far_cell).is_not_equal(Vector2i(-1, -1))
+	# ①点不可达空格 = 取消：范围层回显（修复前被单向清空）
+	battle._HandleMoveTap(far_cell)
+	assert_vector(battle._pending_cell).is_equal(battle.NO_CELL)
+	assert_int(board._move_overlays.size()).is_greater(0) \
+			.override_failure_message("点不可达空格取消后应回显移动范围")
+	# ②路径预览后再点不可达空格 = 取消预览：范围层回显
+	var reachable: Array[Vector2i] = battle.context.grid.find_reachable(unit, unit.move_final())
+	battle._HandleMoveTap(reachable[0])
+	assert_vector(battle._pending_cell).is_equal(reachable[0])
+	battle._HandleMoveTap(far_cell)
+	assert_vector(battle._pending_cell).is_equal(battle.NO_CELL)
+	assert_int(board._move_overlays.size()).is_greater(0) \
+			.override_failure_message("取消路径预览后应回显移动范围")
+	# ③出格点按（跳过连点漏入指令窗的典型落点）= 取消：范围层回显
+	var out_event := InputEventMouseButton.new()
+	out_event.button_index = MOUSE_BUTTON_LEFT
+	out_event.pressed = true
+	out_event.position = Vector2(-64.0, -64.0)
+	battle._on_board_gui_input(out_event)
+	assert_int(board._move_overlays.size()).is_greater(0) \
+			.override_failure_message("出格点按取消后应回显移动范围")
+	# ④技能模式点纯空区域 = 取消技能：回移动范围（与按钮取消同口径）
+	battle._EnterSkillMode(unit.base_attack_id)
+	assert_str(String(battle._selected_skill_id)).is_not_empty()
+	battle._HandleSkillTap(far_cell)
+	assert_str(String(battle._selected_skill_id)).is_empty()
+	assert_int(board._move_overlays.size()).is_greater(0) \
+			.override_failure_message("技能模式取消后应回显移动范围")
+	# ⑤技执行后（已行动未移动——S3-03 仍可移动）：帧末刷新回显范围
+	unit.has_acted = true
+	battle._RefreshActionBarForCurrentTurn()
+	assert_int(board._move_overlays.size()).is_greater(0) \
+			.override_failure_message("技执行后未移动应回显移动范围（S3-03）")
+	battle.controller.abort_battle()
+
+
+func test_degraded_exit_releases_expedition_lock() -> void:
+	## X2-M1（M3 质检）：return_to=EVENT_SCREEN 但装配降级（无 battle_params）——
+	## 「返回公会壳」前置 _return_to=-1，锁随 _exit_tree 释放
+	## （防回会话口径跳过解锁——锁卡 true 跳过全部 autosave）
+	var save_manager: Node = get_tree().root.get_node("SaveManager")
+	save_manager.set_expedition_lock(true)
+	var scene_manager: Node = get_tree().root.get_node("SceneManager")
+	scene_manager.go(SCENE_BATTLE, {&"return_to": 3})
+	await _AwaitSceneSwap()
+	var battle: Control = get_tree().current_scene as Control
+	assert_object(battle).is_not_null()
+	assert_object(battle.context).is_null()
+	# 降级路径已按回会话口径接管锁
+	assert_bool(save_manager._expedition_lock).is_true()
+	# 降级「返回公会壳」→ 锁释放（X2-M1 修复前此处卡 true）
+	battle._on_retreat_button_pressed()
+	await _AwaitSceneSwap()
+	assert_bool(save_manager._expedition_lock).is_false()

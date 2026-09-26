@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="InteractPointDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/interact_point_def.gd" id="1_gg1mg"]
+
+[resource]
+script = ExtResource("1_gg1mg")
+id = &"evp_village_01"
+display_name = "陷进泥里的板车"
+cell = Vector2i(10, 2)
+kind = 1
+ref_id = &"sp_village_cart"
+comment = "【占位·试玩校准】evp_<区域>_<序>：交互点（村子单点）"

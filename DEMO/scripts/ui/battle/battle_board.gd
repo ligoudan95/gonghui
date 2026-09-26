@@ -92,6 +92,13 @@ var _tips_line2: Label = null
 ## 本层缓存字段删除）
 var _game_data: Node = null
 
+func _ready() -> void:
+	## 引擎回调：尺寸变化监听挂接（W3-04——窗口/容器尺寸变化后格子几何、
+	## 徽章与动态标记须重算落位，此前仅 setup 时布局一次）
+	## 参数：无
+	## 返回：无
+	resized.connect(_OnResized)
+
 func setup(board_context: BattleSetup.BattleContext, game_data: Node) -> void:
 	## 装配板层：计算格子几何 → 画地格 → 建徽章（battle_screen 在 _ready 调）
 	## 参数 board_context：战斗上下文；game_data：GameData（AssetRegistry 取图）
@@ -99,6 +106,34 @@ func setup(board_context: BattleSetup.BattleContext, game_data: Node) -> void:
 	context = board_context
 	_game_data = game_data
 	_BuildLayout()
+	_BuildCells()
+	_BuildBadges()
+	RefreshDynamicMarks()
+
+func _OnResized() -> void:
+	## 尺寸变化重算（W3-04）：未装配（降级路径/装配前首帧零尺寸）跳过；
+	## 几何实际变化才全量重建（格子尺寸/原点/地格/徽章/覆盖层/动态标记——
+	## 覆盖层与 tips 随重建清空，选择态由宿主后续交互重建，属可接受瞬时态）
+	## 参数：无
+	## 返回：无
+	if context == null or context.grid == null:
+		return
+	var old_cell: float = cell_size
+	var old_origin: Vector2 = origin
+	_BuildLayout()
+	if is_equal_approx(old_cell, cell_size) and old_origin == origin:
+		return
+	for child: Node in get_children():
+		child.queue_free()
+	_cells.clear()
+	_badges.clear()
+	_ClearOverlay(_move_overlays)
+	_ClearOverlay(_skill_overlays)
+	_ClearOverlay(_path_overlays)
+	_overlay_layer = null
+	_tips_panel = null
+	_tips_line1 = null
+	_tips_line2 = null
 	_BuildCells()
 	_BuildBadges()
 	RefreshDynamicMarks()

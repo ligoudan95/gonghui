@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="TargetPointDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/target_point_def.gd" id="1_rurme"]
+
+[resource]
+script = ExtResource("1_rurme")
+id = &"tp_mine_east_gallery"
+display_name = "东岔道矿脉"
+cell = Vector2i(13, 7)
+comment = "【占位·试玩校准】tp_<区域>_<语义>：目标点（东矿脉观测点——q_vein_survey 类锚点，DEMO 由老井线消费）"

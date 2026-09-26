@@ -117,6 +117,11 @@ func request_move(dest: Vector2i) -> bool:
 	if not reachable.has(dest):
 		return false
 	_move_unit(current_unit, dest)
+	# W2-1（2026-09-26 拍板：自动结束行动轮）：移动致死（踩敌方陷阱）且战局
+	# 未收束（我方仍有存活）→ 直接置 _turn_done——原 _auto_end_turn 需双标记
+	# 齐备，死者在指令窗悬置 = 等待死锁（软锁：awaiting_command 恒真无输入可解）
+	if not current_unit.alive and not _battle_over:
+		_turn_done = true
 	_auto_end_turn()
 	return true
 
@@ -218,7 +223,7 @@ func _do_round_start() -> void:
 	## 参数：无
 	## 返回：无
 	_context.round_no += 1
-	_context.turn_order = _context.units.filter(func(unit): return unit.alive)
+	_context.turn_order = _context.units.filter(func(unit: BattleUnit) -> bool: return unit.alive)
 	_context.turn_order.sort_custom(_CompareTurnOrder)
 	if _context.round_no == 1 and _context.params != null 			and _context.params.first_strike != BattleParams.FirstStrike.NORMAL:
 		var allies: Array = []
@@ -321,6 +326,8 @@ func _move_unit(unit: BattleUnit, dest: Vector2i) -> void:
 			unit.take_damage(trap_damage)
 			trap_triggered.emit(unit, trap_damage)
 			if not unit.alive:
+				# W1-2：陷阱击杀统一走 on_downed 回调（与技能击杀路径对齐）
+				unit.on_downed()
 				_mark_downed(unit.unit_id)
 			_check_battle_end()
 	unit_moved.emit(unit, from_pos, dest)

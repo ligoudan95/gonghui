@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="TargetPointDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/target_point_def.gd" id="1_7jh7t"]
+
+[resource]
+script = ExtResource("1_7jh7t")
+id = &"tp_mine_north_wall"
+display_name = "北壁"
+cell = Vector2i(9, 4)
+comment = "【占位·试玩校准】tp_<区域>_<语义>：目标点（北壁观测点——暗门事件近旁）"

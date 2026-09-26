@@ -134,7 +134,10 @@ static func collect_race_mult(skill: SkillDef, target_race_tag: StringName) -> f
 
 static func panel_mult_of(caster: Object, status_manager: StatusManager) -> float:
 	## 面板乘算层（单源）：施放者 damage_panel_mult 修正求和（无修正 1.0；
-	## DEMO 高地单源 ×1.2 求和口径——多乘算源引入时改乘算链，见批 2 注）
+	## DEMO 高地单源 ×1.2 求和口径）。
+	## W1-4 债务登记（2026-09-26 审计）：加法近似仅在**单乘算源**时正确——
+	## 多乘算源（高地 + 背刺等同时引入）时 Σ(x−1) ≠ Πx，届时须改乘算链；
+	## M4+ 新增乘算类站位/状态前必须回收本注（消费面：执行链/AI 期望/UI 预览三处同源）
 	## 参数 caster：施放单位；status_manager：状态管理器
 	## 返回：乘算系数
 	var value: float = status_manager.get_stat_mod(caster, KEY_PANEL_MULT)

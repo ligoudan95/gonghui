@@ -1,9 +1,11 @@
 ## 公会壳（guild_shell）场景脚本
 ## 职责：M0 占位主场景——展示当前存档信息（save_point 名/game_day/mode，
 ## 肉眼验证读档一致的锚点）；「保存并返回标题」触发 DAY_END 自动存档演示；
-## 「返回标题」不存档直接回标题；M1 批 3 增「战棋原型调试入口」面板
-## （拍板 B：6 职业勾选 + 两遭遇按钮 → BATTLE_SCREEN；M2 后拆除）。
-## 数据来源：M0 批 4 方案；屏规格=案 15 §2.2；M1 批 3 方案 §7.4。
+## 「返回标题」不存档直接回标题；M3 批 2 增「出征（占位）」面板
+## （P1：两委托按钮 + 临时职业勾选编队 → EXPLORE_SCREEN——M4 出征层接管）。
+## B-22（M3 批 3 拍板 P2=A）：M1 战棋调试块与 M2 事件演示入口已拆除
+## （event_screen 场景/注册/测试保留至 M4 清理）。
+## 数据来源：M0 批 4 方案；屏规格=案 15 §2.2；M1 批 3 方案 §7.4；M3 方案批 2/3。
 ## 单例访问：统一 get_node("/root/X")（gdUnit 测试环境不注册 autoload 标识符）。
 extends Control
 
@@ -18,8 +20,9 @@ const SAVE_POINT_NAMES: Dictionary = {
 	SaveData.SavePoint.RECRUIT_DONE: "招募完成",
 }
 
-## 调试入口职业勾选表（节点名 -> 职业 id；默认勾选 = 初始固定 4 人）
-const DEBUG_CLASSES: Array = [
+## 临时职业勾选编队表（节点名 -> 职业 id；默认勾选 = 初始固定 4 人）——
+## 出征占位面板编队口；M4 出征层接管后随面板退役
+const PARTY_CLASS_OPTIONS: Array = [
 	{"check": "CheckWarrior", "class_id": &"cls_warrior", "default": true},
 	{"check": "CheckRogue", "class_id": &"cls_rogue", "default": true},
 	{"check": "CheckMage", "class_id": &"cls_mage", "default": true},
@@ -39,7 +42,8 @@ func _ready() -> void:
 
 func _ApplyFontTiers() -> void:
 	## tscn 内嵌字号档位覆写（B-7）：HeaderLabel（48→title）/ SaveInfoLabel
-	## （22→subheading）/ 调试标题（20→body）
+	## （22→subheading）/ 出征标题与警示（M3 批 2）；W3-08：四按钮补齐
+	## （保存/返回/出征×2——按钮统一 normal 档，三屏收口）
 	## 参数：无
 	## 返回：无
 	var cfg: CoreConfig = _game_data().get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
@@ -49,11 +53,15 @@ func _ApplyFontTiers() -> void:
 			UiTheme.font_of(cfg, &"ui_font_size_subheading", UiTheme.FONT_SUBHEADING))
 	%SaveWarnLabel.add_theme_font_size_override("font_size",
 			UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
-	get_node("Center/Layout/DebugTitle").add_theme_font_size_override("font_size",
+	get_node("Center/Layout/ExpeditionTitle").add_theme_font_size_override("font_size",
 			UiTheme.font_of(cfg, &"ui_font_size_body", UiTheme.FONT_BODY))
-	# R3-06：调试警示标签同档位覆写（漏网补齐）
-	%DebugWarnLabel.add_theme_font_size_override("font_size",
+	%ExpeditionWarnLabel.add_theme_font_size_override("font_size",
 			UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
+	var button_font: int = UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL)
+	for button_path: String in ["Center/Layout/SaveAndBackButton", "Center/Layout/BackButton",
+			"Center/Layout/ExpeditionQuestRow/ExpeditionExploreButton",
+			"Center/Layout/ExpeditionQuestRow/ExpeditionPurgeButton"]:
+		(get_node(button_path) as Button).add_theme_font_size_override("font_size", button_font)
 
 func _save_manager() -> Node:
 	## 取 SaveManager 自动加载单例（节点路径方式，环境无关）
@@ -104,37 +112,29 @@ func _on_back_pressed() -> void:
 	## 返回：无
 	_scene_manager().go(SceneManagerScript.SceneId.TITLE)
 
-func _on_event_entry_pressed() -> void:
-	## 事件原型入口（M2 演示宿主——M3 后随调试块一并评估去留）
+func _on_expedition_explore_pressed() -> void:
+	## 出征按钮①：探索委托「没能回家的托米」（q_lost_miner_keepsake——
+	## 事件授予委托模板复用为占位出征口）
 	## 参数：无
 	## 返回：无
-	var err: Error = _scene_manager().go(SceneManagerScript.SceneId.EVENT_SCREEN)
-	if err != OK:
-		push_warning("guild_shell: 进入事件演示屏失败（错误码 %d）" % err)
+	_StartExpedition(&"q_lost_miner_keepsake")
 
-func _on_debug_random_pressed() -> void:
-	## 调试入口①：随机遭遇战（8×8，enc_m1_random_pack）
+func _on_expedition_purge_pressed() -> void:
+	## 出征按钮②：清剿委托「清剿哥布林营地」（q_lair_purge——P1 提前落的
+	## CLEAR 判据模板）
 	## 参数：无
 	## 返回：无
-	_StartDebugBattle(&"enc_m1_random_pack")
+	_StartExpedition(&"q_lair_purge")
 
-func _on_debug_lair_pressed() -> void:
-	## 调试入口②：必然遭遇战（10×10，enc_m1_lair_pack）
+func _BuildCheckedParty() -> Array[AdventurerData]:
+	## 按职业勾选组装出战队伍（17-C7 中值偏上掷值——出征占位面板编队口）
 	## 参数：无
-	## 返回：无
-	_StartDebugBattle(&"enc_m1_lair_pack")
-
-func _StartDebugBattle(pack_id: StringName) -> void:
-	## 组装调试出战队伍（勾选职业，17-C7 中值偏上掷值）并切 BATTLE_SCREEN；
-	## 至少 1 人校验（不足时警示标签、不切场景）；S3-04：勾选上限对齐
-	## 遭遇地图出生位数（动态查表零硬编码——超编在 BattleSetup 侧也已硬拒）
-	## 参数 pack_id：遭遇队伍 id
-	## 返回：无
+	## 返回：出战队伍（空 = 未勾选任何职业）
 	var game_data: Node = _game_data()
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	var party: Array[AdventurerData] = []
-	for entry: Dictionary in DEBUG_CLASSES:
+	for entry: Dictionary in PARTY_CLASS_OPTIONS:
 		var check: CheckBox = get_node("%" + String(entry["check"])) as CheckBox
 		if check == null or not check.button_pressed:
 			continue
@@ -146,22 +146,43 @@ func _StartDebugBattle(pack_id: StringName) -> void:
 		party.append(AdventurerData.create_debug(
 				StringName(String(class_id).trim_prefix("cls_")),
 				class_id, attrs, game_data))
+	return party
+
+func _StartExpedition(quest_id: StringName) -> void:
+	## 出征会话组装（P1 占位出征面板）：勾选编队 → 初始满血（装配口径派生）
+	## → run.start_explore（委托判据上下文 + 迷雾/耗时基准注入）→
+	## EXPLORE_SCREEN（expedition_run 跨场景参数）；至少 1 人校验
+	## 参数 quest_id：委托模板 id
+	## 返回：无
+	var game_data: Node = _game_data()
+	var cfg: CoreConfig = game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
+	var party: Array[AdventurerData] = _BuildCheckedParty()
 	if party.is_empty():
-		%DebugWarnLabel.text = "至少勾选 1 名职业"
+		%ExpeditionWarnLabel.text = "至少勾选 1 名职业"
 		return
-	# S3-04：出战人数 ≤ 该遭遇地图我方出生位（超编提示不切场景）
-	var pack: EnemyPackDef = game_data.get_record(pack_id) as EnemyPackDef
-	if pack != null:
-		var map_def: BattleMapDef = game_data.get_record(pack.battle_map_ref) as BattleMapDef
-		if map_def != null and party.size() > map_def.player_spawns.size():
-			%DebugWarnLabel.text = "至多勾选 %d 名职业（地图出生位上限）" % map_def.player_spawns.size()
+	%ExpeditionWarnLabel.text = ""
+	var run := ExpeditionRun.new()
+	for adv: AdventurerData in party:
+		run.party.append(adv)
+		var cls: ClassDef = game_data.get_record(adv.class_id) as ClassDef
+		run.hp[adv] = DerivedStats.calc_hp(
+				int(adv.attrs.get(&"constitution", 10)), cls, adv.level, cfg)
+	var quest: QuestTemplateDef = game_data.get_record(quest_id) as QuestTemplateDef
+	var map_def: ExploreMapDef = null
+	if quest != null and quest.map_id != &"":
+		map_def = game_data.get_record(quest.map_id) as ExploreMapDef
+	if map_def == null:
+		# V-4（2026-09-26 审计）：图域空越界守卫——取首图前判空（对齐
+		# explore_screen._MakeDefaultRun 口径），空时警告提示并中止出征
+		var maps: Array = game_data.get_domain(&"map/maps")
+		if maps.is_empty():
+			%ExpeditionWarnLabel.text = "探索图数据缺失——无法出征。（占位提示——M4 出征层接管）"
+			push_warning("guild_shell: map/maps 域为空——出征中止（V-4）")
 			return
-	%DebugWarnLabel.text = ""
-	var params := BattleParams.new()
-	params.pack_id = pack_id
-	params.party = party
+		map_def = maps[0] as ExploreMapDef
+	run.start_explore(map_def, quest, cfg.vision_radius)
 	# R4-15：关键入口消费 go 返回值（切换失败可感知）
-	var err: Error = _scene_manager().go(SceneManagerScript.SceneId.BATTLE_SCREEN,
-			{&"battle_params": params})
+	var err: Error = _scene_manager().go(SceneManagerScript.SceneId.EXPLORE_SCREEN,
+			{&"expedition_run": run})
 	if err != OK:
-		push_warning("guild_shell: 进入战斗屏失败（错误码 %d）" % err)
+		push_warning("guild_shell: 进入探索屏失败（错误码 %d）" % err)

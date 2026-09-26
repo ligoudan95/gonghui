@@ -229,15 +229,14 @@ func test_all_downed_intercepts_battle_route() -> void:
 	assert_str(screen._panel._result_label.text).contains("全员倒地")
 	assert_bool(get_tree().root.get_node("SaveManager")._expedition_lock).is_true()
 
-func test_scene_flow_regression_guild_entry() -> void:
-	## 场景流转回归：公会壳 → 事件入口 → event_screen 挂载（SceneManager
-	## 注册表扩行不破既有流转）
-	var runner: GdUnitSceneRunner = scene_runner(GUILD_SCENE)
-	var button: Button = runner.find_child("EventEntryButton", true, false) as Button
-	assert_object(button).is_not_null()
-	button.pressed.emit()
+func test_scene_flow_regression_event_entry() -> void:
+	## 场景流转回归：B-22 拆除公会壳入口按钮后，event_screen 场景/注册保留
+	## （P2=A——M4 清理）——直经 SceneManager 挂载验证注册表行仍通
+	var scene_manager: Node = get_tree().root.get_node("SceneManager")
+	assert_int(scene_manager.go(preload(
+			"res://scripts/autoload/scene_manager.gd").SceneId.EVENT_SCREEN)).is_equal(OK)
 	await get_tree().process_frame
 	await get_tree().process_frame
 	assert_object(get_tree().root.find_child("EventScreen", true, false)).is_not_null()
-	var scene_manager: Node = get_tree().root.get_node("SceneManager")
-	assert_int(scene_manager.current_id).is_equal(preload("res://scripts/autoload/scene_manager.gd").SceneId.EVENT_SCREEN)
+	assert_int(scene_manager.current_id).is_equal(preload(
+			"res://scripts/autoload/scene_manager.gd").SceneId.EVENT_SCREEN)

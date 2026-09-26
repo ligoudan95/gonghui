@@ -53,23 +53,25 @@ func _ready() -> void:
 	## 引擎回调：启动时加载总控配置
 	_LoadConfig(false)
 
-func _LoadConfig(force: bool) -> void:
+func _LoadConfig(force: bool) -> bool:
 	## 加载总控配置资源
 	## 参数 force：true = 强制从磁盘重读（热重载——R4-01 同址刷新：磁盘新值
 	## 逐属性拷入 _config 旧壳，_config 对象恒不变；与 GameData.reload_domain
 	## 同方案，两单例的 cfg 引用恒同实例）；false = 走缓存共享
-	## 返回：无（失败时 push_error 并保持 _config 现状）
+	## 返回：true = 加载成功；false = 失败（push_error 并保持 _config 现状——
+	## W4-09：调用方凭返回值决定是否发 config_reloaded，失败不发）
 	var cache_mode: int = ResourceLoader.CACHE_MODE_REUSE
 	if force:
 		cache_mode = ResourceLoader.CACHE_MODE_IGNORE
 	var fresh: CoreConfig = ResourceLoader.load(CONFIG_PATH, "", cache_mode) as CoreConfig
 	if fresh == null:
 		push_error("GameConfig: 无法加载总控配置 %s" % CONFIG_PATH)
-		return
+		return false
 	if force and _config != null:
 		CoreConfig.copy_props(fresh, _config)
 	else:
 		_config = fresh
+	return true
 
 func is_demo_mode() -> bool:
 	## 查询当前是否 DEMO 运行模式
@@ -89,8 +91,10 @@ func is_system_enabled(sys: StringName) -> bool:
 	return _config.enabled_systems[sys]
 
 func reload() -> void:
-	## 热重载总控配置（强制从磁盘重读并替换共享缓存），完成后发出 config_reloaded
+	## 热重载总控配置（强制从磁盘重读并替换共享缓存），完成后发出 config_reloaded；
+	## W4-09：加载失败不发信号（监听方重取参数会拿到旧值——失败时保持旧配置
+	## 并 push_error，调用方无须额外处理）
 	## 参数：无
 	## 返回：无
-	_LoadConfig(true)
-	config_reloaded.emit()
+	if _LoadConfig(true):
+		config_reloaded.emit()

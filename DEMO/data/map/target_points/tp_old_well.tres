@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="TargetPointDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/target_point_def.gd" id="1_0602v"]
+
+[resource]
+script = ExtResource("1_0602v")
+id = &"tp_old_well"
+display_name = "老井暗窖"
+cell = Vector2i(5, 13)
+comment = "【占位·试玩校准】tp_<语义>：目标点（老井暗窖——井道直通矿洞底层；M3 质检 M1 拍板 B：移矿洞深处；q_lost_miner_keepsake 判据）"

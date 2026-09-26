@@ -96,6 +96,27 @@ func _FreshRun() -> ExpeditionRun:
 	run.hp = {_run.party[0]: 40, _run.party[1]: 30}
 	return run
 
+func test_check_detail_fields_passthrough() -> void:
+	## ②检定骰面明细透传（2026-09-25 试玩反馈）：单点检定（暗门·极难）固定
+	## 骰 15——档位/骰面/调整值/合计/难度档名与判定线全字段回带（UI 反馈行
+	## 拼装「掷出 N ＋ M ＝ T（档 线）」消费；合计恒等式 + 无检定默认锚定）
+	var runner: EventRunner = _FixedRunner(15)
+	var run := _FreshRun()
+	var settled: EventRunner.EventView = runner.choose_option(&"sp_mine_secretdoor",
+			&"", _run.party[0], run)
+	assert_int(settled.check_grade).is_greater_equal(0)
+	assert_int(settled.check_die).is_equal(15)
+	assert_int(settled.check_total) \
+			.is_equal(settled.check_die + settled.check_modifier)
+	assert_str(settled.check_tier_label).is_equal("极难")
+	assert_int(settled.check_tier_line).is_equal(int(_cfg.difficulty_tiers["极难"]))
+	# 对照：无检定单点（旅人）——明细字段保持默认（check_grade -1 无明细）
+	var plain: EventRunner.EventView = _runner.start_event(&"sp_village_traveler",
+			_FreshRun())
+	assert_int(plain.check_grade).is_equal(-1)
+	assert_int(plain.check_die).is_equal(0)
+	assert_int(plain.check_tier_line).is_equal(0)
+
 func test_chain_collapse_all_branches_no_deadend() -> void:
 	## 塌方链全分支：o1 成功→n2 终端（15/10）；o2 成功→n3（20/15）；o1 失败→n4
 	## （10/5）；o3 纯选择→n5（15/15+耗时 1）；o4 绕行 E1（零奖励）——零死路

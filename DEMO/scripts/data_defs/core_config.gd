@@ -131,6 +131,9 @@ enum Mode {
 
 # ---- 内容计数基线（批 C M6：校验器计数带参数化——M2 加内容改表即可，
 ## 基线值随内容扩展同表维护；min/max 同值 = 恒定断言）----
+## W4-12 漂移同步注（2026-09-26 审计）：计数带注释与表值须同步维护——
+## 校验器 _CountBand 回退常量与 cfg 缺省回退均锚定本组字段；改表加内容时
+## 同步改注释里的「DEMO N 恒定断言」计数（此前交互点注释 10 表值 11 漂移）
 ## 技能计数带（六职业普攻 / 职业档 1 技 / 敌方技 / 敌方通用普攻）
 @export var content_skill_attacks_min: int = 0
 @export var content_skill_attacks_max: int = 0
@@ -237,6 +240,34 @@ enum Mode {
 @export var ui_font_size_normal: int = 0
 @export var ui_font_size_small: int = 0
 @export var ui_font_size_minor: int = 0
+
+# ---- M3 探索层参数（视觉/演出 + 内容计数带；默认透明/0 = 未回填）----
+## 探索逐格步进演出时长（秒/格——M3 移动演出）
+@export var ui_explore_move_step_seconds: float = 0.0
+## 迷雾未探索遮蔽色（浓雾——UNSEEN 态遮罩）
+@export var ui_fog_unseen_color: Color = Color(0, 0, 0, 0)
+## 迷雾已探索遮蔽色（记忆态——DIM 态遮罩）
+@export var ui_fog_dim_color: Color = Color(0, 0, 0, 0)
+## 探索小队图标色
+@export var ui_explore_party_color: Color = Color(0, 0, 0, 0)
+## 目标点激活色（本委托绑定目标点高亮）
+@export var ui_explore_target_active_color: Color = Color(0, 0, 0, 0)
+## 目标点灰显色（非绑定目标点/未激活出口）
+@export var ui_explore_target_dim_color: Color = Color(0, 0, 0, 0)
+## 判据达成横幅色
+@export var ui_explore_goal_banner_color: Color = Color(0, 0, 0, 0)
+## 探索图计数带（M3：DEMO 总图 1 恒定断言）
+@export var content_map_count_min: int = 0
+@export var content_map_count_max: int = 0
+## 交互点计数带（M3：DEMO 11 恒定断言——含出口点；W4-12 漂移同步 10→11）
+@export var content_interact_points_min: int = 0
+@export var content_interact_points_max: int = 0
+## 目标点计数带（M3：DEMO 6 恒定断言）
+@export var content_target_points_min: int = 0
+@export var content_target_points_max: int = 0
+## 遭遇权重计数带（M3：DEMO 2 恒定断言）
+@export var content_encounter_weights_min: int = 0
+@export var content_encounter_weights_max: int = 0
 
 ## 设计备注（【占位·试玩校准】等标注与数据来源说明，Inspector 可编辑）
 @export var comment: String = ""

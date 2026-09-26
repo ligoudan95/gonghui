@@ -92,6 +92,35 @@ func test_empty_cast_hint_and_cancel() -> void:
 	assert_bool(panel._options_box.visible).is_true()
 	assert_int(panel._options_box.get_child_count()).is_equal(1)
 
+func test_settled_roll_detail_line() -> void:
+	## ②掷骰明细行（2026-09-25 试玩反馈）：show_settled / show_battle_intro
+	## 传入 roll_text 时置首行呈现（「掷出 N ＋ M ＝ T（档 线）」）；
+	## 默认不传（M2 既有调用）零变化无明细行
+	var cfg: CoreConfig = _MakeCfg(0.05)
+	var panel := EventPanel.new()
+	panel.setup(cfg)
+	add_child(panel)
+	auto_free(panel)
+	panel.show_settled(CheckResult.Grade.SUCCESS, "结算文本。", "+10 金",
+			"掷出 14 ＋ 2 ＝ 16（容易 8）")
+	assert_bool(panel._result_label.text.begins_with("掷出 14 ＋ 2 ＝ 16（容易 8）")) \
+			.override_failure_message("明细行应置首行").is_true()
+	assert_str(panel._result_label.text).contains("结算文本。")
+	assert_str(panel._result_label.text).contains("+10 金")
+	# 默认参数（M2 既有调用零变化——无明细行）
+	panel.show_settled(CheckResult.Grade.SUCCESS, "二次结算。", "")
+	assert_bool(panel._result_label.text.begins_with("二次结算")) \
+			.override_failure_message("不传 roll_text 不应有明细行").is_true()
+	# B 出口战前演出视图同带明细行（战前经检定进入时难度与骰面可见）
+	var view := EventRunner.EventView.new()
+	view.narrative = "战前叙述。"
+	view.check_grade = CheckResult.Grade.CRIT_FAILURE
+	panel.show_battle_intro(view, "-5 HP", "掷出 1 ＋ 0 ＝ 1（极难 17）")
+	assert_bool(panel._result_label.text.begins_with("掷出 1 ＋ 0 ＝ 1（极难 17）")) \
+			.is_true()
+	assert_str(panel._result_label.text).contains("战前叙述")
+	assert_str(panel._result_label.text).contains("-5 HP")
+
 func test_battle_intro_shows_confirm_button() -> void:
 	## E3-06：B 出口战前演出视图——「进入战斗」钮 + 四档反馈呈现 + 发信
 	var cfg: CoreConfig = _MakeCfg(0.05)
@@ -116,3 +145,28 @@ func test_battle_intro_shows_confirm_button() -> void:
 	panel.clear()
 	assert_bool(panel._battle_button.visible).is_false()
 	assert_str(panel._result_label.text).is_empty()
+
+func test_w303_panel_area_is_skip_hotzone_during_roll() -> void:
+	## W3-03（2026-09-26 拍板 a）：D20 演出期面板置 STOP——面板区点按即跳过
+	## （_gui_input 路由 skip_d20；修复前板面 STOP 吞掉面板区域点击、宿主根
+	## gui_input 的跳过链不可达）；演出结束恢复 IGNORE（常态不挡板面输入）
+	var cfg: CoreConfig = _MakeCfg(0.4)
+	var panel := EventPanel.new()
+	panel.setup(cfg)
+	add_child(panel)
+	auto_free(panel)
+	assert_int(panel.mouse_filter).is_equal(Control.MOUSE_FILTER_IGNORE)
+	# 协程启动（不 await——同帧断言热区即时生效）
+	panel.play_d20_roll()
+	assert_bool(panel._busy).is_true()
+	assert_int(panel.mouse_filter).is_equal(Control.MOUSE_FILTER_STOP)
+	# 面板内点按 → 跳过置位 → 演出协程提前退出（0.4s 时长远超等待窗）
+	var event := InputEventMouseButton.new()
+	event.button_index = MOUSE_BUTTON_LEFT
+	event.pressed = true
+	event.position = Vector2(10, 10)
+	panel._gui_input(event)
+	assert_bool(panel._d20_skip).is_true()
+	await get_tree().create_timer(0.1).timeout
+	assert_bool(panel._busy).is_false()
+	assert_int(panel.mouse_filter).is_equal(Control.MOUSE_FILTER_IGNORE)

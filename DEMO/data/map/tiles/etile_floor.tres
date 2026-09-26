@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ExploreTileDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/explore_tile_def.gd" id="1_yxwcg"]
+
+[resource]
+script = ExtResource("1_yxwcg")
+id = &"etile_floor"
+display_name = "矿洞地面"
+fill_color = Color(0.24, 0.22, 0.19, 1)
+comment = "【占位·试玩校准】etile_<语义>：探索地格（普通可通行）"

@@ -64,6 +64,25 @@ const D20_ROLL_SECONDS: float = 0.9
 const RESULT_DEFEAT: Color = Color(0.95, 0.4, 0.35)
 const RESULT_RETREAT: Color = Color(0.7, 0.8, 0.95)
 
+# ---- 探索层（M3——cfg ui_fog_*/ui_explore_* 兜底）----
+## 探索逐格步进演出时长兜底（秒/格）
+const EXPLORE_MOVE_STEP_SECONDS: float = 0.18
+## 迷雾未探索遮蔽色兜底（浓雾）
+const FOG_UNSEEN: Color = Color(0.02, 0.02, 0.03, 0.92)
+## 迷雾已探索遮蔽色兜底（记忆态）
+const FOG_DIM: Color = Color(0.04, 0.04, 0.05, 0.55)
+## 探索小队图标色兜底
+const EXPLORE_PARTY: Color = Color(0.95, 0.95, 0.85)
+## 目标点激活色兜底（绑定目标高亮）
+const EXPLORE_TARGET_ACTIVE: Color = Color(1.0, 0.85, 0.3)
+## 目标点灰显色兜底（非绑定目标/未激活出口）
+const EXPLORE_TARGET_DIM: Color = Color(0.45, 0.45, 0.5)
+## 判据达成横幅色兜底
+const EXPLORE_GOAL_BANNER: Color = Color(0.35, 0.85, 0.4)
+## 探索常显图标衬底色兜底（迷雾之上目标点的对比底——2026-09-25 层级修复；
+## cfg 字段 ui_explore_icon_backdrop_color 暂未回填，纯兜底模式）
+const EXPLORE_ICON_BACKDROP: Color = Color(0.02, 0.02, 0.03, 0.62)
+
 # ---- 字号档位（B-7 兜底；cfg 字段 ui_font_size_*）----
 const FONT_DISPLAY: int = 64
 const FONT_TITLE: int = 48

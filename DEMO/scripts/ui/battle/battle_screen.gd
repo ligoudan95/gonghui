@@ -5,6 +5,9 @@
 ## 技能确认带血条伤害预览——2026-09-24 二轮反馈）、技能按钮态（资源不足灰显、
 ## hover 描述与预计伤害——二轮反馈）、蛊惑紫边提示、敌方延时点按跳过、
 ## 撤退确认弹窗、结算面板路由回公会壳。
+## 移动范围回显口径（2026-09-26 试玩反馈②③）：指令窗内全部取消路径
+## （出格点按/不可达空格/执行被拒/技能取消）统一 R3-05「取消后回显」——
+## 此前单向清空致「跳过演出」连点漏入指令窗即永久隐藏范围层。
 ## 数据来源：M1 批 3 方案 §7.1/§7.3（交互模型拍板口径）。
 ## 单例访问：统一 get_node("/root/X")（gdUnit 测试环境不注册 autoload 标识符）。
 extends Control
@@ -51,15 +54,18 @@ func _ready() -> void:
 	# M2 批 3：返回路由参数化（return_to 缺省公会壳保持 M1 行为；回传包
 	# 供 event_screen 战后续跑——expedition_run 引用+事件/节点锚点透传回带，
 	# 战后 battle_result 以**合并键**写入不整体替换（E3-01①断链修复））
+	# M3 批 3：回传包增 encounter_pack_id（探索屏遭遇战通道——与
+	# battle_node_id 键区分战后续跑分叉）
 	_return_to = int(params.get(&"return_to", -1))
 	_return_payload = {
 		&"expedition_run": params.get(&"expedition_run", null),
 		&"event_id": params.get(&"event_id", &""),
 		&"battle_node_id": params.get(&"battle_node_id", &""),
+		&"encounter_pack_id": params.get(&"encounter_pack_id", &""),
 	}
-	# E2-4：回事件屏时出征锁由本屏接管持有（event_screen 路由战斗离树不
-	# 释放——锁随会话连续，消除路由空窗）
-	if _return_to == SceneManagerScript.SceneId.EVENT_SCREEN:
+	# E2-4：回事件屏/探索屏时出征锁由本屏接管持有（宿主路由战斗离树不
+	# 释放——锁随会话连续，消除路由空窗；M3 批 3 扩 EXPLORE_SCREEN）
+	if _HoldsExpeditionLock():
 		var save_manager: Node = get_node_or_null("/root/SaveManager")
 		if save_manager != null:
 			save_manager.set_expedition_lock(true)
@@ -90,7 +96,8 @@ func _ready() -> void:
 
 func _ApplyFontTiers() -> void:
 	## tscn 内嵌字号档位覆写（B-7）：RoundLabel（26→large）/ OrderTitle（16→
-	## normal）/ IdleLabel（18→normal）——tscn 值留占位，运行时以 cfg 档位为准
+	## normal）/ IdleLabel（18→normal）——tscn 值留占位，运行时以 cfg 档位为准；
+	## W3-08：底部指令钮四枚 + 撤退补齐（按钮统一 normal 档——三屏收口）
 	## 参数：无
 	## 返回：无
 	var cfg: CoreConfig = context.cfg if context != null else null
@@ -100,6 +107,12 @@ func _ApplyFontTiers() -> void:
 			"font_size", UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 	%IdleLabel.add_theme_font_size_override("font_size",
 			UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
+	var button_font: int = UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL)
+	%AttackButton.add_theme_font_size_override("font_size", button_font)
+	%SkillButtonA.add_theme_font_size_override("font_size", button_font)
+	%SkillButtonB.add_theme_font_size_override("font_size", button_font)
+	%EndTurnButton.add_theme_font_size_override("font_size", button_font)
+	%RetreatButton.add_theme_font_size_override("font_size", button_font)
 
 func _StatusLookupOf() -> Callable:
 	## 状态解析闭包（信息卡消费；上下文未建时返回空解析）
@@ -261,7 +274,11 @@ func _on_board_gui_input(event: InputEvent) -> void:
 		return
 	var cell: Vector2i = %BoardLayer.cell_from_local(mouse_event.position)
 	if cell == Vector2i(-1, -1):
+		# 出格点按取消（2026-09-26 试玩反馈②③：取消后回显移动范围——R3-05
+		# 口径扩展到板面点按；出格点击多来自「跳过演出」连点漏入指令窗，
+		# 此前单向清空致范围层消失直到下一行动轮）
 		_ClearSelection()
+		_RestoreMoveRangeIfUsable(controller.current_unit if controller != null else null)
 		return
 	if controller == null or not controller.awaiting_command:
 		if controller != null:
@@ -294,10 +311,12 @@ func _HandleMoveTap(cell: Vector2i) -> void:
 		if controller.request_move(cell):
 			_ClearSelection()
 		else:
-			# 执行被拒（可达性竞态等）：清路径预览 + 日志反馈，选择态复位
+			# 执行被拒（可达性竞态等）：清路径预览 + 日志反馈 + 回显移动范围
+			# （反馈②③：取消类路径统一回显，范围层不再单向消失）
 			_pending_cell = NO_CELL
 			%BoardLayer.clear_overlays()
 			%BattleLog.push_line(BattleLog.MSG_MOVE_REJECTED, BattleLog.LineKind.SYSTEM)
+			_RestoreMoveRangeIfUsable(unit)
 		return
 	var reachable: Array[Vector2i] = context.grid.find_reachable(unit, unit.move_final())
 	if reachable.has(cell):
@@ -305,7 +324,10 @@ func _HandleMoveTap(cell: Vector2i) -> void:
 		%BoardLayer.show_path_preview(unit.grid_pos, cell)
 		return
 	if occupant == null:
+		# 不可达空格点按 = 取消路径预览（反馈②③：回显移动范围——跳过连点/
+		# 远格误点不再清掉范围层；has_moved/受控时回显自然短路）
 		_ClearSelection()
+		_RestoreMoveRangeIfUsable(unit)
 
 func _HandleSkillTap(cell: Vector2i) -> void:
 	## 技能模式两段式（2026-09-24 二轮反馈升级）：首点射程内目标格 = 确认提示，
@@ -383,7 +405,9 @@ func _HandleSkillTap(cell: Vector2i) -> void:
 		_pending_cell = NO_CELL
 		%BattleLog.push_line(BattleLog.MSG_TARGET_OUT_OF_RANGE, BattleLog.LineKind.SYSTEM)
 		return
+	# 纯空区域取消技能选择（反馈②③：与按钮取消同口径回显移动范围——R3-05）
 	_ClearSelection()
+	_RestoreMoveRangeIfUsable(unit)
 
 func _ClearSelection() -> void:
 	## 清空选择态（技能/待定格/覆盖层）
@@ -415,6 +439,10 @@ func _RefreshActionBarForCurrentTurn() -> void:
 		%RetreatButton.disabled = true
 		return
 	_RefreshActionBar(unit)
+	# 技执行后移动范围回显（反馈②③ + S3-03 行动顺序任意）：攻击后仍可移动——
+	# 无待选态时回显范围；敌方/蛊惑技能同信号触发经守卫自然短路
+	if _selected_skill_id == &"" and _pending_cell == NO_CELL:
+		_RestoreMoveRangeIfUsable(unit)
 
 func _RefreshActionBar(unit: BattleUnit) -> void:
 	## 按钮组刷新：我方指令窗 → 普攻常驻 + 两技能钮（资源不足灰显）+ 结束/撤退；
@@ -592,12 +620,20 @@ var _return_to: int = -1
 ## 回传数据（战后 run 状态+锚点+战斗结果——event_screen 续跑消费）
 var _return_payload: Dictionary = {}
 
+func _HoldsExpeditionLock() -> bool:
+	## 出征锁接管判定（M3 批 3：EVENT_SCREEN 或 EXPLORE_SCREEN 回向均由
+	## 宿主屏 _ready 接管持有——本屏不释放，帧内连续无空窗）
+	## 参数：无
+	## 返回：true = 返回探索/事件会话（锁随会话移交）
+	return _return_to == SceneManagerScript.SceneId.EVENT_SCREEN \
+			or _return_to == SceneManagerScript.SceneId.EXPLORE_SCREEN
+
 func _exit_tree() -> void:
-	## 引擎回调：离树释放出征锁（E2-4：回事件屏时锁由 event_screen._ready
+	## 引擎回调：离树释放出征锁（E2-4：回事件屏/探索屏时锁由宿主屏 _ready
 	## 接管持有——本屏不释放，帧内连续无空窗；其余去向 = 会话结束释放）
 	## 参数：无
 	## 返回：无
-	if _return_to == SceneManagerScript.SceneId.EVENT_SCREEN:
+	if _HoldsExpeditionLock():
 		return
 	var save_manager: Node = get_node_or_null("/root/SaveManager")
 	if save_manager != null:
@@ -615,10 +651,12 @@ func _OnReturnPressed() -> void:
 
 func _RestoreMoveRangeIfUsable(unit: BattleUnit) -> void:
 	## 取消选择后回显移动范围（R3-05 拍板：仅未移动且未被控制时回显——
-	## 已移动/被定身/被蛊惑的取消不再重显范围）
+	## 已移动/被定身/被蛊惑的取消不再重显范围；反馈②③扩用后此口可能收到
+	## 非指令窗单位（敌方行动期出格点按），补 is_controllable 守卫防误显
+	## 敌方范围）
 	## 参数 unit：当前行动单位
 	## 返回：无
-	if unit == null or unit.has_moved:
+	if unit == null or not unit.is_controllable() or unit.has_moved:
 		return
 	if context.status_manager.get_active_control(unit) != StatusDef.ControlKind.NONE:
 		return
@@ -637,9 +675,13 @@ func _on_retreat_button_pressed() -> void:
 	## 撤退钮：确认弹窗（撤退 = 委托失败警示）；S5-2：降级路径（context 为
 	## null，钮文案已改「返回公会壳」）直连 SceneManager 回公会壳——降级
 	## 出口不经撤退语义与弹窗（_switch_pending 已防重入）
+	## X2-M1（锁泄漏修复）：降级去向 = 公会壳（会话终结），go 前置
+	## _return_to = -1——否则回事件/探索屏口径会让 _exit_tree 跳过解锁，
+	## 出征锁卡 true 跳过全部 autosave
 	## 参数：无
 	## 返回：无
 	if controller == null or context == null:
+		_return_to = -1
 		get_node("/root/SceneManager").go(SceneManagerScript.SceneId.GUILD_SHELL)
 		return
 	%RetreatConfirm.popup_centered()

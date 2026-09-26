@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="ExploreMapDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/explore_map_def.gd" id="1_sya28"]
+
+[resource]
+script = ExtResource("1_sya28")
+id = &"map_m1_village_mine"
+display_name = "村口矿道·总图"
+size = Vector2i(15, 15)
+rows = Array[String](["vvvvvvvvvvvvvvv", "vvvvvvvvvvvvvvv", "vvvvvvvvvvvvvvv", "XXXXXXX.XXXXXXX", "X.............X", "X.XXXXX.XXXXX.X", "X.XXXXX.XXXXX.X", "X.............X", "XXX.XXX.XXX.XXX", "XXX.XXX.XXX.XXX", "X.............X", "XXXX.XX.XX.XXXX", "XXXX.XX.XX.XXXX", "XXX.........XXX", "XXXXXXX.XXXXXXX"])
+legend = Dictionary[StringName, StringName]({
+&".": &"etile_floor",
+&"X": &"etile_wall",
+&"p": &"etile_path",
+&"v": &"etile_village_ground"
+})
+region_ids = Array[StringName]([&"reg_village", &"reg_mine"])
+start_cell = Vector2i(7, 1)
+base_expedition_days = 1
+fog_lit_rows = Array[int]([0, 1, 2])
+comment = "【占位·试玩校准】M3 P3=A 总图：村子南段 3 行全亮 + 矿洞 12 行；region_ids 惯例序 [全亮行段（村子）, 其余（矿洞）]；耗时基准唯一权威 base_expedition_days=1（ExpeditionRun 注入）"

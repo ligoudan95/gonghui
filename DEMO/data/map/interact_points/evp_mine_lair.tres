@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="InteractPointDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/interact_point_def.gd" id="1_fyr6l"]
+
+[resource]
+script = ExtResource("1_fyr6l")
+id = &"evp_mine_lair"
+display_name = "哥布林营地"
+cell = Vector2i(7, 14)
+kind = 4
+ref_id = &"enc_m1_lair_pack"
+comment = "【占位·试玩校准】evp_<区域>_<语义>：交互点（必然遭遇——巢穴）"

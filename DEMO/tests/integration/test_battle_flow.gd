@@ -633,3 +633,43 @@ func test_trap_death_stops_enemy_attack() -> void:
 	assert_int(result.kind).is_equal(BattleResult.ResultKind.VICTORY)
 	assert_bool(enemy.alive).is_false()
 	assert_int(enemy_skill_events.size()).is_equal(0)
+
+func test_w21_ally_trap_death_auto_ends_turn() -> void:
+	## W2-1（2026-09-26 拍板：自动结束行动轮）：我方单位移动踩敌方陷阱致死
+	## 且战局未收束（仍有存活）→ 行动轮自动结束、战斗推进到下一单位——
+	## 修复前死者在指令窗悬置（awaiting_command 恒真等待死人输入 = 软锁）
+	var context := _MakeContext(&"enc_m1_random_pack", 31)
+	var controller := _MakeController(context)
+	controller.start_battle(context)
+	# 等首个我方指令窗
+	var waited: int = 0
+	while not controller.awaiting_command and waited < MAX_WAIT_FRAMES:
+		await get_tree().process_frame
+		waited += 1
+	assert_bool(controller.awaiting_command).is_true()
+	var unit: BattleUnit = controller.current_unit
+	assert_bool(unit.is_controllable()).is_true()
+	# 敌方陷阱布在首个可达格（对位语义：敌源我踩即触发）
+	var reachable: Array[Vector2i] = context.grid.find_reachable(unit, unit.move_final())
+	assert_int(reachable.size()).is_greater(0)
+	var enemy_source: BattleUnit = context.enemies[0]
+	context.grid.spawn_dynamic_tile(reachable[0], &"tile_trap", 9999, enemy_source.unit_id)
+	unit.current_hp = 1
+	# 移动致死受理 → 行动轮应自动结束（不悬置在等待死人指令）
+	assert_bool(controller.request_move(reachable[0])).is_true()
+	assert_bool(unit.alive).is_false()
+	assert_bool(controller._battle_over).is_false()
+	# 战局推进：指令窗必然回到下一存活我方单位（修复前恒等死者 = 超时）；
+	# 先等死者行动轮退出（request_move 同帧 _turn_done 置位、轮询循环次帧
+	# 才退出 awaiting_command——须等 false→true 完整翻转）
+	var advanced: int = 0
+	while (controller.current_unit == unit or not controller.awaiting_command) \
+			and advanced < MAX_WAIT_FRAMES:
+		await get_tree().process_frame
+		advanced += 1
+	assert_bool(controller.awaiting_command).override_failure_message(
+			"移动致死后战斗未推进到下一单位（软锁）").is_true()
+	assert_bool(controller.current_unit != unit).override_failure_message(
+			"指令窗仍悬置在死者行动轮").is_true()
+	assert_bool(controller.current_unit.alive).is_true()
+	controller.abort_battle()

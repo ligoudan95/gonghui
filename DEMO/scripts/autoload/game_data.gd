@@ -38,6 +38,13 @@ var DOMAIN_SCHEMA: Dictionary[StringName, Array] = {
 	&"event/hidden_marks": [HiddenMarkDef],
 	&"quest/templates": [QuestTemplateDef],
 	&"assets": [AssetRegistry],
+	# ---- M3 探索层六域（map/ 五域 + world/regions）----
+	&"map/maps": [ExploreMapDef],
+	&"map/tiles": [ExploreTileDef],
+	&"map/interact_points": [InteractPointDef],
+	&"map/target_points": [TargetPointDef],
+	&"map/encounter_weights": [EncounterWeightDef],
+	&"world/regions": [RegionDef],
 }
 
 ## id -> 资源记录 索引
@@ -256,7 +263,10 @@ func get_asset_path(id: StringName) -> String:
 
 func reload_domain(domain: StringName) -> Error:
 	## 热重载单个数据域（清旧索引后重扫，IGNORE 读盘 + 同址拷贝刷新旧实例），
-	## 成功后发出 data_reloaded（R4-11：未知域失败不发信号）
+	## 成功后发出 data_reloaded（R4-11：未知域失败不发信号）。
+	## W4-08 issues 语义声明：issues 为**全局单列表非按域隔离**——rescan 开头
+	## 全量清空重建（S5-6），未 rescan 域的问题记录不保留；消费方（校验器/
+	## 测试）读到的恒为「最近一次扫描口径」的问题全集
 	## 参数 domain：域键（DOMAIN_SCHEMA 之一）
 	## 返回：OK = 重载完成；ERR_INVALID_PARAMETER = 未知域（信号未发）
 	if not DOMAIN_SCHEMA.has(domain):

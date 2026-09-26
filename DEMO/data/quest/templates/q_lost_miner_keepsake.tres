@@ -14,7 +14,8 @@ script = ExtResource("2_ncraf")
 id = &"q_lost_miner_keepsake"
 display_name = "没能回家的托米"
 goal_param = &"tp_old_well"
-region_id = &"mine"
+region_id = &"reg_mine"
+map_id = &"map_m1_village_mine"
 reward = SubResource("Resource_dihlx")
 acquire_channel = 1
 comment = "【占位·试玩校准】案 18 §2.3 事件授予专用（18-C3）；目标=老井暗窖 tp_old_well；奖励 150金/80经验/声望5"

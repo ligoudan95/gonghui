@@ -5,7 +5,9 @@
 ## 盲审批 3 D-4：射程 >1 技能的攻击位候选加视线过滤——与执行器同口径；
 ## 移动裁决三级兜底（M2 试玩修复）：无**严格更近**可达格时——①等距侧移
 ## 恢复射程+视线 → ②按四级链序换打当前位置可及的其他目标 → ③真待机，
-## 消除「无法更近即完全瘫痪干站」缺陷）。
+## 消除「无法更近即完全瘫痪干站」缺陷；四级兜底（M3 试玩修复）：移动后主
+## 目标仍不可及且无攻击安排时——移动后位置/当前位置存在可及目标必攻击
+## （攻击机会恒优先于纯走位），消除「眼前有可及目标却绕开不打」缺陷）。
 ## 数据来源：案 9 §2.5（目标链第七轮口径 + 无可用目标兜底取最近）；17 案
 ## §3.8 敌方技能表 + 17-C16 P1（怒吼每场首次条件满足必用 1 次、此后穷追
 ## 猛打优先；条件首次满足但精力不足 → 义务作废不顺延）。
@@ -44,8 +46,9 @@ class AIAction:
 static func decide(self_unit: Object, grid: BattleGrid, player_units: Array,
 		ctx: Dictionary) -> AIAction:
 	## 敌方单回合决策主入口：技能选择 →（非怒吼）目标四级链 → 移动裁决
-	## （含三级兜底：无严格更近格时——等距侧移恢复攻击 → 换打当前位置
-	## 可及目标 → 真待机；M2 试玩修复「无法更近即完全瘫痪干站」）
+	## （含四级兜底：无严格更近格时——等距侧移恢复攻击 → 换打当前位置
+	## 可及目标 → 真待机；M3 试玩修复——移动后主目标仍不可及时，移动后位置/
+	## 当前位置存在可及目标必攻击，不绕开眼前可打的目标干走位）
 	## 参数 self_unit：决策单位（BattleUnit）；grid：战场；player_units：我方单位全集；
 	## ctx：{cfg, skill_lookup, status_manager（S3-06：期望伤害消费站位面板层，
 	## 缺省回退 1.0——headless 简化上下文兼容）}
@@ -54,7 +57,7 @@ static func decide(self_unit: Object, grid: BattleGrid, player_units: Array,
 	var cfg: CoreConfig = ctx.get(&"cfg") as CoreConfig
 	var skill_lookup: Callable = ctx.get(&"skill_lookup") as Callable
 	var status_manager: StatusManager = ctx.get(&"status_manager") as StatusManager
-	var candidates: Array = player_units.filter(func(unit): return unit.alive)
+	var candidates: Array = player_units.filter(func(unit: Object) -> bool: return unit.alive)
 	if candidates.is_empty():
 		return action
 	# ---- 技能选择（17-C16 P1 + 资源优先）----
@@ -115,13 +118,9 @@ static func decide(self_unit: Object, grid: BattleGrid, player_units: Array,
 		# 其他目标原地攻击——案 9 §2.5 无可用目标兜底口径；技能不变（普攻/
 		# 伤害技对任意我方均合法，怒吼分支无目标不受影响）；追击记忆随实际
 		# 攻击对象更新
-		var attackable: Array = candidates.filter(func(unit: Object) -> bool:
-			return BattleGrid.manhattan(self_unit.grid_pos, unit.grid_pos) <= range_final \
-					and (not needs_los \
-							or grid.has_line_of_sight(self_unit.grid_pos, unit.grid_pos)))
-		if not attackable.is_empty():
-			var fallback: Object = _ChooseTarget(self_unit, skill, attackable, cfg,
-					status_manager)
+		var fallback: Object = _AttackableAt(self_unit, self_unit.grid_pos, skill,
+				candidates, grid, cfg, status_manager)
+		if fallback != null:
 			action.target_unit = fallback
 			action.attack_cell = fallback.grid_pos
 			self_unit.ai_context[&"last_target_id"] = fallback.id
@@ -129,11 +128,54 @@ static func decide(self_unit: Object, grid: BattleGrid, player_units: Array,
 		# 兜底 3（真待机）：全场无射程内视线通目标——合理终态
 		return action
 	action.move_dest = best
-	# 移动后目标进入射程才攻击，否则只移动待机（LOS 已由候选过滤保证）
-	# R2-7：射程判定经 effective_range 单源收口
+	# 移动后目标进入射程才攻击（LOS 已由候选过滤保证）；R2-7：射程判定
+	# 经 effective_range 单源收口
 	if best_distance <= range_final:
 		action.attack_cell = target.grid_pos
+		return action
+	# 兜底 4（强制攻击可及目标——M3 试玩修复）：移动后主目标仍不可及且
+	# 无攻击安排——此前版本在此直接「移动+待机」，即便候选中存在当前
+	# 位置射程内且视线通的其他目标也不打（主目标被四级链按血量/追击记忆
+	# 锁定，其更近格存在时兜底 2 不触发）——用户观察「有能攻击的人却不去
+	# 攻击」的根因。修复：①先查移动到 best 后该位置上的可及目标（移动+
+	# 攻击兼得，不放弃接近）；②无则放弃本次移动，原地攻击当前位置可及
+	# 目标（按四级链序取）。两者皆无才保持移动待机（合理终态：全场确实
+	# 打不着任何人时接近主目标仍有价值）。追击记忆随实际攻击对象更新
+	var moved_attack: Object = _AttackableAt(self_unit, best, skill, candidates,
+			grid, cfg, status_manager)
+	if moved_attack != null:
+		action.target_unit = moved_attack
+		action.attack_cell = moved_attack.grid_pos
+		self_unit.ai_context[&"last_target_id"] = moved_attack.id
+		return action
+	var here_attack: Object = _AttackableAt(self_unit, self_unit.grid_pos, skill,
+			candidates, grid, cfg, status_manager)
+	if here_attack != null:
+		action.move_dest = NO_CELL
+		action.target_unit = here_attack
+		action.attack_cell = here_attack.grid_pos
+		self_unit.ai_context[&"last_target_id"] = here_attack.id
 	return action
+
+static func _AttackableAt(self_unit: Object, from_cell: Vector2i, skill: SkillDef,
+		candidates: Array, grid: BattleGrid, cfg: CoreConfig,
+		status_manager: StatusManager) -> Object:
+	## 指定位置视角下的可及目标查询（兜底 2/4 共用单源——M3 试玩修复）：
+	## 选中技射程内且视线通（los_required 单源——近战射程 1 免视线）的候选，
+	## 多个按四级链序取；与执行器前置校验同口径，产出可直接执行
+	## 参数 self_unit：决策单位；from_cell：视角格（当前位置或拟移动格）；
+	## skill/candidates/grid/cfg/status_manager：决策上下文
+	## 返回：目标单位；无可及目标 null
+	var needs_los: bool = SkillExecutor.los_required(skill)
+	var range_final: int = SkillExecutor.effective_range(skill)
+	var attackable: Array = candidates.filter(func(unit: Object) -> bool:
+			return unit.grid_pos != from_cell \
+					and BattleGrid.manhattan(from_cell, unit.grid_pos) <= range_final \
+					and (not needs_los \
+							or grid.has_line_of_sight(from_cell, unit.grid_pos)))
+	if attackable.is_empty():
+		return null
+	return _ChooseTarget(self_unit, skill, attackable, cfg, status_manager)
 
 static func _ChooseSkill(self_unit: Object, grid: BattleGrid, candidates: Array,
 		cfg: CoreConfig, skill_lookup: Callable) -> StringName:
@@ -157,7 +199,10 @@ static func _ChooseSkill(self_unit: Object, grid: BattleGrid, candidates: Array,
 	if self_unit.role_tag == UnitTags.ROLE_ELITE:
 		if roar_id != &"" and not self_unit.ai_context.get(&"roar_used", false):
 			var roar_skill: SkillDef = skill_lookup.call(roar_id) as SkillDef
-			if _AlliesInAura3x3(self_unit, candidates, grid) >= _RoarAllyCountLine(cfg):
+			# W2-5：二次 lookup 空守卫——roar_id 收集时解析成功不代表此刻仍可解析
+			# （lookup 表可变），空引用直接跳过怒吼义务分支（避免 .resource_type 崩溃）
+			if roar_skill != null \
+					and _AlliesInAura3x3(self_unit, grid) >= _RoarAllyCountLine(cfg):
 				# 首次满足：精力足 → 必用（决策即置 roar_used 关闭义务——每场一次）；
 				# 不足 → 义务作废（不顺延）——两态均关闭义务
 				self_unit.ai_context[&"roar_used"] = true
@@ -184,8 +229,8 @@ static func _ChooseTarget(self_unit: Object, skill: SkillDef, candidates: Array,
 	## status_manager：S3-06 期望伤害的站位面板层来源（缺省 null 回退 1.0）
 	## 返回：目标单位（空候选由调用方前置拦截）
 	# ①可击杀（最近优先）
-	var killable: Array = candidates.filter(func(unit):
-		return _ExpectedDamage(self_unit, skill, unit, cfg, status_manager) >= float(unit.current_hp))
+	var killable: Array = candidates.filter(func(unit: Object) -> bool:
+			return _ExpectedDamage(self_unit, skill, unit, cfg, status_manager) >= float(unit.current_hp))
 	if not killable.is_empty():
 		return _NearestOf(self_unit, killable)
 	# ②追击记忆
@@ -233,9 +278,10 @@ static func _ExpectedDamage(self_unit: Object, skill: SkillDef, target: Object,
 	return BattleRules.expected_damage(mitigated, chance, crit,
 			BattleRules.crit_mult_base_of(cfg))
 
-static func _AlliesInAura3x3(self_unit: Object, candidates: Array, grid: BattleGrid) -> int:
+static func _AlliesInAura3x3(self_unit: Object, grid: BattleGrid) -> int:
 	## 自中心 3×3（切比雪夫 ≤1）内存活我方数（怒吼义务门槛）
-	## 参数 self_unit/candidates/grid：决策上下文
+	## 参数 self_unit/grid：决策上下文（候选集经格子占位索引现查——
+	## W1-5：死参数 candidates 已删，原实现从未消费）
 	## 返回：数量
 	var count: int = 0
 	for cell: Vector2i in grid.cells_aura_3x3(self_unit.grid_pos):

@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="QuestTemplateDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/reward_def.gd" id="1_n27t7"]
+[ext_resource type="Script" path="res://scripts/data_defs/quest_template_def.gd" id="2_0lp71"]
+
+[sub_resource type="Resource" id="Resource_iitnk"]
+script = ExtResource("1_n27t7")
+exp = 80
+gold = 150
+reputation = 5
+
+[resource]
+script = ExtResource("2_0lp71")
+id = &"q_lair_purge"
+display_name = "清剿哥布林营地"
+goal_type = 0
+goal_param = &"enc_m1_lair_pack"
+region_id = &"reg_mine"
+map_id = &"map_m1_village_mine"
+party_min = 3
+party_max = 4
+time_limit_days = 5
+reward = SubResource("Resource_iitnk")
+comment = "【占位·试玩校准】案 18 §2.6 定稿行（P1 提前落）；CLEAR 判据 enc_m1_lair_pack；人力 3-4（2026-09-25 M3 质检拍板改回案文定稿）；时限 5 天；奖励 150金/80经验/声望5"

@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ExploreTileDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/explore_tile_def.gd" id="1_a1dwf"]
+
+[resource]
+script = ExtResource("1_a1dwf")
+id = &"etile_wall"
+display_name = "岩壁"
+walkable = false
+fill_color = Color(0.13, 0.13, 0.15, 1)
+accent_color = Color(0.05, 0.05, 0.06, 1)
+style = 2
+comment = "【占位·试玩校准】etile_<语义>：探索地格（障碍——寻路绕行）"

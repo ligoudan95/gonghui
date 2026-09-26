@@ -36,6 +36,9 @@ const SCENE_GUILD_SHELL: StringName = SaveData.SCENE_GUILD_SHELL
 var current: SaveData
 ## 最近一次解析失败原因（S5-1：load_game 统一信号文案的传递位）
 var _last_parse_fail_reason: String = ""
+## 最近一次正本打开失败错误码（W4-10：_ReadSaveTextWithFallback 读正本失败
+## 当场捕获——load_game 组装 fail_reason 时再取会被后续 .bak 打开覆写）
+var _last_primary_open_error: int = OK
 
 ## 出征锁（#26：出征中不自动存档；M3 出征层经 set_expedition_lock 调用）
 var _expedition_lock: bool = false
@@ -91,7 +94,9 @@ func load_game() -> SaveData:
 	if not has_save() and not FileAccess.file_exists(BAK_PATH):
 		return null
 	var text: String = _ReadSaveTextWithFallback()
-	var fail_reason: String = "存档文件无法打开（错误码 %d）" % FileAccess.get_open_error()
+	# W4-10：正本打开失败码已由 _ReadSaveTextWithFallback 先行捕获（原此处
+	# 再取 get_open_error 会拿到 .bak 兜底打开后的错误码——文案失真）
+	var fail_reason: String = "存档文件无法打开（错误码 %d）" % _last_primary_open_error
 	var data: SaveData = null
 	if not text.is_empty():
 		data = _ParseSaveText(text)
@@ -237,12 +242,15 @@ func _WriteAtomic(json_text: String) -> Error:
 
 func _ReadSaveTextWithFallback() -> String:
 	## 读正本文本；正本无法打开（缺失/占用/坏盘）且 .bak 存在时兜底读 .bak
-	## （B-2：三段式中途被杀的崩溃窗口——正本已挪 .bak、tmp 未回正）
+	## （B-2：三段式中途被杀的崩溃窗口——正本已挪 .bak、tmp 未回正）；
+	## W4-10：正本打开失败码先行捕获入 _last_primary_open_error（防 .bak
+	## 兜底打开覆写全局错误码——load_game 的 fail_reason 消费）
 	## 参数：无
 	## 返回：存档文本；两处均不可读返回空串
 	var file: FileAccess = FileAccess.open(SAVE_PATH, FileAccess.READ)
 	if file == null:
-		push_warning("SaveManager: 正本无法打开（错误码 %d），尝试 .bak 兜底" % FileAccess.get_open_error())
+		_last_primary_open_error = FileAccess.get_open_error()
+		push_warning("SaveManager: 正本无法打开（错误码 %d），尝试 .bak 兜底" % _last_primary_open_error)
 		file = FileAccess.open(BAK_PATH, FileAccess.READ)
 		if file == null:
 			return ""

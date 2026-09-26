@@ -16,7 +16,8 @@ var _manager: StatusManager
 var _statuses: Dictionary = {}
 var _rng: RandomNumberGenerator
 
-## 测试替身单位（鸭子契约：side/alive/attrs/hit/dodge/status_resist/take_damage）
+## 测试替身单位（鸭子契约：side/alive/attrs/hit/dodge/status_resist/take_damage/
+## on_downed——W1-2：DOT 跳伤致死回调对齐技能击杀路径）
 class FakeUnit:
 	extends RefCounted
 	var id: StringName = &"unit"
@@ -28,6 +29,7 @@ class FakeUnit:
 	var status_resist: float = 0.0
 	var hp: int = 100
 	var damage_log: Array[int] = []
+	var downed_calls: int = 0
 
 	func take_damage(amount: int) -> void:
 		## 直扣伤害（DOT 免减免轨——护甲/抗性不参与）
@@ -35,6 +37,10 @@ class FakeUnit:
 		hp -= amount
 		if hp <= 0:
 			alive = false
+
+	func on_downed() -> void:
+		## 倒地回调（W1-2 契约扩展——调用计数供断言）
+		downed_calls += 1
 
 func before() -> void:
 	## 套件前置：加载 cfg_main、构建状态字典（before 为套件级钩子，重资源只载一次）
@@ -517,3 +523,20 @@ func test_allowed_sources_rejects_foreign_kind() -> void:
 	assert_int(_manager.get_statuses(unit).size()).is_equal(0)
 	assert_bool(_manager.apply(unit, _statuses[&"DEBUFF_tile_poison"],
 			StatusInstance.SourceKind.TILE, &"tile_poison_swamp", 0, 1, false)).is_true()
+
+func test_w12_dot_death_calls_on_downed_and_freezes_decrement() -> void:
+	## W1-2 + W1-3（2026-09-26 审计）：DOT 跳伤致死统一回调 on_downed（与
+	## 技能/陷阱击杀路径对齐）；②递减遍历跳过倒地单位（状态随死亡冻结）
+	var unit := FakeUnit.new()
+	unit.hp = 3
+	# 诅咒 3 回合、开局载入锚点（current_round=0 → 回合 1 末即首跳；意志 16
+	# → 一跳 round(16×0.5) = 8 ≥ 3 一跳致死）
+	assert_bool(_manager.apply(unit, _statuses[&"DEBUFF_curse"],
+			StatusInstance.SourceKind.SKILL, &"skl_curse", 3, 0, false)).is_true()
+	var report: Array = _manager.end_of_round_tick(1, [unit], _rng)
+	assert_bool(unit.alive).is_false()
+	assert_int(unit.downed_calls).is_equal(1) \
+			.override_failure_message("W1-2：DOT 致死应回调 on_downed（与技能击杀对齐）")
+	assert_int(report.size()).is_equal(1)
+	# W1-3：倒地单位跳过递减遍历——状态随死亡冻结（不递减不移除）
+	assert_int(_manager.get_statuses(unit).size()).is_equal(1) 			.override_failure_message("W1-3：死者状态应冻结（跳过递减遍历不移除）")

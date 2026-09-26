@@ -794,7 +794,210 @@ domain = &"quest/templates"
 display_name = "没能回家的托米"
 rule_note = "q_<语义>：委托模板（事件授予专用）"
 
+[sub_resource type="Resource" id="Resource_j46ws"]
+script = ExtResource("1_xxsy3")
+resource_id = &"map_m1_village_mine"
+domain = &"map/maps"
+display_name = "村口矿道·总图"
+rule_note = "map_<区域>_<语义>：探索图（M3·P3=A 总图）"
+
+[sub_resource type="Resource" id="Resource_mvkr6"]
+script = ExtResource("1_xxsy3")
+resource_id = &"etile_floor"
+domain = &"map/tiles"
+display_name = "矿洞地面"
+rule_note = "etile_<语义>：探索地格（可通行）"
+
+[sub_resource type="Resource" id="Resource_7rw8l"]
+script = ExtResource("1_xxsy3")
+resource_id = &"etile_wall"
+domain = &"map/tiles"
+display_name = "岩壁"
+rule_note = "etile_<语义>：探索地格（障碍）"
+
+[sub_resource type="Resource" id="Resource_asic3"]
+script = ExtResource("1_xxsy3")
+resource_id = &"etile_path"
+domain = &"map/tiles"
+display_name = "隐秘通道"
+rule_note = "etile_<语义>：探索地格（暗门捷径）"
+
+[sub_resource type="Resource" id="Resource_hhwg4"]
+script = ExtResource("1_xxsy3")
+resource_id = &"etile_village_ground"
+domain = &"map/tiles"
+display_name = "村中土路"
+rule_note = "etile_<语义>：探索地格（村子段）"
+
+[sub_resource type="Resource" id="Resource_t12hy"]
+script = ExtResource("1_xxsy3")
+resource_id = &"evp_mine_01"
+domain = &"map/interact_points"
+display_name = "塌方救援（点）"
+rule_note = "evp_<区域>_<序>：交互点（链入口）"
+
+[sub_resource type="Resource" id="Resource_g2rr1"]
+script = ExtResource("1_xxsy3")
+resource_id = &"evp_mine_02"
+domain = &"map/interact_points"
+display_name = "矿道鬼火（点）"
+rule_note = "evp_<区域>_<序>：交互点（链入口）"
+
+[sub_resource type="Resource" id="Resource_3x6wm"]
+script = ExtResource("1_xxsy3")
+resource_id = &"evp_mine_03"
+domain = &"map/interact_points"
+display_name = "废弃矿工营地（点）"
+rule_note = "evp_<区域>_<序>：交互点（链入口）"
+
+[sub_resource type="Resource" id="Resource_os57f"]
+script = ExtResource("1_xxsy3")
+resource_id = &"evp_village_01"
+domain = &"map/interact_points"
+display_name = "陷进泥里的板车（点）"
+rule_note = "evp_<区域>_<序>：交互点（村子单点）"
+
+[sub_resource type="Resource" id="Resource_4d41u"]
+script = ExtResource("1_xxsy3")
+resource_id = &"evp_village_02"
+domain = &"map/interact_points"
+display_name = "井边的旅人（点）"
+rule_note = "evp_<区域>_<序>：交互点（村子单点）"
+
+[sub_resource type="Resource" id="Resource_tkjd7"]
+script = ExtResource("1_xxsy3")
+resource_id = &"evp_mine_secret"
+domain = &"map/interact_points"
+display_name = "北壁的风（点）"
+rule_note = "evp_<区域>_<语义>：交互点（暗门 NEAR）"
+
+[sub_resource type="Resource" id="Resource_166x5"]
+script = ExtResource("1_xxsy3")
+resource_id = &"evp_mine_lair"
+domain = &"map/interact_points"
+display_name = "哥布林营地（点）"
+rule_note = "evp_<区域>_<语义>：交互点（必然遭遇）"
+
+[sub_resource type="Resource" id="Resource_ims3k"]
+script = ExtResource("1_xxsy3")
+resource_id = &"evp_mine_chest_01"
+domain = &"map/interact_points"
+display_name = "弃置矿箱·北廊"
+rule_note = "evp_<区域>_<语义>：交互点（宝箱 TAP）"
+
+[sub_resource type="Resource" id="Resource_hbr05"]
+script = ExtResource("1_xxsy3")
+resource_id = &"evp_mine_chest_02"
+domain = &"map/interact_points"
+display_name = "弃置矿箱·西巷"
+rule_note = "evp_<区域>_<语义>：交互点（宝箱 TAP）"
+
+[sub_resource type="Resource" id="Resource_y1e88"]
+script = ExtResource("1_xxsy3")
+resource_id = &"evp_mine_chest_03"
+domain = &"map/interact_points"
+display_name = "弃置矿箱·东场"
+rule_note = "evp_<区域>_<语义>：交互点（宝箱 TAP）"
+
+[sub_resource type="Resource" id="Resource_555je"]
+script = ExtResource("1_xxsy3")
+resource_id = &"evp_village_exit"
+domain = &"map/interact_points"
+display_name = "回城出口（点）"
+rule_note = "evp_<区域>_<语义>：交互点（出口 TAP）"
+
+[sub_resource type="Resource" id="Resource_5d1pa"]
+script = ExtResource("1_xxsy3")
+resource_id = &"tp_mine_east_gallery"
+domain = &"map/target_points"
+display_name = "东岔道矿脉"
+rule_note = "tp_<区域>_<语义>：目标点（勘查）"
+
+[sub_resource type="Resource" id="Resource_q4f4k"]
+script = ExtResource("1_xxsy3")
+resource_id = &"tp_mine_north_wall"
+domain = &"map/target_points"
+display_name = "北壁"
+rule_note = "tp_<区域>_<语义>：目标点（勘查）"
+
+[sub_resource type="Resource" id="Resource_1j1fi"]
+script = ExtResource("1_xxsy3")
+resource_id = &"tp_mine_south_shaft"
+domain = &"map/target_points"
+display_name = "南竖井"
+rule_note = "tp_<区域>_<语义>：目标点（勘查）"
+
+[sub_resource type="Resource" id="Resource_n67gn"]
+script = ExtResource("1_xxsy3")
+resource_id = &"tp_mine_west_camp"
+domain = &"map/target_points"
+display_name = "西巷旧营地"
+rule_note = "tp_<区域>_<语义>：目标点（勘查）"
+
+[sub_resource type="Resource" id="Resource_laq4p"]
+script = ExtResource("1_xxsy3")
+resource_id = &"tp_mine_track_yard"
+domain = &"map/target_points"
+display_name = "轨道调车场"
+rule_note = "tp_<区域>_<语义>：目标点（勘查）"
+
+[sub_resource type="Resource" id="Resource_4y6xp"]
+script = ExtResource("1_xxsy3")
+resource_id = &"tp_old_well"
+domain = &"map/target_points"
+display_name = "老井暗窖"
+rule_note = "tp_<语义>：目标点（矿洞深处——判据锚点；M3 质检拍板 B 移位）"
+
+[sub_resource type="Resource" id="Resource_jkjmm"]
+script = ExtResource("1_xxsy3")
+resource_id = &"encw_mine"
+domain = &"map/encounter_weights"
+display_name = "矿洞遭遇权重"
+rule_note = "encw_<区域>：遭遇权重"
+
+[sub_resource type="Resource" id="Resource_t0igy"]
+script = ExtResource("1_xxsy3")
+resource_id = &"encw_village"
+domain = &"map/encounter_weights"
+display_name = "村子遭遇权重"
+rule_note = "encw_<区域>：遭遇权重（安全区）"
+
+[sub_resource type="Resource" id="Resource_6eu0y"]
+script = ExtResource("1_xxsy3")
+resource_id = &"reg_city"
+domain = &"world/regions"
+display_name = "光辉城"
+rule_note = "reg_<语义>：世界区域"
+
+[sub_resource type="Resource" id="Resource_bhsmv"]
+script = ExtResource("1_xxsy3")
+resource_id = &"reg_village"
+domain = &"world/regions"
+display_name = "村口聚落"
+rule_note = "reg_<语义>：世界区域"
+
+[sub_resource type="Resource" id="Resource_533bw"]
+script = ExtResource("1_xxsy3")
+resource_id = &"reg_mine"
+domain = &"world/regions"
+display_name = "矿洞一层"
+rule_note = "reg_<语义>：世界区域"
+
+[sub_resource type="Resource" id="Resource_thymv"]
+script = ExtResource("1_xxsy3")
+resource_id = &"q_lair_purge"
+domain = &"quest/templates"
+display_name = "清剿哥布林营地"
+rule_note = "q_<语义>：委托模板（板刷——CLEAR 判据）"
+
+[sub_resource type="Resource" id="Resource_56ss7"]
+script = ExtResource("1_xxsy3")
+resource_id = &"hm_mine_secret_door"
+domain = &"event/hidden_marks"
+display_name = "北壁暗门"
+rule_note = "hm_<语义>：隐藏标记（暗门 unlock_flag 登记）"
+
 [resource]
 script = ExtResource("2_8hs6i")
-entries = Array[ExtResource("1_xxsy3")]([SubResource("Resource_7rp6k"), SubResource("Resource_oft80"), SubResource("Resource_n0ea3"), SubResource("Resource_8b336"), SubResource("Resource_hxk6g"), SubResource("Resource_l7131"), SubResource("Resource_8wgs3"), SubResource("Resource_ito87"), SubResource("Resource_mvlxc"), SubResource("Resource_bw3po"), SubResource("Resource_6s0uu"), SubResource("Resource_kpbtc"), SubResource("Resource_p5cqs"), SubResource("Resource_e25vx"), SubResource("Resource_inerj"), SubResource("Resource_pa4wo"), SubResource("Resource_coef1"), SubResource("Resource_dmwsm"), SubResource("Resource_h7b8d"), SubResource("Resource_pvxlm"), SubResource("Resource_8igpl"), SubResource("Resource_cwl1f"), SubResource("Resource_tomj8"), SubResource("Resource_67gfp"), SubResource("Resource_01rdt"), SubResource("Resource_p0axp"), SubResource("Resource_4uaip"), SubResource("Resource_dl7mi"), SubResource("Resource_d0vn1"), SubResource("Resource_wsgw6"), SubResource("Resource_oqqqu"), SubResource("Resource_x4q0o"), SubResource("Resource_0ucge"), SubResource("Resource_h3wwn"), SubResource("Resource_pk2js"), SubResource("Resource_cli47"), SubResource("Resource_w1hfh"), SubResource("Resource_gwor4"), SubResource("Resource_uyas2"), SubResource("Resource_3k27s"), SubResource("Resource_yry1n"), SubResource("Resource_j4c4f"), SubResource("Resource_b83j2"), SubResource("Resource_pubcw"), SubResource("Resource_ywjf5"), SubResource("Resource_fh5vw"), SubResource("Resource_u0rav"), SubResource("Resource_wk6it"), SubResource("Resource_xxsy3"), SubResource("Resource_8hs6i"), SubResource("Resource_xjr3h"), SubResource("Resource_kjgb4"), SubResource("Resource_l8020"), SubResource("Resource_hewr7"), SubResource("Resource_kqsjo"), SubResource("Resource_wxmxw"), SubResource("Resource_3xjaa"), SubResource("Resource_slrmy"), SubResource("Resource_27uxc"), SubResource("Resource_lbffk"), SubResource("Resource_6fscd"), SubResource("Resource_p2ky8"), SubResource("Resource_B2S0"), SubResource("Resource_B2S1"), SubResource("Resource_B2S2"), SubResource("Resource_B2S3"), SubResource("Resource_B2S4"), SubResource("Resource_B2S5"), SubResource("Resource_B2S6"), SubResource("Resource_B2S7"), SubResource("Resource_B2S8"), SubResource("Resource_B2T9"), SubResource("Resource_B2T10"), SubResource("Resource_B2T11"), SubResource("Resource_B2T12"), SubResource("Resource_B2T13"), SubResource("Resource_B2T14"), SubResource("Resource_B2T15"), SubResource("Resource_B2T16"), SubResource("Resource_B2T17"), SubResource("Resource_B2T18"), SubResource("Resource_B2T19"), SubResource("Resource_B2T20"), SubResource("Resource_B2X0"), SubResource("Resource_B2X1"), SubResource("Resource_2ecym"), SubResource("Resource_4r4qe"), SubResource("Resource_pe7pm"), SubResource("Resource_kvllj"), SubResource("Resource_lpihg"), SubResource("Resource_eimhm"), SubResource("Resource_btjvi"), SubResource("Resource_wjna8"), SubResource("Resource_bnusc"), SubResource("Resource_6gijb"), SubResource("Resource_jxvbu"), SubResource("Resource_bi4xl"), SubResource("Resource_yaiqf"), SubResource("Resource_oqig6"), SubResource("Resource_anpy2"), SubResource("Resource_t02th"), SubResource("Resource_4ofvs"), SubResource("Resource_s677f"), SubResource("Resource_3sklr"), SubResource("Resource_jc5g8"), SubResource("Resource_528ok"), SubResource("Resource_aru5v"), SubResource("Resource_vcik6"), SubResource("Resource_rfrhy"), SubResource("Resource_17mgl"), SubResource("Resource_sbkk8"), SubResource("Resource_ucf00"), SubResource("Resource_62ieu")])
+entries = Array[ExtResource("1_xxsy3")]([SubResource("Resource_7rp6k"), SubResource("Resource_oft80"), SubResource("Resource_n0ea3"), SubResource("Resource_8b336"), SubResource("Resource_hxk6g"), SubResource("Resource_l7131"), SubResource("Resource_8wgs3"), SubResource("Resource_ito87"), SubResource("Resource_mvlxc"), SubResource("Resource_bw3po"), SubResource("Resource_6s0uu"), SubResource("Resource_kpbtc"), SubResource("Resource_p5cqs"), SubResource("Resource_e25vx"), SubResource("Resource_inerj"), SubResource("Resource_pa4wo"), SubResource("Resource_coef1"), SubResource("Resource_dmwsm"), SubResource("Resource_h7b8d"), SubResource("Resource_pvxlm"), SubResource("Resource_8igpl"), SubResource("Resource_cwl1f"), SubResource("Resource_tomj8"), SubResource("Resource_67gfp"), SubResource("Resource_01rdt"), SubResource("Resource_p0axp"), SubResource("Resource_4uaip"), SubResource("Resource_dl7mi"), SubResource("Resource_d0vn1"), SubResource("Resource_wsgw6"), SubResource("Resource_oqqqu"), SubResource("Resource_x4q0o"), SubResource("Resource_0ucge"), SubResource("Resource_h3wwn"), SubResource("Resource_pk2js"), SubResource("Resource_cli47"), SubResource("Resource_w1hfh"), SubResource("Resource_gwor4"), SubResource("Resource_uyas2"), SubResource("Resource_3k27s"), SubResource("Resource_yry1n"), SubResource("Resource_j4c4f"), SubResource("Resource_b83j2"), SubResource("Resource_pubcw"), SubResource("Resource_ywjf5"), SubResource("Resource_fh5vw"), SubResource("Resource_u0rav"), SubResource("Resource_wk6it"), SubResource("Resource_xxsy3"), SubResource("Resource_8hs6i"), SubResource("Resource_xjr3h"), SubResource("Resource_kjgb4"), SubResource("Resource_l8020"), SubResource("Resource_hewr7"), SubResource("Resource_kqsjo"), SubResource("Resource_wxmxw"), SubResource("Resource_3xjaa"), SubResource("Resource_slrmy"), SubResource("Resource_27uxc"), SubResource("Resource_lbffk"), SubResource("Resource_6fscd"), SubResource("Resource_p2ky8"), SubResource("Resource_B2S0"), SubResource("Resource_B2S1"), SubResource("Resource_B2S2"), SubResource("Resource_B2S3"), SubResource("Resource_B2S4"), SubResource("Resource_B2S5"), SubResource("Resource_B2S6"), SubResource("Resource_B2S7"), SubResource("Resource_B2S8"), SubResource("Resource_B2T9"), SubResource("Resource_B2T10"), SubResource("Resource_B2T11"), SubResource("Resource_B2T12"), SubResource("Resource_B2T13"), SubResource("Resource_B2T14"), SubResource("Resource_B2T15"), SubResource("Resource_B2T16"), SubResource("Resource_B2T17"), SubResource("Resource_B2T18"), SubResource("Resource_B2T19"), SubResource("Resource_B2T20"), SubResource("Resource_B2X0"), SubResource("Resource_B2X1"), SubResource("Resource_2ecym"), SubResource("Resource_4r4qe"), SubResource("Resource_pe7pm"), SubResource("Resource_kvllj"), SubResource("Resource_lpihg"), SubResource("Resource_eimhm"), SubResource("Resource_btjvi"), SubResource("Resource_wjna8"), SubResource("Resource_bnusc"), SubResource("Resource_6gijb"), SubResource("Resource_jxvbu"), SubResource("Resource_bi4xl"), SubResource("Resource_yaiqf"), SubResource("Resource_oqig6"), SubResource("Resource_anpy2"), SubResource("Resource_t02th"), SubResource("Resource_4ofvs"), SubResource("Resource_s677f"), SubResource("Resource_3sklr"), SubResource("Resource_jc5g8"), SubResource("Resource_528ok"), SubResource("Resource_aru5v"), SubResource("Resource_vcik6"), SubResource("Resource_rfrhy"), SubResource("Resource_17mgl"), SubResource("Resource_sbkk8"), SubResource("Resource_ucf00"), SubResource("Resource_62ieu"), SubResource("Resource_j46ws"), SubResource("Resource_mvkr6"), SubResource("Resource_7rw8l"), SubResource("Resource_asic3"), SubResource("Resource_hhwg4"), SubResource("Resource_t12hy"), SubResource("Resource_g2rr1"), SubResource("Resource_3x6wm"), SubResource("Resource_os57f"), SubResource("Resource_4d41u"), SubResource("Resource_tkjd7"), SubResource("Resource_166x5"), SubResource("Resource_ims3k"), SubResource("Resource_hbr05"), SubResource("Resource_y1e88"), SubResource("Resource_555je"), SubResource("Resource_5d1pa"), SubResource("Resource_q4f4k"), SubResource("Resource_1j1fi"), SubResource("Resource_n67gn"), SubResource("Resource_laq4p"), SubResource("Resource_4y6xp"), SubResource("Resource_jkjmm"), SubResource("Resource_t0igy"), SubResource("Resource_6eu0y"), SubResource("Resource_bhsmv"), SubResource("Resource_533bw"), SubResource("Resource_thymv"), SubResource("Resource_56ss7")])
 comment = "全库资源命名登记表（用户拍板②·2026-09-23）：每条记录资源 id/域前缀/中文名/命名规则；条目随资源增删同步维护；M1 批 1 追加战斗域 14 条；盲审批 2 A-2 追加 spr_×9 + tend_×12（含表自身与 registry 补登，共 85 条）"

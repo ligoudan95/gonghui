@@ -43,14 +43,15 @@ echo.
 
 REM ---- step 2: headless data validation ----
 set "VAL_LOG=%TEMP%\gonghui_selfcheck_validation.log"
+REM S5-8: report path moved to user:// (= %APPDATA%\Godot\app_userdata\<project>)
+REM C-9: project name "gonghui" mirrors project.godot application/config/name - rename project => sync next line
+REM W4-07 (audit4): USER_REPORT must be defined BEFORE the stale-report delete below
+set "USER_REPORT=%APPDATA%\Godot\app_userdata\gonghui\reports\validation_report.txt"
 REM R4-07: remove stale report before run (user:// persists across runs)
 if exist "%USER_REPORT%" del "%USER_REPORT%"
 "%GODOT%" --headless -s res://tools/run_validation.gd > "%VAL_LOG%" 2>&1
 set "VAL_RC=!errorlevel!"
 echo [selfcheck] ---- data validation (exit %VAL_RC%) ----
-REM S5-8: report path moved to user:// (= %APPDATA%\Godot\app_userdata\<project>)
-REM C-9: project name "gonghui" mirrors project.godot application/config/name - rename project => sync next line
-set "USER_REPORT=%APPDATA%\Godot\app_userdata\gonghui\reports\validation_report.txt"
 if exist "%USER_REPORT%" (
     type "%USER_REPORT%"
 ) else (

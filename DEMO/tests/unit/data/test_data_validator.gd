@@ -18,9 +18,9 @@ func before() -> void:
 	_game_data.initialize_data()
 
 func test_run_all_clean() -> void:
-	## 全库校验应零错误零警告（63 条记录 = M0 49 + M1 批 1 战斗域 14；计数带全部命中预期）
+	## 全库校验应零错误零警告（121 条记录 = M0 49 + M1 战斗域 14 + M2 事件 29 + M3 探索层 29；计数带全部命中预期）
 	var report: ValidationReport = DataValidator.run_all(_game_data)
-	assert_int(report.checked_count).is_equal(92)
+	assert_int(report.checked_count).is_equal(121)
 	assert_int(report.errors.size()).is_equal(0)
 	assert_int(report.warnings.size()).is_equal(0)
 	assert_bool(report.is_ok()).is_true()
@@ -156,5 +156,21 @@ func test_m2_graph_outcome_option_mix_detected() -> void:
 	node.option_ids.remove_at(node.option_ids.size() - 1)
 	assert_bool(_HasError(report, "V-M2-ref-graph", "混排")) \
 			.override_failure_message("终端节点混排选项应报错").is_true()
+	var report_after: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(report_after.errors.size()).is_equal(0)
+
+func test_v5_map_region_count_over_two_is_caught() -> void:
+	## V-5（2026-09-26 审计）：region_ids 数量 ≤ 2——DEMO 口径冻结
+	## （ExploreMapState.region_index_of 两段下标推导假设）；负反注入第 3 段
+	## → 必须报 V-M3-map-region-count 且 to_text 含记录 id；恢复后归零
+	var map_def: ExploreMapDef = _game_data.get_record(&"map_m1_village_mine") as ExploreMapDef
+	assert_object(map_def).is_not_null()
+	var original: Array[StringName] = map_def.region_ids.duplicate()
+	map_def.region_ids.append(&"reg_city")
+	var report: ValidationReport = DataValidator.run_all(_game_data)
+	map_def.region_ids = original
+	assert_bool(_HasError(report, "V-M3-map-region-count", "map_m1_village_mine")) \
+			.override_failure_message("region_ids 超 DEMO 冻结口径 ≤ 2 应报错").is_true()
+	assert_str(report.to_text()).contains("map_m1_village_mine")
 	var report_after: ValidationReport = DataValidator.run_all(_game_data)
 	assert_int(report_after.errors.size()).is_equal(0)

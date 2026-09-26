@@ -59,6 +59,16 @@ func setup(map_def: BattleMapDef, tile_lookup: Callable) -> bool:
 	if String(fallback).is_empty():
 		push_error("BattleGrid: legend 缺 '.' 图例项（%s）——空格无地格定义" % map_def.id)
 		setup_issues.append("legend 缺 '.' 图例项（空格地格未定义）")
+	# W1-6：行长 == size.x 校验入 setup_issues（与 V-M1-map-layout 同口径——
+	# 此前仅数据侧拦截，运行时行长错位静默错读展平行列）
+	for row_index: int in map_def.rows.size():
+		if map_def.rows[row_index].length() != map_def.size.x:
+			push_error("BattleGrid: 第 %d 行行长 %d != size.x %d（%s）" % [
+				row_index, map_def.rows[row_index].length(), map_def.size.x, map_def.id,
+			])
+			setup_issues.append("第 %d 行行长 %d != size.x %d" % [
+				row_index, map_def.rows[row_index].length(), map_def.size.x,
+			])
 	for row: String in map_def.rows:
 		for row_char: String in row:
 			var tile_id: StringName = map_def.legend.get(row_char, &"")
@@ -239,10 +249,26 @@ func has_line_of_sight(from: Vector2i, to: Vector2i) -> bool:
 	## 返回：true = 视线通畅（同格或相邻恒 true）
 	if from == to:
 		return true
+	return line_of_sight_clear(from, to,
+			func(cell: Vector2i) -> bool:
+				var tile: TileTypeDef = _BaseTileAt(cell)
+				return tile == null or not tile.walkable)
+
+static func line_of_sight_clear(from: Vector2i, to: Vector2i, is_opaque: Callable) -> bool:
+	## 视线通透判定（Bresenham 单源——2026-09-26 视野遮挡拍板）：中间格
+	## （不含端点）经注入 is_opaque 回调判定阻断、端点不算；战棋 has_line_of_sight
+	## 与探索层迷雾（FogOfWar）两消费点共用同一格线算法——墙格自身可见
+	## （作为目标格的墙不经中间格判定）
+	## 参数 from/to：起终坐标；is_opaque：格遮蔽回调（cell -> true = 遮挡视线；
+	## 无效回调 = 全透明）
+	## 返回：true = 视线通畅（同格恒 true）
+	if from == to:
+		return true
+	if not is_opaque.is_valid():
+		return true
 	var line: Array[Vector2i] = _Bresenham(from, to)
 	for index: int in range(1, line.size() - 1):
-		var tile: TileTypeDef = _BaseTileAt(line[index])
-		if tile == null or not tile.walkable:
+		if is_opaque.call(line[index]):
 			return false
 	return true
 
@@ -310,7 +336,7 @@ func _BaseTileAt(pos: Vector2i) -> TileTypeDef:
 		return null
 	return _tile_lookup.call(base_tiles[index]) as TileTypeDef
 
-func _Bresenham(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
+static func _Bresenham(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
 	## Bresenham 格线（整数误差项迭代，端点含）
 	## 参数 from/to：起终坐标
 	## 返回：线上的格坐标序列（含两端）

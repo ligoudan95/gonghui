@@ -191,3 +191,44 @@ func test_legend_missing_dot_reports_issue() -> void:
 		if issue.contains("'.'" ):
 			has_dot_issue = true
 	assert_bool(has_dot_issue).override_failure_message("缺 '.' 图例未报 setup_issue").is_true()
+
+func test_w16_row_length_mismatch_reports_issue() -> void:
+	## W1-6（2026-09-26 审计）：行长 != size.x 记 setup_issues（与
+	## V-M1-map-layout 同口径——展平行主序错位在运行时侧也可感知）
+	var map_def := BattleMapDef.new()
+	map_def.id = &"btm_test_row_len"
+	map_def.size = Vector2i(3, 2)
+	map_def.rows = ["...", ".."]
+	map_def.legend = {".": &"tile_normal"}
+	var grid := BattleGrid.new()
+	var ok: bool = grid.setup(map_def, func(tile_id: StringName) -> Resource:
+		return _tiles.get(tile_id, null))
+	assert_bool(ok).is_false()
+	var has_len_issue: bool = false
+	for issue: String in grid.setup_issues:
+		if issue.contains("行长") and issue.contains("size.x"):
+			has_len_issue = true
+	assert_bool(has_len_issue).override_failure_message("行长错位未报 setup_issue").is_true()
+
+func test_w18_line_of_sight_clear_direct_cases() -> void:
+	## W1-8（2026-09-26 审计）：line_of_sight_clear 静态直测——同格恒通 /
+	## 无效回调全透明 / 斜线端点不算（中间格经回调判定）/ 中间格遮挡断
+	var opaque_cells: Dictionary = {}
+	var probe: Callable = func(cell: Vector2i) -> bool: return opaque_cells.has(cell)
+	# 同格恒通（无回调亦通）
+	assert_bool(BattleGrid.line_of_sight_clear(Vector2i(2, 2), Vector2i(2, 2), probe)).is_true()
+	assert_bool(BattleGrid.line_of_sight_clear(Vector2i(2, 2), Vector2i(2, 2),
+			Callable())).is_true()
+	# 无效回调 = 全透明（远距恒通）
+	assert_bool(BattleGrid.line_of_sight_clear(Vector2i(0, 0), Vector2i(7, 7),
+			Callable())).is_true()
+	# 斜线端点不算：终点本身是"墙"不遮挡自己（战棋可见墙格口径）
+	opaque_cells[Vector2i(7, 7)] = true
+	assert_bool(BattleGrid.line_of_sight_clear(Vector2i(0, 0), Vector2i(7, 7), probe)).is_true()
+	opaque_cells.clear()
+	# 斜线中间格遮挡 → 断（(0,0)→(4,4) 经 (2,2)）
+	opaque_cells[Vector2i(2, 2)] = true
+	assert_bool(BattleGrid.line_of_sight_clear(Vector2i(0, 0), Vector2i(4, 4), probe)).is_false()
+	# 相邻直线无中间格 → 遮挡集不涉及时恒通
+	opaque_cells[Vector2i(9, 9)] = true
+	assert_bool(BattleGrid.line_of_sight_clear(Vector2i(0, 0), Vector2i(1, 0), probe)).is_true()

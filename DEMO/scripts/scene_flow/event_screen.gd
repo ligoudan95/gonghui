@@ -13,6 +13,9 @@ extends Control
 const SceneManagerScript: GDScript = preload("res://scripts/autoload/scene_manager.gd")
 
 ## UI 文案模板（E3-11/E8：逻辑层零文案——拦截/授予/终局文本集中 UI 层单源）
+## W3-09 登记注：path_blocked/quest_granted/quest_grant_dup/all_downed 等条目
+## 与 explore_screen.UI_TEXTS 重复（EventPanel 内嵌双宿主各自拼装所致）——
+## M4 事件演示宿主退役时随本屏消重，勿在本屏扩新增重复条目
 const UI_TEXTS: Dictionary = {
 	&"path_blocked": "（此路当前不通。）",
 	&"quest_granted": "新委托『%s』已加入挂单列表。",
@@ -47,6 +50,8 @@ var _active_node_id: StringName = &""
 var _last_battle_node_id: StringName = &""
 ## B 出口战前演出待战出口（「进入战斗」点击消费——E3-06 先播再战）
 var _pending_battle_outcome: EventOutcomeDef = null
+## 最近战前演出视图快照（W3-02：路由失败回滚重呈——对齐 explore 口径）
+var _last_battle_intro_view: EventRunner.EventView = null
 ## 路由战斗中标记（E2-4：_exit_tree 持锁判定——路由期间锁由 battle_screen
 ## 接管持有，本屏离树不释放）
 var _routing_battle: bool = false
@@ -139,12 +144,15 @@ func _MakeRun() -> ExpeditionRun:
 
 func _ApplyFontTiers() -> void:
 	## tscn 内嵌字号档位覆写（E3-12：TitleLabel/StatusLabel——tscn 值留占位，
-	## 运行时以 cfg 档位为准，对齐 guild_shell/battle_screen 惯例）
+	## 运行时以 cfg 档位为准，对齐 guild_shell/battle_screen 惯例）；
+	## W3-08：BackButton 补齐（按钮统一 normal 档——三屏按钮字号覆写收口）
 	## 参数：无
 	## 返回：无
 	%TitleLabel.add_theme_font_size_override("font_size",
 			UiTheme.font_of(_cfg, &"ui_font_size_heading", UiTheme.FONT_HEADING))
 	%StatusLabel.add_theme_font_size_override("font_size",
+			UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
+	%BackButton.add_theme_font_size_override("font_size",
 			UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 
 func _BuildMenu() -> void:
@@ -205,6 +213,7 @@ func _DispatchView(view: EventRunner.EventView) -> void:
 	if view.pending_outcome != null \
 			and view.pending_outcome.exit_kind == EventOutcomeDef.ExitKind.B:
 		_pending_battle_outcome = view.pending_outcome
+		_last_battle_intro_view = view
 		_panel.show_battle_intro(view, _RewardTextOf(view))
 		return
 	if view.options.is_empty():
@@ -283,7 +292,9 @@ func _OnBattleIntroPressed() -> void:
 func _RouteBattle(outcome: EventOutcomeDef) -> void:
 	## B 出口路由：组装 BattleParams（倒地过滤，E2-3）→ go(BATTLE_SCREEN,
 	## {battle_params, return_to, expedition_run, event_id, battle_node_id})
-	## ——战后经 pending_params 回传续跑（锚点原样回带，E3-01②）
+	## ——战后经 pending_params 回传续跑（锚点原样回带，E3-01②）；
+	## W3-02：对齐 explore 口径——消费 go 返回值（失败可感知），失败时复位
+	## _routing_battle 并回滚 _pending_battle_outcome 重呈战前演出（可再点）
 	## 参数 outcome：B 出口（归属节点经 _active_node_id 锚定）
 	## 返回：无
 	_last_battle_node_id = _active_node_id
@@ -299,13 +310,24 @@ func _RouteBattle(outcome: EventOutcomeDef) -> void:
 	var params: BattleParams = _runner.build_battle_params(outcome, _run)
 	params.party = alive_party
 	_routing_battle = true
-	get_node("/root/SceneManager").go(SceneManagerScript.SceneId.BATTLE_SCREEN, {
+	var err: Error = get_node("/root/SceneManager").go(SceneManagerScript.SceneId.BATTLE_SCREEN, {
 		&"battle_params": params,
 		&"return_to": SceneManagerScript.SceneId.EVENT_SCREEN,
 		&"expedition_run": _run,
 		&"event_id": _active_event_id,
 		&"battle_node_id": _active_node_id,
 	})
+	if err != OK:
+		# W3-02 回滚：路由标记复位 + 恢复待战出口 + 重呈战前演出（可再点
+		# 「进入战斗」重试；快照缺失时仅恢复出口位待再点）
+		_routing_battle = false
+		push_warning("event_screen: 路由战斗失败（错误码 %d）" % err)
+		_pending_battle_outcome = outcome
+		if _last_battle_intro_view != null:
+			_panel.show_battle_intro(_last_battle_intro_view,
+					_RewardTextOf(_last_battle_intro_view))
+		else:
+			push_warning("event_screen: 战前演出视图快照缺失——仅恢复待战出口位")
 
 func _ResumeAfterBattle(result: BattleResult) -> void:
 	## 战后续跑：回写 end_stats → 胜利结算 post_battle（15/15 入 run）；

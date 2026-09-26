@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="EncounterWeightDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/encounter_weight_def.gd" id="1_jycyv"]
+
+[resource]
+script = ExtResource("1_jycyv")
+id = &"encw_village"
+region_id = &"reg_village"
+random_pack_id = &"enc_m1_random_pack"
+comment = "【占位·试玩校准】encw_<区域>：遭遇权重（村子——安全区，chance 0 不掷；pack 仅为引用闭环占位）"

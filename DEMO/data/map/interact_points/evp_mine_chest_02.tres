@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="InteractPointDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/interact_point_def.gd" id="1_awvy4"]
+
+[resource]
+script = ExtResource("1_awvy4")
+id = &"evp_mine_chest_02"
+display_name = "弃置矿箱·西巷"
+cell = Vector2i(1, 10)
+kind = 2
+trigger = 1
+gold_min = 20
+gold_max = 35
+comment = "【占位·试玩校准】evp_<区域>_<语义>：交互点（宝箱——金域 [20,35]）"

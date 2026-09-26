@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="EncounterWeightDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/encounter_weight_def.gd" id="1_oyl6d"]
+
+[resource]
+script = ExtResource("1_oyl6d")
+id = &"encw_mine"
+region_id = &"reg_mine"
+encounter_chance = 0.0
+random_pack_id = &"enc_m1_random_pack"
+comment = "【占位·试玩校准】【用户拍板 2026-09-25】DEMO 排除所有随机战斗——机制保留数据侧关闭（chance 0 前置拒掷；pack 仅为引用闭环占位，与村区同口径）"

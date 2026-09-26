@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="RegionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/region_def.gd" id="1_7fyi3"]
+
+[resource]
+script = ExtResource("1_7fyi3")
+id = &"reg_city"
+display_name = "光辉城"
+description = "工会总部所在的大城市——委托与结算的归处。"
+comment = "【占位·试玩校准】reg_<语义>：世界区域（M3；DEMO 城区不落图）"

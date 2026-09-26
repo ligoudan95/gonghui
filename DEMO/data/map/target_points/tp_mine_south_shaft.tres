@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="TargetPointDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/target_point_def.gd" id="1_8f4qf"]
+
+[resource]
+script = ExtResource("1_8f4qf")
+id = &"tp_mine_south_shaft"
+display_name = "南竖井"
+cell = Vector2i(3, 13)
+comment = "【占位·试玩校准】tp_<区域>_<语义>：目标点（南竖井观测点）"

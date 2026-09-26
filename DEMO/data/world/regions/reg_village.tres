@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="RegionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/region_def.gd" id="1_hthlk"]
+
+[resource]
+script = ExtResource("1_hthlk")
+id = &"reg_village"
+display_name = "村口聚落"
+description = "贴着矿洞讨生活的村子南段——安全区，无随机遭遇。"
+comment = "【占位·试玩校准】reg_<语义>：世界区域（M3；探索图全亮行段）"

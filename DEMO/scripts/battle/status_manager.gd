@@ -15,6 +15,7 @@
 ## - attrs: Dictionary（{StringName 属性 id: int}，ATTR_RATIO 跳伤换算源）
 ## - hit: float / dodge: float / status_resist: float（两段判定消费）
 ## - take_damage(amount: int) -> void（DOT 直扣，不走减免轨）
+## - on_downed() -> void（W1-2：DOT 跳伤致死回调——与技能/陷阱击杀路径对齐）
 class_name StatusManager
 extends RefCounted
 
@@ -236,11 +237,18 @@ func end_of_round_tick(round: int, units: Array, rng: RandomNumberGenerator) -> 
 				else:
 					tick_damage = BattleRules.dot_tick(unit.attrs, status.dot)
 				unit.take_damage(tick_damage)
+				if not unit.alive:
+					# W1-2：DOT 跳伤致死统一走 on_downed 回调（与技能/陷阱击杀
+					# 路径对齐——此前仅技能攻击链回调，DOT/陷阱两路漏调）
+					unit.on_downed()
 				dot_events.append({&"unit": unit, &"damage": tick_damage})
 	# ②持续递减与移除（站位地格状态豁免——M1 批 2 缺口补线 2026-09-24 八轮：
 	# remove_policy=on_leave_tile 的即时类在格期间常驻，不随回合末移除/递减，
-	# 生命周期完全由离格 on_unit_moved 管理）
+	# 生命周期完全由离格 on_unit_moved 管理）；W1-3：倒地单位跳过——状态随
+	# 死亡冻结（DOT 致死者①段已回调 on_downed，此处不再遍历其残留状态）
 	for unit: Object in units:
+		if not unit.alive:
+			continue
 		for instance: StatusInstance in _GetUnitStatuses(unit).duplicate():
 			if instance.duration_zero:
 				var standing_status: StatusDef = _LookupStatus(instance.status_id)
