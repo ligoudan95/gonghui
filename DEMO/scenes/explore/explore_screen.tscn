@@ -106,8 +106,8 @@ offset_left = -360.0
 offset_top = -160.0
 offset_right = 360.0
 offset_bottom = 160.0
-grow_horizontal = 2
-grow_vertical = 2
+grow_horizontal = 1
+grow_vertical = 1
 z_index = 100
 
 [node name="SettleBox" type="VBoxContainer" parent="SettlementPanel"]
@@ -122,6 +122,7 @@ text = ""
 horizontal_alignment = 1
 
 [node name="SettlementBody" type="Label" parent="SettlementPanel/SettleBox"]
+autowrap_mode = 2
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
@@ -136,6 +137,6 @@ text = "回城"
 
 [node name="RetreatConfirm" type="ConfirmationDialog" parent="."]
 unique_name_in_owner = true
-dialog_text = "撤退 = 委托失败（本次出征进度不保留）。确定撤退吗？"
+dialog_text = "撤退 = 委托失败（本次出征进度不保留、队伍不会重伤，途中所得将丢弃）。确定撤退吗？"
 ok_button_text = "撤退"
 cancel_button_text = "继续探索"

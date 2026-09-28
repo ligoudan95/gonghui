@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="QuestTemplateDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/reward_def.gd" id="1_rwd"]
+[ext_resource type="Script" path="res://scripts/data_defs/quest_template_def.gd" id="2_qtd"]
+
+[sub_resource type="Resource" id="Resource_rwd"]
+script = ExtResource("1_rwd")
+exp = 30
+gold = 60
+reputation = 1
+
+[resource]
+script = ExtResource("2_qtd")
+id = &"q_chore_supply_run"
+display_name = "补给跑腿"
+exec_class = 1
+party_min = 1
+party_max = 2
+time_limit_days = 5
+duration_days = 2
+reward = SubResource("Resource_rwd")
+abandonable = true
+recommend_attrs = Array[StringName]([&"constitution", &"strength"])
+expire_behavior = 0
+region_id = &"reg_city"
+issuer = "杂货铺老板娘"
+description = "几筐灯油和干粮要送去矿口的哨站，路上太平，就是得有人扛。"
+comment = "【占位·试玩校准】M4 增补批 Q1-Q7 拍板：轻度委托（非战斗/1-2 人/工期 2 天/REFRESH）；奖励 60金·30经验·声望1；占用期间成员不可出征；可放弃"

@@ -8,6 +8,13 @@
 class_name CheckRoller
 extends RefCounted
 
+## 代码兜底常量（S1-M4-2-a：原四处裸字面量提具名——cfg 字段未注入/未回填
+## 时的回退值；表值 == 兜底由 data_validator V-B2-cfg-fallback int 域锚定）
+const CRIT_SUCCESS_DROP_DIVISOR_FALLBACK: int = 3
+const CRIT_SUCCESS_LINE_MIN_FALLBACK: int = 16
+const LUCK_FLOOR_Z_BASE_FALLBACK: int = 2
+const LUCK_FLOOR_Z_DIVISOR_FALLBACK: int = 4
+
 ## 大成功判定线（= max(crit_success_line_min, 20 − max(0, floor((幸运 − 偏移) /
 ## 降线除数 X)))——幸运越高线越低、钳 16 下限不再降；骰 1 优先不看本线）
 static func crit_line_of(luck: int, cfg: CoreConfig) -> int:

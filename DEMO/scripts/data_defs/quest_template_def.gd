@@ -3,7 +3,7 @@
 ## 到期表现与推荐编队提示；M2 落事件授予 1 行（q_lost_miner_keepsake），
 ## M3 提前落板刷首行（q_lair_purge），M4 补齐板刷 8 行全量（案 18 §2.6 定稿）。
 ## 数据来源：案 6《委托与声望》（模板字段）；案 18 §2.3/§2.6（DEMO 内容）；
-## 案 17 §3.7（超额加成口径——模板字段位，0=走 cfg 统一值，拍板③）。
+## 案 17 §3.7（超额加成口径——模板字段位，0=走 cfg 统一值，M4 主批拍板③）。
 ## id 命名规范：quest/templates 域，q_ 前缀，文件名与 id 同名。
 class_name QuestTemplateDef
 extends Resource
@@ -92,8 +92,13 @@ enum ExpireBehavior {
 ## 委托描述（文案钩子——案 18 §2.6；UI 委托卡展示）
 @export var description: String = ""
 ## 超额人数奖励加成率（每人 +本值；0 = 走 cfg 统一值 quest_excess_bonus_per_head
-## ——拍板③：模板字段位承载，仅货币+经验适用、声望不加）
+## ——M4 主批拍板③：模板字段位承载，仅货币+经验适用、声望不加；「M4 增补批
+## 拍板③」另指设置界面双档分辨率——两轮拍板各自轮内序号）
 @export var excess_bonus_per_head: float = 0.0
+## 工期天数（M4 增补批：轻度委托——NON_COMBAT 派人即开工，工期挂日结算
+## quest_noncombat_advance 步自动推进、期满自动结算；0 = 战斗模板未配置，
+## ≥1 为轻度模板必配——V-M4-quest-template 执行大类互斥校验）
+@export var duration_days: int = 0
 
 ## 设计备注（【占位·试玩校准】等标注与数据来源说明，Inspector 可编辑）
 @export var comment: String = ""

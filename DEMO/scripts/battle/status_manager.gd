@@ -101,13 +101,16 @@ func apply(target: Object, status: StatusDef, source_kind: int, source_id: Strin
 				status.id, source_token, str(status.allowed_sources)])
 			_last_reject_reason = &"source_not_allowed"
 			return false
-	# ①同名刷新（取大 + 条件重起算——S2-3：>= 门控含等值；DOT 快照随重施加刷新）
+	# ①同名刷新（取大 + 条件重起算——S2-3：>= 门控含等值；DOT 快照随重施加刷新）；
+	# S2-M2-3-b 纯防御：重算 duration_zero——即时类被常规刷新后转为常规语义、
+	# 常规实例被即时施加（effective ≤ 0）时 remaining 钳 0 保持不倒扣
 	for instance: StatusInstance in target_statuses:
 		if instance.status_id != status.id:
 			continue
 		if effective >= instance.remaining:
-			instance.remaining = effective
+			instance.remaining = maxi(0, effective)
 			instance.first_tick_round = _CalcFirstTick(effective, current_round)
+			instance.duration_zero = effective <= 0
 			# 控制锁刷新纳入同一门控（S2-3：等值重施加同样刷新锁窗）
 			if status.control_kind != StatusDef.ControlKind.NONE:
 				instance.control_locks = maxi(instance.control_locks, effective)
@@ -261,8 +264,11 @@ func end_of_round_tick(round: int, units: Array, rng: RandomNumberGenerator) -> 
 				instance.remaining -= 1
 				if instance.remaining <= 0:
 					_GetUnitStatuses(unit).erase(instance)
-	# ③施加回合结束：锁定跳过标记失效（蛊惑/已行动锁自下回合生效）
+	# ③施加回合结束：锁定跳过标记失效（蛊惑/已行动锁自下回合生效）；
+	# W1-3 口径对齐：倒地单位状态随死亡冻结——不参与本段清除
 	for unit: Object in units:
+		if not unit.alive:
+			continue
 		for instance: StatusInstance in _GetUnitStatuses(unit):
 			instance.from_next_turn_only = false
 	# ④回合推进与已行动标记重置

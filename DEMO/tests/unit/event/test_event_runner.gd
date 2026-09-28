@@ -374,3 +374,41 @@ func test_view_node_id_single_source() -> void:
 	var direct: EventRunner.EventView = runner2.choose_option(&"chain_mine_wisp",
 			&"opt_wisp_2", run2.party[0], run2)
 	assert_str(String(direct.node_id)).is_equal("")
+
+func test_s2m1_normal_failure_shows_failure_text() -> void:
+	## S2-M1 回归：普通失败（非大失败）fallback 取 failure 文案——修复前
+	## fallback 误取 success（sp_village_cart FAILURE 显示「车抬起来了。」）
+	## 弱智施检者（力 1）+ 骰 5 → 合计必落 FAILURE 档（骰非 1 不触发大失败）
+	var runner: EventRunner = _FixedRunner(5)
+	var run := _FreshRun()
+	runner.start_event(&"sp_village_cart", run)
+	var settled: EventRunner.EventView = runner.choose_option(&"sp_village_cart",
+			&"", _run.party[1], run)
+	assert_int(settled.check_grade).is_equal(CheckResult.Grade.FAILURE)
+	assert_str(settled.narrative).contains("车没抬动")
+	assert_bool(settled.narrative.contains("车抬起来了")).is_false()
+
+func test_s2m1_normal_failure_unlock_flag_not_granted() -> void:
+	## S2-M1 回归（暗门侧）：极难线普通失败——failure 文案呈现且 unlock_flags
+	## 为空（文案与结果一致；修复前显示 success 文案「风声找到了。」）
+	var runner: EventRunner = _FixedRunner(5)
+	var run := _FreshRun()
+	runner.start_event(&"sp_mine_secretdoor", run)
+	var settled: EventRunner.EventView = runner.choose_option(&"sp_mine_secretdoor",
+			&"", _run.party[1], run)
+	assert_int(settled.check_grade).is_equal(CheckResult.Grade.FAILURE)
+	assert_str(settled.narrative).contains("敲遍了整面北墙")
+	assert_bool(settled.narrative.contains("风声找到了")).is_false()
+	assert_bool(run.unlock_flags.is_empty()).is_true()
+
+func test_s2m1_no_check_single_finalized_once() -> void:
+	## S2-M2-3-d 联动回归：无检定单点 start_event 即结算即终局——choose_option
+	## 二次调用被 E7 拦截（奖励不再二次累计）
+	var run := _FreshRun()
+	var view: EventRunner.EventView = _runner.start_event(&"sp_village_traveler", run)
+	var first_exp: int = int(run.rewards[&"exp"])
+	assert_bool(first_exp > 0).is_true()
+	var second: EventRunner.EventView = _runner.choose_option(&"sp_village_traveler",
+			&"", _run.party[0], run)
+	assert_bool(second.narrative.is_empty()).is_true()
+	assert_int(int(run.rewards[&"exp"])).is_equal(first_exp)

@@ -23,6 +23,36 @@ func before_test() -> void:
 	scene_manager.previous_id = -1
 	var no_params: Dictionary = {}
 	scene_manager.pending_params = no_params
+	# M-10：本套件 M-2 用例写真实存档（NEW_GAME/RETURN_SETTLED）——统一复位
+	_ResetAutoloadState()
+
+func after_test() -> void:
+	## 用例级后置：清盘（M-2 用例写入的存档不遗留——失败路径也必达）
+	## 参数：无
+	## 返回：无
+	_ResetAutoloadState()
+
+func _ResetAutoloadState() -> void:
+	## M-10（套件卫生统一）：触真实 autoload 的套件统一复位——存档目录清盘
+	##（含 .bak/.tmp 幂等）+ SaveManager.current 置空 + 出征锁释放 + GuildState
+	## core 重建（provider 闭包读字段即时值，重建安全——test_scene_flow 先例）
+	## 参数：无
+	## 返回：无
+	_CleanSaveDirRobust()
+	var save_manager: Node = get_tree().root.get_node_or_null("SaveManager")
+	if save_manager != null:
+		save_manager.current = null
+		save_manager.set_expedition_lock(false)
+	var guild_state: Node = get_tree().root.get_node_or_null("GuildState")
+	if guild_state != null:
+		guild_state.core = GuildCore.new()
+
+func _CleanSaveDirRobust() -> void:
+	## 存档目录清盘（正本/.bak/.tmp 逐个删除——幂等，目录缺失静默）
+	## 参数：无
+	## 返回：无
+	for entry_name: String in ["main_save.json", "main_save.json.bak", "main_save.json.tmp"]:
+		DirAccess.remove_absolute("user://saves/" + entry_name)
 
 func _EnterRandomBattle() -> void:
 	## B-22：公会壳调试入口拆除——直构 BattleParams（默认 4 职业，等价原
@@ -128,7 +158,7 @@ func test_degraded_run_interaction_guards() -> void:
 	var retreat_button: Button = battle.get_node("%RetreatButton") as Button
 	assert_bool(retreat_button.disabled) \
 			.override_failure_message("降级路径撤退钮应保留降级出口").is_false()
-	assert_str(retreat_button.text).is_equal("返回公会壳")
+	assert_str(retreat_button.text).is_equal("返回公会")
 
 func test_battle_screen_direct_load_smoke() -> void:
 	## 直开冒烟：无跨场景参数 → 优雅降级（IdleLabel 提示、不开战不崩溃）
@@ -726,8 +756,106 @@ func test_degraded_exit_releases_expedition_lock() -> void:
 	assert_object(battle).is_not_null()
 	assert_object(battle.context).is_null()
 	# 降级路径已按回会话口径接管锁
-	assert_bool(save_manager._expedition_lock).is_true()
+	assert_bool(save_manager.is_expedition_locked()).is_true()
 	# 降级「返回公会壳」→ 锁释放（X2-M1 修复前此处卡 true）
 	battle._on_retreat_button_pressed()
 	await _AwaitSceneSwap()
-	assert_bool(save_manager._expedition_lock).is_false()
+	assert_bool(save_manager.is_expedition_locked()).is_false()
+
+func test_m2_degraded_retreat_settles_dead_quest() -> void:
+	## M-2（修复批次 3）：装配失败降级「返回公会壳」——回传 run 经 GuildState
+	## 按 RETREAT 结算：委托 IN_PROGRESS→移除（无死单残留）、锁释放、
+	## RETURN_SETTLED 存档落盘（修复前 run 丢弃无结算，委托永久卡 IN_PROGRESS
+	## 封锁一切后续出征且被 autosave 持久化）
+	var guild_state: Node = get_tree().root.get_node("GuildState")
+	guild_state.core = GuildCore.new()
+	guild_state.new_game()
+	var core: GuildCore = guild_state.core
+	core.board.board.clear()
+	var inst: QuestInstance = core.board.spawn_on_board(&"q_lair_purge", core.day)
+	var party: Array[StringName] = [core.roster[0].unit_id, core.roster[1].unit_id,
+			core.roster[2].unit_id]
+	assert_bool(core.accept_quest(inst.serial, party)).is_true()
+	assert_bool(core.start_expedition(inst.serial)).is_true()
+	var run: ExpeditionRun = guild_state.build_expedition_run(inst)
+	var save_manager: Node = get_tree().root.get_node("SaveManager")
+	save_manager.set_expedition_lock(true)
+	# 装配失败注入：pack 查无 → BattleSetup.build 返回 null → 降级屏
+	var params := BattleParams.new()
+	params.pack_id = &"enc_missing_pack"
+	params.party = [core.roster[0]]
+	get_tree().root.get_node("SceneManager").go(SCENE_BATTLE, {
+		&"battle_params": params,
+		&"return_to": 3,
+		&"expedition_run": run,
+	})
+	await _AwaitSceneSwap()
+	var battle: Control = get_tree().current_scene as Control
+	assert_object(battle).is_not_null()
+	assert_object(battle.context).is_null()
+	# 死单仍在（降级本身不结算——撤退出口统一回退）
+	assert_int(core.board.in_progress_count()).is_equal(1)
+	# 降级撤退 → run 结算回退：移除/释锁/RETURN_SETTLED 落盘
+	battle._on_retreat_button_pressed()
+	await _AwaitSceneSwap()
+	assert_bool(save_manager.is_expedition_locked()).is_false()
+	assert_int(core.board.in_progress_count()).is_equal(0)
+	assert_object(core.board.find_accepted(inst.serial)).is_null()
+	assert_int(save_manager.current.save_point).is_equal(SaveData.SavePoint.RETURN_SETTLED)
+	# 存档清理由 after_test 统一承担（M-10 套件卫生）
+
+func test_result_panel_retreat_copy_no_injury() -> void:
+	## 低危 11（P1 文案断言）：RETREAT 结算详情含「不会重伤」（与 RETREAT
+	## 单独映射口径同步）；DEFEAT/VICTORY 详情不再硬编码天数/奖励数值（M-1）
+	var panel := ResultPanel.new()
+	add_child(panel)
+	auto_free(panel)
+	var retreat := BattleResult.new()
+	retreat.kind = BattleResult.ResultKind.RETREAT
+	panel.show_result(retreat)
+	assert_str(panel._title_label.text).contains("撤退")
+	assert_str(panel._detail_label.text).contains("不会重伤")
+	var defeat := BattleResult.new()
+	defeat.kind = BattleResult.ResultKind.DEFEAT
+	panel.show_result(defeat)
+	assert_str(panel._detail_label.text).contains("回城结算")
+	assert_bool(panel._detail_label.text.contains("3 天")).is_false()
+
+
+func test_s4m1_degraded_demo_run_pure_navigation() -> void:
+	## S4-M1 回归（批次 3 二次缺陷）：降级 × 演示 run——_MakeDefaultRun 口径
+	##（quest_serial=0、队长不在名册）经降级撤退**不走公会结算**（不推日历/
+	## 不落 RETURN_SETTLED 存档），维持纯导航
+	var guild_state: Node = get_tree().root.get_node("GuildState")
+	guild_state.core = GuildCore.new()
+	guild_state.new_game()
+	var core: GuildCore = guild_state.core
+	var day_before: int = core.day
+	# 演示 run：无委托序号、队长为临时 debug 单位（不在名册）
+	var demo_run := ExpeditionRun.new()
+	var game_data: Node = get_tree().root.get_node("GameData")
+	demo_run.party.append(AdventurerData.create_debug(&"demo", &"cls_warrior", {
+		&"strength": 10, &"agility": 10, &"constitution": 10,
+		&"intelligence": 10, &"perception": 10, &"willpower": 10, &"luck": 10,
+	}, game_data))
+	var save_manager: Node = get_tree().root.get_node("SaveManager")
+	save_manager.set_expedition_lock(true)
+	var params := BattleParams.new()
+	params.pack_id = &"enc_missing_pack"
+	params.party = [demo_run.party[0]]
+	get_tree().root.get_node("SceneManager").go(SCENE_BATTLE, {
+		&"battle_params": params,
+		&"return_to": 3,
+		&"expedition_run": demo_run,
+	})
+	await _AwaitSceneSwap()
+	var battle: Control = get_tree().current_scene as Control
+	assert_object(battle).is_not_null()
+	assert_object(battle.context).is_null()
+	# 降级撤退：演示 run 纯导航——无结算无落盘
+	battle._on_retreat_button_pressed()
+	await _AwaitSceneSwap()
+	assert_bool(save_manager.is_expedition_locked()).is_false()
+	assert_int(core.day).is_equal(day_before)
+	assert_bool(save_manager.current.save_point == SaveData.SavePoint.RETURN_SETTLED) \
+			.is_false()

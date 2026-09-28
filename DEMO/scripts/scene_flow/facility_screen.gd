@@ -9,6 +9,9 @@ extends Control
 ## SceneManager 脚本常量引用
 const SceneManagerScript: GDScript = preload("res://scripts/autoload/scene_manager.gd")
 
+## 按钮统一尺寸（S5-M5-1-h：原两处 Vector2 字面量提常量）
+const BUTTON_SIZE: Vector2 = Vector2(280, 56)
+
 ## 本屏设施 id（tscn 注入：fac_dormitory / fac_training_ground）
 @export var facility_id: StringName = &""
 
@@ -64,14 +67,14 @@ func _BuildLayout() -> void:
 	box.add_child(spacer)
 	_upgrade_button = Button.new()
 	_upgrade_button.name = "UpgradeButton"
-	_upgrade_button.custom_minimum_size = Vector2(280, 56)
+	_upgrade_button.custom_minimum_size = BUTTON_SIZE
 	_upgrade_button.add_theme_font_size_override("font_size",
 			UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 	_upgrade_button.pressed.connect(_OnUpgradePressed)
 	box.add_child(_upgrade_button)
 	var back_button := Button.new()
 	back_button.text = "返回公会"
-	back_button.custom_minimum_size = Vector2(280, 56)
+	back_button.custom_minimum_size = BUTTON_SIZE
 	back_button.add_theme_font_size_override("font_size",
 			UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 	back_button.pressed.connect(_OnBackPressed)

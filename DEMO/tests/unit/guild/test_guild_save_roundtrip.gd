@@ -177,8 +177,11 @@ func test_return_settled_save_failure_flagged() -> void:
 	## summary.save_failed 置位（结算面板警示行消费）
 	var save_manager: Node = load(SAVE_MANAGER_SCRIPT).new()
 	add_child(save_manager)
+	# 修复批次 3（套件隔离）：局部 GuildState 不 add_child——避免 _ready 的
+	# bind 命中真 autoload SaveManager 覆写其 provider（局部实例释放后真 SM
+	# 残留悬空 Callable，套件顺序一变即 errors）；手动等价初始化后直用
 	var state: Node = load(GUILD_STATE_SCRIPT).new()
-	add_child(state)
+	state.core = GuildCore.new()
 	state._rng = _MakeRng(506)
 	state.bind(save_manager, _game_data)
 	state.new_game()
@@ -197,8 +200,9 @@ func test_new_game_initial_state_and_load_restore() -> void:
 	## 委托板 3/招募池 3/game_day=1/NEW_GAME 写盘；load_game → 快照恢复等价
 	var save_manager: Node = load(SAVE_MANAGER_SCRIPT).new()
 	add_child(save_manager)
+	# 修复批次 3（套件隔离）：同上——局部 GuildState 不 add_child 手动初始化
 	var state: Node = load(GUILD_STATE_SCRIPT).new()
-	add_child(state)
+	state.core = GuildCore.new()
 	state._rng = _MakeRng(504)
 	state.bind(save_manager, _game_data)
 	state.new_game()
@@ -209,7 +213,7 @@ func test_new_game_initial_state_and_load_restore() -> void:
 	assert_int(state.core.recruit_pool.candidates.size()).is_equal(3)
 	assert_int(save_manager.current.game_day).is_equal(1)
 	assert_int(save_manager.current.save_point).is_equal(SaveData.SavePoint.NEW_GAME)
-	assert_int(save_manager.current.schema_version).is_equal(2)
+	assert_int(save_manager.current.schema_version).is_equal(SaveData.SCHEMA_VERSION)
 	# 初始 4 人：预解锁第 1 技（1 个）+出生 1 点+职业集合恰为定稿四职业
 	var class_set: Array[StringName] = []
 	for member: AdventurerData in state.core.roster:
@@ -235,5 +239,68 @@ func test_new_game_initial_state_and_load_restore() -> void:
 	assert_int(state.core.recruit_pool.candidates.size()).is_equal(3)
 	# 存档侧公会快照键落盘
 	assert_bool(loaded.payload.has(&"guild")).is_true()
+	state.free()
+	save_manager.free()
+
+func test_s3m2_malformed_snapshot_conservative_clear() -> void:
+	## S3-M2 回归（拍板：保守清空）：畸形 payload——roster/facility_levels 破坏成
+	## Dictionary/标量、board/candidates 破坏成标量——restore 链不 SCRIPT ERROR
+	## 中断，对应槽保守清空，读档可继续（core 运行态自洽）
+	var core := GuildCore.new()
+	core.attach(_Cfg(), _game_data, _MakeRng(511))
+	core.restore_snapshot({
+		"day": 4,
+		"gold": 300,
+		"board": "corrupted",
+		"recruit_pool": 42,
+		"facility_levels": 17,
+		"roster": {"broken": true},
+		"last_party_by_tpl": 7,
+		"pending_tendency_levels": 1.5,
+	})
+	# 全部槽保守清空、顶层标量仍恢复、无中断后续断言可达
+	assert_int(core.day).is_equal(4)
+	assert_int(core.gold).is_equal(300)
+	assert_int(core.board.board.size()).is_equal(0)
+	assert_int(core.board.accepted.size()).is_equal(0)
+	assert_int(core.recruit_pool.candidates.size()).is_equal(0)
+	assert_int(core.facility_levels.size()).is_equal(0)
+	assert_int(core.roster.size()).is_equal(0)
+	assert_int(core.last_party_by_tpl.size()).is_equal(0)
+	assert_int(core.pending_tendency_levels.size()).is_equal(0)
+	# 恢复后 core 仍可用（新游戏语义重建——读档可继续）
+	core.board.initial_fill(core.day)
+	assert_int(core.board.board.size()).is_equal(3)
+
+func test_s3m2_malformed_member_entries_skipped() -> void:
+	## S3-M2 补充：roster 数组内混入非 Dictionary 条目——跳过坏条目、好条目
+	## 正常恢复（与「实例损坏条目跳过」既有口径一致）
+	var good := GuildCore.new()
+	good.setup(_Cfg(), _game_data, _MakeRng(512))
+	var snapshot: Dictionary = good.to_snapshot()
+	snapshot["roster"] = [snapshot["roster"][0], "corrupted-entry", 42]
+	var core := GuildCore.new()
+	core.attach(_Cfg(), _game_data, _MakeRng(513))
+	core.restore_snapshot(snapshot)
+	assert_int(core.roster.size()).is_equal(1)
+	assert_str(String(core.roster[0].unit_id)).is_equal(
+			String(good.roster[0].unit_id))
+
+func test_s3m5b_wait_day_autosave_failure_flagged() -> void:
+	## S3-M5-1-b 回归：DAY_END autosave FAILED（注入 current 置空）——
+	## GuildState.last_autosave_failed 置位（guild_shell RefreshAll 感知），
+	## 与 RETURN_SETTLED 的 summary.save_failed 口径对称
+	var save_manager: Node = load(SAVE_MANAGER_SCRIPT).new()
+	add_child(save_manager)
+	var state: Node = load(GUILD_STATE_SCRIPT).new()
+	state.core = GuildCore.new()
+	state._rng = _MakeRng(514)
+	state.bind(save_manager, _game_data)
+	state.new_game()
+	assert_bool(state.last_autosave_failed).is_false()
+	save_manager.current = null
+	var summary: GuildCore.DaySummary = state.wait_one_day()
+	assert_object(summary).is_not_null()
+	assert_bool(state.last_autosave_failed).is_true()
 	state.free()
 	save_manager.free()

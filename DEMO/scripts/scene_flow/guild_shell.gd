@@ -5,12 +5,42 @@
 ## 日结算轻提示行（完整汇总弹窗归 M5）/ 升级+倾向选择弹层（LevelupPanel——
 ## pending 队列驱动）；M0 存档演示三件与 M3 占位出征面板已随批 2 退役
 ##（存档走五时点自动存档；出征入口移驻协会屏挂单管理）。
+## 右栏布局口径（修复批次 5：M4 试玩验收第 1 轮 UI 反馈）：设施协会区块
+## 置顶（EntryTitle→宿舍→训练场→协会）→「等待一天」「待选倾向」→
+## 日结算轻提示行垂直撑满剩余空间（SideBox 子节点顺序契约见
+## test_guild_shell_ui_contract）。
 ## 数据来源：M4 批 2 方案；案 15 §2.2（屏规格）；案 2 §2.2（等待/跳过一天）。
 ## 单例访问：统一 get_node("/root/X")（gdUnit 测试环境惯例）。
 extends Control
 
 ## SceneManager 脚本常量引用（枚举常量不可经实例属性访问，见 title_screen.gd 注）
 const SceneManagerScript: GDScript = preload("res://scripts/autoload/scene_manager.gd")
+
+## UI 文案模板（逻辑层零文案——UI 层单源；S4-M4-4：本屏内联文案收编单源，
+## 惯例对齐 quest_board_panel/explore_screen 先例）
+const UI_TEXTS: Dictionary = {
+	&"no_session": "（未开始游戏）",
+	&"session_hint": "从标题屏「开始」或「继续」进入游戏。",
+	&"day_week_format": "第 %d 天·%s",
+	&"day_format": "第 %d 天",
+	&"gold_format": "%d 金",
+	&"reputation_format": "声望 %d",
+	&"wait_locked_tooltip": "出征进行中——日历冻结",
+	&"wait_locked_hint": "出征进行中——日历冻结，不能等待。",
+	&"pending_button_format": "待选倾向（%d 人）",
+	&"association_label": "冒险者协会（委托·招募）",
+	&"association_badge": "冒险者协会（委托·招募）★新挂单",
+	&"day_summary_format": "第 %d 天：%s。",
+	&"day_summary_plain": "第 %d 天：无事发生。",
+	&"summary_recovered_format": "恢复 %d 人",
+	&"summary_week_refresh": "委托板周刷新",
+	&"summary_board_removed_format": "板上到期 %d 单",
+	&"summary_accepted_failed_format": "挂单到期失败 %d 单",
+	&"summary_candidates_format": "新候选：%s",
+	&"autosave_failed_hint": "⚠ 最近一次自动存档写入失败——进度可能未落盘，请重试操作。",
+	&"summary_light_done_format": "轻度委托完成：%s +%d 金 +%d 经验 +%d 声望",
+	&"summary_light_done_bench_suffix": "（板凳 %d 人各得 %d 经验）",
+}
 
 ## GameData 单例引用（_ready 缓存）
 var _game_data: Node = null
@@ -63,7 +93,7 @@ func _ApplyFontTiers() -> void:
 			UiTheme.font_of(_cfg, &"ui_font_size_large", UiTheme.FONT_LARGE))
 	%SettleInfoLabel.add_theme_font_size_override("font_size",
 			UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
-	get_node("Layout/MainBox/SideBox/EntryTitle").add_theme_font_size_override("font_size",
+	%EntryTitle.add_theme_font_size_override("font_size",
 			UiTheme.font_of(_cfg, &"ui_font_size_subheading", UiTheme.FONT_SUBHEADING))
 	var button_font: int = UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL)
 	for button: Button in [%BackButton, %WaitButton, %PendingButton, %DormitoryButton,
@@ -100,10 +130,10 @@ func RefreshAll() -> void:
 	## 参数：无
 	## 返回：无
 	if not _HasSession():
-		%DayLabel.text = "（未开始游戏）"
+		%DayLabel.text = UI_TEXTS[&"no_session"]
 		%GoldLabel.text = ""
 		%ReputationLabel.text = ""
-		%SettleInfoLabel.text = "从标题屏「开始」或「继续」进入游戏。"
+		%SettleInfoLabel.text = UI_TEXTS[&"session_hint"]
 		%WaitButton.disabled = true
 		_ApplyAssociationBadge()
 		return
@@ -119,10 +149,13 @@ func RefreshAll() -> void:
 	var locked: bool = _save_manager().is_expedition_locked()
 	%WaitButton.disabled = locked
 	# Z2-6：出征冻结 tooltip（禁用态无点击反馈的口径提示）
-	%WaitButton.tooltip_text = "出征进行中——日历冻结" if locked else ""
+	%WaitButton.tooltip_text = String(UI_TEXTS[&"wait_locked_tooltip"]) if locked else ""
 	# Z2-3：悬置倾向直入入口（pending>0 时显示）
 	%PendingButton.visible = not core.pending_tendency_levels.is_empty()
-	%PendingButton.text = "待选倾向（%d 人）" % core.pending_tendency_levels.size()
+	%PendingButton.text = String(UI_TEXTS[&"pending_button_format"]) % core.pending_tendency_levels.size()
+	# S3-M5-1-b：最近一次自动存档失败感知（四时点 FAILED 与 M-3 口径对称）
+	if _guild_state().last_autosave_failed:
+		%SettleInfoLabel.text = UI_TEXTS[&"autosave_failed_hint"]
 	_ApplyAssociationBadge()
 
 func _OnDaySettled(_summary: Variant) -> void:
@@ -138,9 +171,9 @@ func _on_wait_pressed() -> void:
 	## 返回：无
 	if not _HasSession():
 		return
-	var summary: Variant = _guild_state().wait_one_day()
+	var summary: GuildCore.DaySummary = _guild_state().wait_one_day()
 	if summary == null:
-		%SettleInfoLabel.text = "出征进行中——日历冻结，不能等待。"
+		%SettleInfoLabel.text = UI_TEXTS[&"wait_locked_hint"]
 		RefreshAll()
 		return
 	%SettleInfoLabel.text = _SummarizeDay(summary)
@@ -153,24 +186,35 @@ func _on_pending_pressed() -> void:
 	_levelup_panel.open(_guild_state().core)
 	%LevelupHost.visible = true
 
-func _SummarizeDay(summary: Variant) -> String:
+func _SummarizeDay(summary: GuildCore.DaySummary) -> String:
 	## 日结算轻提示行拼装（恢复/到期明细/新候选——DaySummary 读值）
 	## 参数 summary：GuildCore.DaySummary
 	## 返回：提示文本
 	var parts: PackedStringArray = []
 	if not summary.recovered_ids.is_empty():
-		parts.append("恢复 %d 人" % summary.recovered_ids.size())
+		parts.append(String(UI_TEXTS[&"summary_recovered_format"]) % summary.recovered_ids.size())
 	if summary.week_refreshed:
-		parts.append("委托板周刷新")
+		parts.append(UI_TEXTS[&"summary_week_refresh"])
 	if not summary.board_removed.is_empty():
-		parts.append("板上到期 %d 单" % summary.board_removed.size())
+		parts.append(String(UI_TEXTS[&"summary_board_removed_format"]) % summary.board_removed.size())
 	if not summary.accepted_failed.is_empty():
-		parts.append("挂单到期失败 %d 单" % summary.accepted_failed.size())
+		parts.append(String(UI_TEXTS[&"summary_accepted_failed_format"]) % summary.accepted_failed.size())
 	if not summary.new_candidate_names.is_empty():
-		parts.append("新候选：%s" % "、".join(summary.new_candidate_names))
+		parts.append(String(UI_TEXTS[&"summary_candidates_format"]) % "、".join(summary.new_candidate_names))
+	# M4 增补批：轻度委托完成条目（多条顿号拼接；板凳分享后缀——拍板①）
+	if not summary.light_completed.is_empty():
+		var light_parts: PackedStringArray = []
+		for result: GuildCore.LightQuestResult in summary.light_completed:
+			var entry_text: String = String(UI_TEXTS[&"summary_light_done_format"]) % [
+					result.display_name, result.gold, result.exp, result.reputation]
+			if result.bench_member_count > 0:
+				entry_text += String(UI_TEXTS[&"summary_light_done_bench_suffix"]) % [
+						result.bench_member_count, result.bench_exp_per_member]
+			light_parts.append(entry_text)
+		parts.append("、".join(light_parts))
 	if parts.is_empty():
-		return "第 %d 天：无事发生。" % summary.day
-	return "第 %d 天：%s。" % [summary.day, "；".join(parts)]
+		return String(UI_TEXTS[&"day_summary_plain"]) % summary.day
+	return String(UI_TEXTS[&"day_summary_format"]) % [summary.day, "；".join(parts)]
 
 func _OnMemberSelected(unit_id: StringName) -> void:
 	## 成员行点击 → 成员详情弹层（属性/装备/技能/解锁/倾向入口——批 3 接线）

@@ -134,7 +134,7 @@ func request_skill(skill_id: StringName, target_cell: Vector2i) -> bool:
 		return false
 	if not current_unit.skill_ids.has(skill_id):
 		return false
-	var result = _execute_skill(current_unit, skill_id, target_cell)
+	var result: SkillExecutor.ExecutionResult = _execute_skill(current_unit, skill_id, target_cell)
 	if result == null or not result.success:
 		return false
 	current_unit.has_acted = true
@@ -350,7 +350,7 @@ func _execute_skill(unit: BattleUnit, skill_id: StringName, target_cell: Vector2
 		&"forced_crit": -1,
 		&"status_lookup": _context.status_lookup,
 	}
-	var result = _executor.execute(unit, skill, target_cell, ctx)
+	var result: SkillExecutor.ExecutionResult = _executor.execute(unit, skill, target_cell, ctx)
 	skill_executed.emit(unit, result)
 	if result != null:
 		for entry: StringName in result.applied_statuses:

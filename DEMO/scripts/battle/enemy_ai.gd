@@ -208,15 +208,20 @@ static func _ChooseSkill(self_unit: Object, grid: BattleGrid, candidates: Array,
 				self_unit.ai_context[&"roar_used"] = true
 				if self_unit.has_resource(roar_skill.resource_type, roar_skill.resource_cost):
 					return roar_id
-		# 穷追优先：首个精力足够的伤害技（DEMO 精英技能表序 = 穷追在前）
+		# 穷追优先：首个精力足够的伤害技（DEMO 精英技能表序 = 穷追在前）；
+		# S2-M2-3-i：lookup 查无跳过（对齐 W2-5 怒吼分支空守卫——坏引用不崩）
 		for skill_id: StringName in damage_skills:
 			var skill: SkillDef = skill_lookup.call(skill_id) as SkillDef
+			if skill == null:
+				continue
 			if self_unit.has_resource(skill.resource_type, skill.resource_cost):
 				return skill_id
 		return common
-	# 杂兵分支：首个精力足够的主动技，耗尽转普攻
+	# 杂兵分支：首个精力足够的主动技，耗尽转普攻（同空守卫）
 	for skill_id: StringName in damage_skills:
 		var skill: SkillDef = skill_lookup.call(skill_id) as SkillDef
+		if skill == null:
+			continue
 		if self_unit.has_resource(skill.resource_type, skill.resource_cost):
 			return skill_id
 	return common

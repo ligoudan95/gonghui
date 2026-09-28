@@ -83,6 +83,8 @@ func _ready() -> void:
 		%IdleLabel.visible = true
 		_DisableInteractionForDegradedRun()
 		return
+	# M-6 拍板：结算面板返回钮按去向分流（探索通道=继续探索/缺省=返回公会）
+	%ResultPanel.set_return_label(_return_to == SceneManagerScript.SceneId.EXPLORE_SCREEN)
 	# 敌方演出延时（A-10：表侧权威——cfg.ui_battle_delay_seconds 回填
 	# controller；@export 默认保留为测试注入口，测试赋 0 在此后仍生效）
 	controller.delay_seconds = context.cfg.ui_battle_delay_seconds
@@ -103,7 +105,7 @@ func _ApplyFontTiers() -> void:
 	var cfg: CoreConfig = context.cfg if context != null else null
 	%RoundLabel.add_theme_font_size_override("font_size",
 			UiTheme.font_of(cfg, &"ui_font_size_large", UiTheme.FONT_LARGE))
-	%TurnOrderBar.get_parent().get_node("OrderTitle").add_theme_font_size_override(
+	%OrderTitle.add_theme_font_size_override(
 			"font_size", UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 	%IdleLabel.add_theme_font_size_override("font_size",
 			UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
@@ -145,7 +147,8 @@ func _DisableInteractionForDegradedRun() -> void:
 	%SkillButtonB.disabled = true
 	%EndTurnButton.disabled = true
 	%RetreatButton.disabled = false
-	%RetreatButton.text = "返回公会壳"
+	# S4-M4-5-e：降级按钮统一「返回公会」（原「返回公会壳」——屏名不进按钮文案）
+	%RetreatButton.text = "返回公会"
 	%BoardLayer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func _ConnectController() -> void:
@@ -677,13 +680,39 @@ func _on_retreat_button_pressed() -> void:
 	## X2-M1（锁泄漏修复）：降级去向 = 公会壳（会话终结），go 前置
 	## _return_to = -1——否则回事件/探索屏口径会让 _exit_tree 跳过解锁，
 	## 出征锁卡 true 跳过全部 autosave
+	## M-2（修复批次 3）：降级撤退先经 GuildState 按 RETREAT 结算 run——
+	## 委托 IN_PROGRESS→移除（死单回退）/释锁/RETURN_SETTLED 存档/run.settled
+	## 幂等；选直接结算而非回探索屏走图缺失终结：后者需给探索屏新增参数
+	## 契约，而 settle 口已是幂等单源
 	## 参数：无
 	## 返回：无
 	if controller == null or context == null:
+		_SettleDegradedRunForDeadQuestExit()
 		_return_to = -1
-		get_node("/root/SceneManager").go(SceneManagerScript.SceneId.GUILD_SHELL)
+		# S3-M5-1-c：消费 go 返回值（R4-15 口径——切换失败可感知）
+		var degraded_err: Error = get_node("/root/SceneManager").go(
+				SceneManagerScript.SceneId.GUILD_SHELL)
+		if degraded_err != OK:
+			push_warning("battle_screen: 降级返回公会壳失败（错误码 %d）" % degraded_err)
 		return
 	%RetreatConfirm.popup_centered()
+
+func _SettleDegradedRunForDeadQuestExit() -> void:
+	## 降级路径 run 结算（M-2）：回传包携带出征会话且公会会话就绪时按 RETREAT
+	## 出口结算（释锁先行+委托移除+RETURN_SETTLED autosave）；无 run/无公会
+	## 会话（M1 旧流直开）不动作维持纯导航；**演示会话隔离**（S4-M1 批次 3
+	## 二次缺陷：_MakeDefaultRun 演示 run 不进公会结算防误推日历/误落盘——
+	## 与 explore_screen._IsDemoSession 同一静态口 GuildCore.is_demo_session）
+	## 参数：无
+	## 返回：无
+	var degraded_run: ExpeditionRun = _return_payload.get(&"expedition_run", null) as ExpeditionRun
+	var guild_state: Node = get_node_or_null("/root/GuildState")
+	if degraded_run == null or guild_state == null or guild_state.core == null \
+			or guild_state.core.cfg == null:
+		return
+	if GuildCore.is_demo_session(degraded_run, guild_state.core):
+		return
+	guild_state.settle_expedition(degraded_run, GuildCore.ExpeditionOutcome.RETREAT)
 
 func _on_retreat_confirm_confirmed() -> void:
 	## 撤退确认：发起撤退（RETREAT = 委托失败口径占位）

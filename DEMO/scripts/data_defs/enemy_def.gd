@@ -44,11 +44,13 @@ enum RaceTag {
 ## 通用普攻技能 id（skl_atk_enemy_common，17-C16 承接行）
 @export var common_attack_skill_id: StringName = &""
 ## AI 档位（行为复杂度标记，批 3+ 战斗 AI 消费）
+## 运行时未消费（预留——DEMO AI 层级恒为兜底链 L1；完整版 AI 层选择消费）
 @export var ai_level: int = 1
 ## 战场 sprite 资源 id（批 A H3：入表——路径经 assets 域 AssetRegistry 映射；
 ## V-A-sprite-id 校验非空且有登记）
 @export var sprite_id: StringName = &""
 ## 掉落表引用 id（经济域资源引用，批 2 落表）
+## 运行时未消费（预留——DEMO 战利品直接入 run.rewards，不经掉落表；完整版消费）
 @export var drop_ref: StringName = &""
 ## 头像资源 id（路径经 assets 域 AssetRegistry 映射）
 @export var portrait_id: StringName = &""

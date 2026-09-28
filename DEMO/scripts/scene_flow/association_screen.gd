@@ -12,6 +12,17 @@ extends Control
 ## SceneManager 脚本常量引用
 const SceneManagerScript: GDScript = preload("res://scripts/autoload/scene_manager.gd")
 
+## UI 文案模板（逻辑层零文案——UI 层单源；S4-M4-4：本屏内联提示收编单源）
+const UI_TEXTS: Dictionary = {
+	&"start_fail_no_data": "出征装配失败——队伍或地图数据缺失。",
+	&"go_fail_rollback_format": "进入探索屏失败——出征已取消（%s），请重试。",
+	&"recruit_ok_format": "%s 入会（当前 %d/%d 人）",
+	&"light_start_ok_format": "已派出开工——工期 %d 天",
+	&"light_abandon_confirm_text": "放弃进行中的轻度委托？工期作废、无奖励，成员立即释放。",
+	&"light_abandon_confirm_ok": "确认放弃",
+	&"light_abandon_confirm_cancel": "再想想",
+}
+
 ## GameData 单例引用
 var _game_data: Node = null
 ## 总控配置
@@ -24,6 +35,10 @@ var _accepted_panel: AcceptedPanel = null
 var _recruit_panel: RecruitPanel = null
 ## 编队弹层
 var _organize_panel: OrganizePanel = null
+## 轻度放弃二次确认弹窗（M4 增补批——代码构建+UiTheme 档位）
+var _light_abandon_confirm: ConfirmationDialog = null
+## 待确认放弃的轻度实例序号（弹窗确认消费）
+var _pending_light_abandon_serial: int = 0
 
 func _ready() -> void:
 	## 引擎回调：装配三分区与编队弹层 → 信号接线 → 清未查看挂单标记
@@ -53,6 +68,13 @@ func _ready() -> void:
 	%OrganizeHost.add_child(_organize_panel)
 	_organize_panel.confirmed.connect(_OnOrganizeConfirmed)
 	_organize_panel.cancelled.connect(_OnOrganizeCancelled)
+	# M4 增补批：轻度放弃二次确认弹窗（LIGHT_RUNNING 工期作废警示）
+	_light_abandon_confirm = ConfirmationDialog.new()
+	_light_abandon_confirm.dialog_text = UI_TEXTS[&"light_abandon_confirm_text"]
+	_light_abandon_confirm.ok_button_text = UI_TEXTS[&"light_abandon_confirm_ok"]
+	_light_abandon_confirm.cancel_button_text = UI_TEXTS[&"light_abandon_confirm_cancel"]
+	_light_abandon_confirm.confirmed.connect(_OnLightAbandonConfirmed)
+	add_child(_light_abandon_confirm)
 	_ApplyFontTiers()
 	RefreshAll()
 
@@ -124,20 +146,35 @@ func _OnReassignRequested(serial: int) -> void:
 	_organize_panel.open(inst, _core())
 
 func _OnOrganizeConfirmed(serial: int, member_ids: Array[StringName]) -> void:
-	## 编队确认：板上实例走 accept_quest（接单=编队确认）、挂单实例走
+	## 编队确认（M4 增补批路由分流）：板上轻度模板走 start_light_quest
+	##（一步开工）、板上战斗模板走 accept_quest（接单=编队确认）、挂单实例走
 	## reassign_party（占用转移）；失败原因呈现在弹层提示行（弹层不关）
 	## 参数 serial：实例序号；member_ids：选中成员 id 列表
 	## 返回：无
 	var core: GuildCore = _core()
-	var is_accept: bool = core.board.find_on_board(serial) != null
-	var ok: bool = core.accept_quest(serial, member_ids) if is_accept \
-			else core.reassign_party(serial, member_ids)
+	var target: QuestInstance = core.board.find_on_board(serial)
+	var ok: bool = false
+	var is_light: bool = false
+	if target != null:
+		var tpl: QuestTemplateDef = _game_data.get_record(target.template_id) as QuestTemplateDef
+		is_light = tpl != null and tpl.exec_class == QuestTemplateDef.ExecClass.NON_COMBAT
+		ok = core.start_light_quest(serial, member_ids) if is_light \
+				else core.accept_quest(serial, member_ids)
+	else:
+		ok = core.reassign_party(serial, member_ids)
 	if not ok:
 		_organize_panel.show_hint(core.last_error)
 		return
 	_CloseOrganize()
-	_SetHint("")
+	# 轻度开工成功提示（工期天数；战斗通道维持清空提示行）
+	if is_light:
+		var tpl2: QuestTemplateDef = _game_data.get_record(target.template_id) as QuestTemplateDef
+		if tpl2 != null:
+			_SetHint(String(UI_TEXTS[&"light_start_ok_format"]) % tpl2.duration_days)
+	else:
+		_SetHint("")
 	RefreshAll()
+
 
 func _OnOrganizeCancelled() -> void:
 	## 编队取消
@@ -177,7 +214,7 @@ func _OnStartRequested(serial: int) -> void:
 	var run: ExpeditionRun = _guild_state().begin_expedition(inst)
 	if run == null:
 		# 装配失败（数据缺失）或确认失败（core.last_error——进行中上限/每日一次）
-		_SetHint("出征装配失败——队伍或地图数据缺失。" if core.last_error.is_empty() \
+		_SetHint(String(UI_TEXTS[&"start_fail_no_data"]) if core.last_error.is_empty() \
 				else core.last_error)
 		return
 	_SetHint("")
@@ -187,18 +224,37 @@ func _OnStartRequested(serial: int) -> void:
 		# M4：go 失败完整回退（释锁→委托回挂单→出征日标记恢复）——不出征
 		get_node("/root/SaveManager").set_expedition_lock(false)
 		core.abort_expedition(serial, previous_days)
-		_SetHint("进入探索屏失败——出征已取消（%s），请重试。" % core.last_error)
+		_SetHint(String(UI_TEXTS[&"go_fail_rollback_format"]) % core.last_error)
 		push_error("association_screen: 进入探索屏失败（错误码 %d）——已回退出征登记" % err)
 		RefreshAll()
 
 func _OnAbandonRequested(serial: int) -> void:
-	## 挂单「放弃」（P2 拍板：无惩罚无奖励、释放占用）
+	## 挂单「放弃」（P2 拍板：无惩罚无奖励、释放占用）；M4 增补批：
+	## LIGHT_RUNNING 轻度进行中先弹二次确认（工期作废警示）——战斗挂单
+	## ACCEPTED 态维持直通
 	## 参数 serial：挂单实例序号
 	## 返回：无
 	var core: GuildCore = _core()
+	var inst: QuestInstance = core.board.find_accepted(serial)
+	if inst != null and inst.state == QuestInstance.State.LIGHT_RUNNING:
+		_pending_light_abandon_serial = serial
+		_light_abandon_confirm.popup_centered()
+		return
 	if not core.abandon_quest(serial):
 		_SetHint(core.last_error)
 		return
+	_SetHint("")
+	RefreshAll()
+
+func _OnLightAbandonConfirmed() -> void:
+	## 轻度放弃确认（工期作废、成员立即释放——Q5 拍板口径）
+	## 参数：无
+	## 返回：无
+	var core: GuildCore = _core()
+	if not core.abandon_quest(_pending_light_abandon_serial):
+		_SetHint(core.last_error)
+		return
+	_pending_light_abandon_serial = 0
 	_SetHint("")
 	RefreshAll()
 
@@ -210,7 +266,7 @@ func _OnRecruitRequested(index: int) -> void:
 	if member == null:
 		_SetHint(_core().last_error)
 		return
-	_SetHint("%s 入会（当前 %d/%d 人）" % [member.display_name,
+	_SetHint(String(UI_TEXTS[&"recruit_ok_format"]) % [member.display_name,
 			_core().roster.size(), _core().dorm_capacity()])
 	RefreshAll()
 

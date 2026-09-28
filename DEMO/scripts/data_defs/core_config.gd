@@ -12,16 +12,32 @@ extends Resource
 ## GameConfig 直载路径与 GameData 查表消费点统一引用）
 const CFG_MAIN_ID: StringName = &"cfg_main"
 
+## Resource 内建属性精确跳过清单（S3-M1 根修：原 `begins_with("resource_")`
+## 前缀判据误伤数据字段——SkillDef.resource_type/resource_cost、ClassDef.
+## resource_type/resource_source_attr、EnemyDef.resource_pool、NamingEntry.
+## resource_id 均为业务字段，热重载时被错误跳过致旧引用见旧值）。只列
+## Resource 真内建属性，新增内建属性时同步维护本清单。
+const RESOURCE_BUILTIN_PROPS: Array[String] = [
+	"resource_name",
+	"resource_path",
+	"resource_local_to_scene",
+	"resource_scene_unique_id",
+	"resource_group",
+]
+
 static func copy_props(from_record: Resource, to_record: Resource) -> void:
 	## 资源属性逐项拷贝（R4-01 热重载同址刷新核心——定义于数据定义层：
 	## GameConfig/GameData 两单例合向引用不反向）：脚本导出字段与普通属性
 	## 全量拷入旧实例（嵌套子资源为引用替换——新 dot/modifiers 等一并生效）；
-	## resource_* 内建、script 本身与元数据跳过（同脚本类——属性集恒一致）
+	## Resource 内建（**精确名单**——S3-M1 根修）、script 本身与元数据跳过
+	##（同脚本类——属性集恒一致）
 	## 参数 from_record：磁盘新读实例；to_record：旧实例（同址壳）
 	## 返回：无
 	for prop: Dictionary in from_record.get_property_list():
 		var prop_name: String = String(prop["name"])
-		if prop_name.begins_with("resource_") or prop_name == "script" 				or prop_name == "NODE_PATH" or prop_name.begins_with("metadata/"):
+		if prop_name == "script" or prop_name == "NODE_PATH" \
+				or prop_name.begins_with("metadata/") \
+				or RESOURCE_BUILTIN_PROPS.has(prop_name):
 			continue
 		to_record.set(prop_name, from_record.get(prop_name))
 
@@ -218,6 +234,12 @@ enum Mode {
 @export var ui_overlay_path_color: Color = Color(0, 0, 0, 0)
 @export var ui_overlay_confirm_color: Color = Color(0, 0, 0, 0)
 
+# ---- UI 飘字/tips 配色（S4-M4-3-d：battle_board 飘字与 tips 两行入表；默认透明 = 未回填）----
+@export var ui_damage_crit_color: Color = Color(0, 0, 0, 0)
+@export var ui_damage_normal_color: Color = Color(0, 0, 0, 0)
+@export var ui_tips_line1_color: Color = Color(0, 0, 0, 0)
+@export var ui_tips_line2_color: Color = Color(0, 0, 0, 0)
+
 # ---- UI 战斗日志配色（B-6：LINE_COLORS 五色入表）----
 @export var ui_log_system_color: Color = Color(0, 0, 0, 0)
 @export var ui_log_damage_color: Color = Color(0, 0, 0, 0)
@@ -277,8 +299,9 @@ enum Mode {
 @export var calendar_week_days: int = 0
 ## 星期显示开关（案 2 §2.1 历法显示 DEMO 必做 #19）
 @export var calendar_week_display: bool = false
-## 日结算管线步骤键（顺序消费——案 2 §2.4 固定顺序表驱动；V-M4-cfg-domain
-## 校验键集恰合五步序）
+## 日结算管线步骤键（顺序消费——案 2 §2.4 固定顺序表驱动；M4 增补批起六步：
+## quest_countdown 后插入 quest_noncombat_advance 轻度工期推进步；
+## V-M4-cfg-domain 校验键集恰合六步序）
 @export var day_settle_pipeline: Array[String] = []
 ## 初始资金（案 17 §3.7：500 金）
 @export var initial_gold: int = 0
@@ -311,22 +334,31 @@ enum Mode {
 @export var injury_rest_days: int = 0
 ## 委托板名义数量（DEMO 占位取 3——案 6 §5；允许板空不承诺恒定）
 @export var quest_board_size: int = 0
-## 周刷新/开局预生成抽板数（板刷池 8 不放回抽 3 上板——P-9）
+## 周刷新/开局预生成抽板数（板刷池 11 不放回抽 3 上板——P-9；M4 增补批起
+## 11 = 8 战斗 + 3 轻度混刷）
 @export var quest_week_draw: int = 0
 ## 超额人数奖励加成率统一值（结算值 ×(1+本值×超额人数)，货币+经验适用、
-## 声望不加；模板 excess_bonus_per_head > 0 时覆盖本值——拍板③）
+## 声望不加；模板 excess_bonus_per_head > 0 时覆盖本值——M4 主批拍板③）
 @export var quest_excess_bonus_per_head: float = 0.0
 ## 替换到期表现的新实例时限（「加急·」3 天——案 18 §2.6 自洽注）
 @export var quest_replace_time_limit: int = 0
-## 委托模板计数带（M4：DEMO 合计 9=板刷 8+事件授予 1）
+## 委托模板计数带（M4 增补批：DEMO 合计 12=板刷 11+事件授予 1）
 @export var content_quest_templates_min: int = 0
 @export var content_quest_templates_max: int = 0
-## 板刷渠道模板计数带（M4：8 恒定断言）
+## 板刷渠道模板计数带（M4 增补批：11 恒定断言——8 战斗+3 轻度混刷）
 @export var content_quest_board_min: int = 0
 @export var content_quest_board_max: int = 0
 ## 事件授予渠道模板计数带（M4：1 恒定断言）
 @export var content_quest_grant_min: int = 0
 @export var content_quest_grant_max: int = 0
+## 轻度委托奖励带宽（M4 增补批：NON_COMBAT 模板校验带——exp/gold/reputation
+## 各 min-max；【占位·试玩校准】，W4-12 漂移同步：改带须同步 validator 引用）
+@export var quest_light_reward_exp_min: int = 0
+@export var quest_light_reward_exp_max: int = 0
+@export var quest_light_reward_gold_min: int = 0
+@export var quest_light_reward_gold_max: int = 0
+@export var quest_light_reward_reputation_min: int = 0
+@export var quest_light_reward_reputation_max: int = 0
 ## 设施定义计数带（M4：宿舍+训练场 2 恒定断言）
 @export var content_facilities_min: int = 0
 @export var content_facilities_max: int = 0

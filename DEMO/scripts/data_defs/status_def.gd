@@ -55,8 +55,11 @@ enum DurationType {
 ## 默认持续回合数（技能效果 duration=0 时回退到此值）
 @export var default_duration: int = 1
 ## 持续时间类型（战斗回合 / 战斗结束 / 持久）
+## 运行时未消费（预留——M1/M2 只走 BATTLE_ROUND 隐含口径；完整版消费）
 @export var duration_type: DurationType = DurationType.BATTLE_ROUND
 ## 叠加规则标记（如 &"no_stack_take_larger" 同名不叠加取较大；批 2 与案 11 口径定名）
+## 运行时未消费（预留——叠加口径现走 S2-2/R1-8 拍板的 category/polarity 规则；
+## 完整版自定义叠加公式消费）
 @export var stack_rule: StringName = &""
 ## 互斥组 id（同组状态互斥，见 status/mutex_groups 域；空 = 不参与互斥）
 @export var mutex_group_id: StringName = &""

@@ -118,8 +118,10 @@ static func build(params: BattleParams, game_data: Node) -> BattleContext:
 		var adv: AdventurerData = params.party[slot]
 		var cls: ClassDef = game_data.get_record(adv.class_id) as ClassDef
 		if cls == null:
-			push_error("BattleSetup: 职业 '%s' 无法解析（%s）" % [adv.class_id, adv.unit_id])
-			continue
+			# S3-M5-1-f 裁定：拒绝装配（与超编同轨——此前 continue 缺员开战，
+			# 探索屏已有路由失败回滚通路）
+			push_error("BattleSetup: 职业 '%s' 无法解析（%s）——拒绝装配" % [adv.class_id, adv.unit_id])
+			return null
 		var equip: EquipDef = _FindEquipForClass(game_data, adv.class_id)
 		var unit := UnitBuilder.build_ally(adv, cls, equip, context.cfg)
 		unit.slot_index = slot
@@ -160,6 +162,7 @@ static func build(params: BattleParams, game_data: Node) -> BattleContext:
 				push_error("BattleSetup: 敌人 '%s' 无法解析" % enemy_id)
 				slot_cursor += 1
 				continue
+			# 占位：解析成功的敌人计入 enemy_order
 			var enemy := UnitBuilder.build_enemy(enemy_def, enemy_order)
 			var name_count: int = int(enemy_name_counts.get(enemy_id, 0)) + 1
 			enemy_name_counts[enemy_id] = name_count
@@ -175,6 +178,11 @@ static func build(params: BattleParams, game_data: Node) -> BattleContext:
 			context.enemies.append(enemy)
 			enemy_order += 1
 			slot_cursor += 1
+	if context.enemies.is_empty():
+		# S3-M5-1-f 裁定：敌方全解析失败 = 空场战斗无意义——拒绝装配（与
+		# 我方职业解析失败同轨）
+		push_error("BattleSetup: 队伍 '%s' 敌方全部无法解析——拒绝装配" % pack.id)
+		return null
 	# 开局载入状态（current_round=0 → first_tick_round=1 开局载入锚点）
 	for entry: Dictionary in params.initial_statuses:
 		var status_id: StringName = entry.get(&"status_id", &"")
@@ -215,9 +223,27 @@ static func _ResolveSpawn(context: BattleContext, map_def: BattleMapDef,
 		push_error("BattleSetup: formation[%d] (%d,%d) 不可通行——回退顺排位" % [slot, cell.x, cell.y])
 		return fallback
 	if occupant != null and occupant.alive:
-		push_error("BattleSetup: formation[%d] (%d,%d) 已有单位占位——回退顺排位" % [slot, cell.x, cell.y])
-		return fallback
+		push_error("BattleSetup: formation[%d] (%d,%d) 已有单位占位——顺排位复查" % [slot, cell.x, cell.y])
+		return _NextFreeSpawn(context, map_def, fallback)
 	return cell
+
+static func _NextFreeSpawn(context: BattleContext, map_def: BattleMapDef,
+		preferred: Vector2i) -> Vector2i:
+	## 顺排位复查（S2-M2-3-e）：fallback 也被占时沿 player_spawns 找下一空位
+	##（界内+可通行+无存活占位）——防 formation 非法回退后叠格；全占回退
+	## preferred（叠格降级，装配不崩）
+	## 参数 context：战场已建；map_def：地图表；preferred：原顺排位
+	## 返回：生效出生格
+	for spawn_cell: Vector2i in map_def.player_spawns:
+		var tile: TileTypeDef = context.grid.tile_at(spawn_cell)
+		var occupant: Object = context.grid.get_unit_at(spawn_cell)
+		if tile == null or not tile.walkable:
+			continue
+		if occupant != null and occupant.alive:
+			continue
+		return spawn_cell
+	push_warning("BattleSetup: 全部我方出生位已占——回退 %s 叠格装配" % preferred)
+	return preferred
 
 static func validate_skill_resources(context: BattleContext) -> Array[String]:
 	## 战斗开始前技能资源预校验（盲审批 3 D-1——AURA 资源校验提前）：全部参战

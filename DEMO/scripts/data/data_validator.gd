@@ -153,6 +153,7 @@ static func run_all(game_data: Node) -> ValidationReport:
 	_CheckEventCounts(report, game_data)
 	# ---- M3 批 1 新增（V-M3 十一组：探索层域）+ V-5（2026-09-26 审计新增）----
 	_CheckExploreMapLayout(report, game_data)
+	_CheckExploreTileVisual(report, game_data)
 	_CheckExploreMapRegionCount(report, game_data)
 	_CheckExploreMapPoints(report, game_data)
 	_CheckExploreFogLit(report, game_data)
@@ -287,6 +288,8 @@ static func _CheckEnumDomains(report: ValidationReport, game_data: Node) -> void
 	# V-A-class-attr（批 C M8）：法穿换算源表驱动字段必填且 ∈ 七属性
 	for record: Resource in _DomainRecords(game_data, &"class/classes"):
 		var cls := record as ClassDef
+		# S1-M4-3-c：ClassDef.resource_type 枚举值域（六职业其余枚举全查唯此漏）
+		_CheckEnumRange(report, cls.id, "ClassDef.resource_type", cls.resource_type, ClassDef.ResourceType.size() - 1)
 		if String(cls.mag_pierce_source_attr).is_empty():
 			report.add_error("V-A-class-attr", cls.id, "mag_pierce_source_attr 为空")
 		elif not _SevenAttrs().has(cls.mag_pierce_source_attr):
@@ -586,7 +589,8 @@ static func _CheckMapLayout(report: ValidationReport, game_data: Node) -> void:
 					report.add_error("V-M1-map-layout", map_def.id,
 							"布局字符 '%s' 不在 legend" % row_char)
 		for legend_char: String in map_def.legend:
-			var tile_id: StringName = map_def.legend[legend_char]
+			# S1-M4-2-d：legend 值 as 类型断言（W4-04 口径贯彻——坏值显式报错）
+			var tile_id: StringName = map_def.legend[legend_char] as StringName
 			if game_data.get_record(tile_id) == null:
 				report.add_error("V-M1-map-layout", map_def.id,
 						"legend 值 '%s'（字符 '%s'）不是已存在的地格 id" % [tile_id, legend_char])
@@ -1029,7 +1033,9 @@ static func _CheckCfgDomains(report: ValidationReport, game_data: Node) -> void:
 			"content_target_points", "content_encounter_weights",
 			"content_event_chains", "content_event_singles",
 			"content_quest_templates", "content_quest_board", "content_quest_grant",
-			"content_facilities", "content_adv_seeds"]:
+			"content_facilities", "content_adv_seeds",
+			"quest_light_reward_exp", "quest_light_reward_gold",
+			"quest_light_reward_reputation"]:
 		var band_min: int = int(cfg.get(band_name + "_min"))
 		var band_max: int = int(cfg.get(band_name + "_max"))
 		if band_min < 0 or band_min > band_max:
@@ -1048,11 +1054,24 @@ static func _CheckValueDomains(report: ValidationReport, game_data: Node) -> voi
 			if bounds.x > bounds.y:
 				report.add_error("V-B2-value-domain", cls.id,
 						"属性 '%s' 区间下限 %d > 上限 %d" % [attr_id, bounds.x, bounds.y])
+		# S1-M4-2-b：attr_ranges 键集 == 七属性全集（unit_builder 消费 .get
+		# 回退中性 10——缺键静默不在表侧放过）
+		for attr_id: StringName in _SevenAttrs():
+			if not cls.attr_ranges.has(attr_id):
+				report.add_error("V-B2-value-domain", cls.id,
+						"attr_ranges 缺属性 '%s'（七属性全集要求）" % attr_id)
 	for record: Resource in _DomainRecords(game_data, &"battle/enemies"):
 		var enemy := record as EnemyDef
 		if not _EnemyRoleTags().has(enemy.role_tag):
 			report.add_error("V-B2-value-domain", enemy.id,
 					"role_tag '%s' 不在合法集 %s" % [enemy.role_tag, str(_EnemyRoleTags())])
+	# S1-M4-2-b：enemy.attrs 键集 == 七属性全集（同 cls 口径——缺键静默回退拦截）
+	for record: Resource in _DomainRecords(game_data, &"battle/enemies"):
+		var enemy_attrs := record as EnemyDef
+		for attr_id: StringName in _SevenAttrs():
+			if not enemy_attrs.attrs.has(attr_id):
+				report.add_error("V-B2-value-domain", enemy_attrs.id,
+						"attrs 缺属性 '%s'（七属性全集要求）" % attr_id)
 	for record: Resource in _DomainRecords(game_data, &"status/stats"):
 		var status := record as StatusDef
 		if status.default_duration < 0:
@@ -1091,6 +1110,11 @@ static func _CheckCfgFallbacks(report: ValidationReport, game_data: Node) -> voi
 		["pierce_per_modifier", DerivedStats.PIERCE_PER_MODIFIER_FALLBACK],
 		["armor_per_modifier", DerivedStats.ARMOR_PER_MODIFIER_FALLBACK],
 		["skill_range_max", SKILL_RANGE_MAX_FALLBACK],
+		# S1-M4-2-a：检定域四处兜底锚定（CheckRoller 具名常量）
+		["crit_success_drop_divisor", CheckRoller.CRIT_SUCCESS_DROP_DIVISOR_FALLBACK],
+		["crit_success_line_min", CheckRoller.CRIT_SUCCESS_LINE_MIN_FALLBACK],
+		["luck_floor_z_base", CheckRoller.LUCK_FLOOR_Z_BASE_FALLBACK],
+		["luck_floor_z_divisor", CheckRoller.LUCK_FLOOR_Z_DIVISOR_FALLBACK],
 	]
 	for pair: Array in int_pairs:
 		var raw_int: Variant = cfg.get(pair[0])
@@ -1119,6 +1143,7 @@ static func _CheckCfgFallbacks(report: ValidationReport, game_data: Node) -> voi
 		["resist_weight", DerivedStats.RESIST_WEIGHT_FALLBACK],
 		["hit_base", DerivedStats.HIT_BASE_FALLBACK],
 		["dodge_base", DerivedStats.DODGE_BASE_FALLBACK],
+		["ui_d20_roll_seconds", UiTheme.D20_ROLL_SECONDS],
 	]
 	for pair: Array in float_pairs:
 		var raw_float: Variant = cfg.get(pair[0])
@@ -1393,6 +1418,41 @@ static func _CheckEventRefGraph(report: ValidationReport, game_data: Node) -> vo
 			report.add_error("V-M2-ref-graph", option_id,
 					"孤儿选项（无节点挂载——不可达）")
 
+	# S1-M4-2-e：自链入口沿选项去向 BFS——本链全部节点须可达（复用
+	# V-M3-map-connectivity 先例；不可达节点=死内容运行时永不可见）；
+	# 自包含遍历（重取 chains/options——前置循环变量已出作用域）
+	for chain_record: Resource in _DomainRecords(game_data, &"event/chains"):
+		var bfs_chain := chain_record as EventChainDef
+		if nodes.get(bfs_chain.entry_node_id, null) as EventNodeDef == null:
+			continue
+		var chain_nodes: Array[StringName] = []
+		for node_id: StringName in nodes:
+			var chain_node: EventNodeDef = nodes[node_id] as EventNodeDef
+			if chain_node != null and chain_node.chain_id == bfs_chain.id:
+				chain_nodes.append(node_id)
+		var reachable_nodes: Dictionary = {bfs_chain.entry_node_id: true}
+		var frontier_nodes: Array[StringName] = [bfs_chain.entry_node_id]
+		while not frontier_nodes.is_empty():
+			var current_id: StringName = frontier_nodes.pop_front()
+			var current_node: EventNodeDef = nodes.get(current_id, null) as EventNodeDef
+			if current_node == null:
+				continue
+			for option_id: StringName in current_node.option_ids:
+				var hop: EventOptionDef = options.get(option_id, null) as EventOptionDef
+				if hop == null:
+					continue
+				# 选项双去向均可达（CHECK 失败去向同样是运行时路径——
+				# 链内 _to 与 *_outcome 互斥，*_to 侧才进图）
+				for hop_to: StringName in [hop.success_to, hop.failure_to]:
+					if hop_to == &"" or reachable_nodes.has(hop_to):
+						continue
+					reachable_nodes[hop_to] = true
+					frontier_nodes.append(hop_to)
+		for node_id: StringName in chain_nodes:
+			if not reachable_nodes.has(node_id):
+				report.add_error("V-M2-ref-graph", bfs_chain.id,
+						"节点 '%s' 自入口沿选项去向不可达（死内容）" % node_id)
+
 static func _CheckEventRefExit(report: ValidationReport, game_data: Node) -> void:
 	## V-M2-ref-exit：出口类型值域——C/D 计数 == 0（DEMO 零实例口径）；
 	## B 出口必带 battle.pack_id 与 battle.post_battle
@@ -1481,15 +1541,7 @@ static func _CheckEventNumDomain(report: ValidationReport, game_data: Node) -> v
 		var owner_id: StringName = outcome_pair[0]
 		var outcome: EventOutcomeDef = outcome_pair[1]
 		if outcome.reward != null:
-			if outcome.reward.exp != 0 and (outcome.reward.exp < 10 or outcome.reward.exp > 20):
-				report.add_error("V-M2-num-domain", owner_id,
-						"exp %d 越界 [10,20]" % outcome.reward.exp)
-			if outcome.reward.gold != 0 and (outcome.reward.gold < 5 or outcome.reward.gold > 30):
-				report.add_error("V-M2-num-domain", owner_id,
-						"gold %d 越界 [5,30]" % outcome.reward.gold)
-			if outcome.reward.reputation < 0 or outcome.reward.reputation > 2:
-				report.add_error("V-M2-num-domain", owner_id,
-						"reputation %d 越界 [0,2]" % outcome.reward.reputation)
+			_CheckRewardBand(report, owner_id, outcome.reward)
 	for record: Resource in _DomainRecords(game_data, &"event/options"):
 		var option := record as EventOptionDef
 		if option.cost_days != 0 and option.cost_days != 1:
@@ -1503,16 +1555,48 @@ static func _CheckEventNumDomain(report: ValidationReport, game_data: Node) -> v
 			if modifier != null and (modifier.party_hp_delta < -10 or modifier.party_hp_delta > 0):
 				report.add_error("V-M2-num-domain", option.id,
 						"party_hp_delta %d 越界 [-10,0]" % modifier.party_hp_delta)
+			# S1-M4-2-c：修饰叠加带与出口奖励同带校验（event_runner 加法叠加入账
+			# ——手滑突破奖励带在此拦截；reward_delta 与 reward 同域）
+			if modifier != null and modifier.reward_delta != null:
+				_CheckRewardBand(report, option.id, modifier.reward_delta)
 	for record: Resource in _DomainRecords(game_data, &"event/singles"):
 		var single := record as SingleEventDef
 		if not tier_names.is_empty() and not single.difficulty_tier.is_empty() \
 				and not tier_names.has(single.difficulty_tier):
 			report.add_error("V-M2-num-domain", single.id,
 					"难度档名 '%s' 不在 cfg 键集" % single.difficulty_tier)
+		# S1-M4-3-b：单点检定联动——attr 非空则 tier 必填（对齐 options 侧；
+		# 运行时空档回退判定线 20 近乎必败）且 attr ∈ 七属性
+		if not String(single.check_attr_id).is_empty():
+			if single.difficulty_tier.is_empty():
+				report.add_error("V-M2-num-domain", single.id,
+						"check_attr_id 非空但 difficulty_tier 为空（检定联动必填）")
+			elif not AttrKeys.seven_attrs().has(single.check_attr_id):
+				report.add_error("V-M2-num-domain", single.id,
+						"check_attr_id 不在七属性域")
 		for modifier: EventModifierDef in [single.crit_modifier, single.crit_fail_modifier]:
 			if modifier != null and (modifier.party_hp_delta < -10 or modifier.party_hp_delta > 0):
 				report.add_error("V-M2-num-domain", single.id,
 						"party_hp_delta %d 越界 [-10,0]" % modifier.party_hp_delta)
+			# S1-M4-2-c：同 options 侧——修饰叠加带同域校验
+			if modifier != null and modifier.reward_delta != null:
+				_CheckRewardBand(report, single.id, modifier.reward_delta)
+
+static func _CheckRewardBand(report: ValidationReport, owner_id: StringName,
+		reward: RewardDef) -> void:
+	## 事件奖励带检查（S1-M4-2-c 抽取共用：出口奖励与修饰叠加同域——
+	## exp ∈ [10,20] / gold ∈ [5,30] / reputation ∈ [0,2]；0 exp/gold = 缺省合法）
+	## 参数 report/owner_id/reward：报告 / 归属 id / 奖励
+	## 返回：无
+	if reward.exp != 0 and (reward.exp < 10 or reward.exp > 20):
+		report.add_error("V-M2-num-domain", owner_id,
+				"exp %d 越界 [10,20]" % reward.exp)
+	if reward.gold != 0 and (reward.gold < 5 or reward.gold > 30):
+		report.add_error("V-M2-num-domain", owner_id,
+				"gold %d 越界 [5,30]" % reward.gold)
+	if reward.reputation < 0 or reward.reputation > 2:
+		report.add_error("V-M2-num-domain", owner_id,
+				"reputation %d 越界 [0,2]" % reward.reputation)
 
 static func _CheckEventFourTexts(report: ValidationReport, game_data: Node) -> void:
 	## V-M2-four-texts：四档文本——success/failure 非空（全出口）；链内出口
@@ -1630,10 +1714,22 @@ static func _CheckExploreMapLayout(report: ValidationReport, game_data: Node) ->
 					report.add_error("V-M3-map-layout", map_def.id,
 							"布局字符 '%s' 不在 legend" % row_char)
 		for legend_char: StringName in map_def.legend:
-			var tile_id: StringName = map_def.legend[legend_char]
+			# S1-M4-2-d：同上 as 类型断言（探索图 legend）
+			var tile_id: StringName = map_def.legend[legend_char] as StringName
 			if game_data.get_record(tile_id) == null:
 				report.add_error("V-M3-map-layout", map_def.id,
 						"legend 值 '%s'（字符 '%s'）不是已存在的探索地格 id" % [tile_id, legend_char])
+
+static func _CheckExploreTileVisual(report: ValidationReport, game_data: Node) -> void:
+	## V-M3-etile-visual（S1-M4-3-f）：探索地格 fill_color 回填校验（对齐
+	## battle tiles 的 V-A-tile-visual 先例——alpha ≤ 0 = 未回填）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"map/tiles"):
+		var etile := record as ExploreTileDef
+		if etile.fill_color.a <= 0.0:
+			report.add_error("V-M3-etile-visual", etile.id,
+					"fill_color 未回填（alpha ≤ 0）")
 
 static func _CheckExploreMapRegionCount(report: ValidationReport, game_data: Node) -> void:
 	## V-M3-map-region-count（V-5 2026-09-26 审计）：region_ids 数量 ≤ 2——
@@ -1831,6 +1927,10 @@ static func _CheckExploreRefQuestGoal(report: ValidationReport, game_data: Node)
 	## 返回：无
 	for record: Resource in _DomainRecords(game_data, &"quest/templates"):
 		var quest := record as QuestTemplateDef
+		# M4 增补批：轻度（NON_COMBAT）不走判据/地图/区域消费通路——goal_param
+		# 与 map_id 恒空，全检查跳过（勿拦）
+		if quest.exec_class == QuestTemplateDef.ExecClass.NON_COMBAT:
+			continue
 		if quest.goal_type != QuestTemplateDef.GoalType.CLEAR \
 				and quest.goal_type != QuestTemplateDef.GoalType.EXPLORE:
 			# L5：DEMO 判据消费通路仅 CLEAR/EXPLORE（GoalTracker 双通道）
@@ -1955,6 +2055,15 @@ static func _CheckExploreEncwDomain(report: ValidationReport, game_data: Node) -
 		if game_data.get_record(weight.random_pack_id) as EnemyPackDef == null:
 			report.add_error("V-M3-encw-domain", weight.id,
 					"random_pack_id '%s' 不在 battle/enemy_packs 域" % weight.random_pack_id)
+	var seen_regions: Dictionary = {}
+	for record: Resource in _DomainRecords(game_data, &"map/encounter_weights"):
+		var weight := record as EncounterWeightDef
+		# S1-M4-2-d：region_id 去重断言（消费端字典按 region_id 建索引——
+		# 同区域两行时后者静默覆盖前者，表侧拦截）
+		if seen_regions.has(weight.region_id):
+			report.add_error("V-M3-encw-domain", weight.id,
+					"region_id '%s' 重复登记（同区域仅允许一行）" % weight.region_id)
+		seen_regions[weight.region_id] = true
 
 static func _CheckExploreTreasureDomain(report: ValidationReport, game_data: Node) -> void:
 	## V-M3-treasure-domain：宝箱金域——TREASURE 点金域 ∈ [20,40] 且
@@ -1992,21 +2101,35 @@ static func _CheckQuestRewardDomain(report: ValidationReport, game_data: Node) -
 	## 收口——数值改表越带即拦截，防单行手滑数量级错误（如 1500 金）
 	## 参数：报告 / GameData
 	## 返回：无
+	# M4 增补批：按执行大类分流带宽——COMBAT 沿用固定带；NON_COMBAT 读 cfg
+	# quest_light_reward_* 六字段（轻度表带——exp 30 低于战斗带下限 40，
+	# 不分流即红灯）
+	var cfg: CoreConfig = game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
 	for record: Resource in _DomainRecords(game_data, &"quest/templates"):
 		var quest := record as QuestTemplateDef
 		if quest.reward == null:
 			report.add_error("V-M3-quest-reward", quest.id,
 					"reward 为空（委托无奖励——结算申报空转）")
 			continue
-		if quest.reward.exp < 40 or quest.reward.exp > 120:
+		var is_light: bool = quest.exec_class == QuestTemplateDef.ExecClass.NON_COMBAT
+		var exp_min: int = cfg.quest_light_reward_exp_min if is_light and cfg != null else 40
+		var exp_max: int = cfg.quest_light_reward_exp_max if is_light and cfg != null else 120
+		var gold_min: int = cfg.quest_light_reward_gold_min if is_light and cfg != null else 50
+		var gold_max: int = cfg.quest_light_reward_gold_max if is_light and cfg != null else 300
+		var rep_min: int = cfg.quest_light_reward_reputation_min if is_light and cfg != null else 0
+		var rep_max: int = cfg.quest_light_reward_reputation_max if is_light and cfg != null else 10
+		if quest.reward.exp < exp_min or quest.reward.exp > exp_max:
 			report.add_error("V-M3-quest-reward", quest.id,
-					"exp %d 越界 [40, 120]（DEMO 经济带宽）" % quest.reward.exp)
-		if quest.reward.gold < 50 or quest.reward.gold > 300:
+					"exp %d 越界 [%d, %d]（%s 带宽）" % [quest.reward.exp, exp_min, exp_max,
+							"轻度" if is_light else "DEMO 经济"])
+		if quest.reward.gold < gold_min or quest.reward.gold > gold_max:
 			report.add_error("V-M3-quest-reward", quest.id,
-					"gold %d 越界 [50, 300]（DEMO 经济带宽）" % quest.reward.gold)
-		if quest.reward.reputation < 0 or quest.reward.reputation > 10:
+					"gold %d 越界 [%d, %d]（%s 带宽）" % [quest.reward.gold, gold_min, gold_max,
+							"轻度" if is_light else "DEMO 经济"])
+		if quest.reward.reputation < rep_min or quest.reward.reputation > rep_max:
 			report.add_error("V-M3-quest-reward", quest.id,
-					"reputation %d 越界 [0, 10]（DEMO 经济带宽）" % quest.reward.reputation)
+					"reputation %d 越界 [%d, %d]（%s 带宽）" % [quest.reward.reputation, rep_min, rep_max,
+							"轻度" if is_light else "DEMO 经济"])
 
 static func _CheckExploreMapConnectivity(report: ValidationReport, game_data: Node) -> void:
 	## V-M3-map-connectivity（W5-6）：探索图连通性——start_cell 出发四向 BFS
@@ -2075,6 +2198,31 @@ static func _CheckGuildQuestTemplate(report: ValidationReport, game_data: Node) 
 		var quest := record as QuestTemplateDef
 		_CheckEnumRange(report, quest.id, "QuestTemplateDef.expire_behavior",
 				quest.expire_behavior, QuestTemplateDef.ExpireBehavior.size() - 1)
+		# M4 增补批：执行大类/委托类型枚举域 + 大类互斥（NON_COMBAT：
+		# duration_days ∈ [1,7] 且 goal_param/map_id 恒空；COMBAT：duration_days
+		# == 0 且 goal_param/map_id 必填）
+		_CheckEnumRange(report, quest.id, "QuestTemplateDef.exec_class",
+				quest.exec_class, QuestTemplateDef.ExecClass.size() - 1)
+		_CheckEnumRange(report, quest.id, "QuestTemplateDef.quest_type",
+				quest.quest_type, QuestTemplateDef.QuestType.size() - 1)
+		if quest.exec_class == QuestTemplateDef.ExecClass.NON_COMBAT:
+			if quest.duration_days < 1 or quest.duration_days > 7:
+				report.add_error("V-M4-quest-template", quest.id,
+						"轻度工期 %d 越界 [1, 7]" % quest.duration_days)
+			if not String(quest.goal_param).is_empty() or not String(quest.map_id).is_empty():
+				report.add_error("V-M4-quest-template", quest.id,
+						"轻度委托 goal_param/map_id 须为空（不走判据/地图通路）")
+		else:
+			if quest.duration_days != 0:
+				report.add_error("V-M4-quest-template", quest.id,
+						"战斗委托 duration_days 须为 0（轻度字段位不消费）")
+			if String(quest.goal_param).is_empty() or String(quest.map_id).is_empty():
+				report.add_error("V-M4-quest-template", quest.id,
+						"战斗委托 goal_param/map_id 必填（判据/地图通路）")
+		# S1-M4-3-e：人力区间 1 ≤ party_min ≤ party_max ≤ 4
+		if quest.party_min < 1 or quest.party_max < quest.party_min or quest.party_max > 4:
+			report.add_error("V-M4-quest-template", quest.id,
+					"人力区间 [%d, %d] 非法（须 1 ≤ min ≤ max ≤ 4）" % [quest.party_min, quest.party_max])
 		if quest.excess_bonus_per_head < 0.0 or quest.excess_bonus_per_head > 1.0:
 			report.add_error("V-M4-quest-template", quest.id,
 					"excess_bonus_per_head %f 越界 [0, 1]" % quest.excess_bonus_per_head)
@@ -2100,7 +2248,7 @@ static func _CheckGuildQuestCounts(report: ValidationReport, game_data: Node) ->
 	## 参数：报告 / GameData
 	## 返回：无
 	_CheckCountBand(report, game_data, "<quest/templates>", "content_quest_templates",
-			"委托模板", game_data.get_domain_ids(&"quest/templates").size(), 9, "V-M4-quest-count")
+			"委托模板", game_data.get_domain_ids(&"quest/templates").size(), 12, "V-M4-quest-count")
 	var board_count: int = 0
 	var grant_count: int = 0
 	for record: Resource in _DomainRecords(game_data, &"quest/templates"):
@@ -2110,7 +2258,7 @@ static func _CheckGuildQuestCounts(report: ValidationReport, game_data: Node) ->
 		elif quest.acquire_channel == QuestTemplateDef.AcquireChannel.EVENT_GRANT:
 			grant_count += 1
 	_CheckCountBand(report, game_data, "<quest/templates>", "content_quest_board",
-			"板刷渠道模板", board_count, 8, "V-M4-quest-count")
+			"板刷渠道模板", board_count, 11, "V-M4-quest-count")
 	_CheckCountBand(report, game_data, "<quest/templates>", "content_quest_grant",
 			"事件授予渠道模板", grant_count, 1, "V-M4-quest-count")
 
@@ -2225,7 +2373,7 @@ static func _CheckGuildAdvSeed(report: ValidationReport, game_data: Node) -> voi
 static func _CheckGuildCfgDomain(report: ValidationReport, game_data: Node) -> void:
 	## V-M4-cfg-domain：总控配置 M4 经营层扩展——三档花费递增 / 档界
 	## 0 < line_low < line_high / 池容量 ≥ 1 / 名池非空 / 周天数 = 7 /
-	## pipeline 键集恰合五步序 / initial_gold 正 / 休养基础 ≥ 1 / 替换时限 ≥ 1 /
+	## pipeline 键集恰合六步序（M4 增补批）/ initial_gold 正 / 休养基础 ≥ 1 / 替换时限 ≥ 1 /
 	## 成长与委托参数正数 / 超额加成率 ∈ (0,1]
 	## 参数：报告 / GameData
 	## 返回：无
@@ -2251,12 +2399,21 @@ static func _CheckGuildCfgDomain(report: ValidationReport, game_data: Node) -> v
 		report.add_error("V-M4-cfg-domain", CoreConfig.CFG_MAIN_ID,
 				"calendar_week_days %d != 7（DEMO 七日一周冻结口径）" % cfg.calendar_week_days)
 	var expected_pipeline: Array[String] = [
-		"day_advance", "recovery", "recruit_refresh", "quest_countdown", "summary",
+		"day_advance", "recovery", "recruit_refresh", "quest_countdown",
+		"quest_noncombat_advance", "summary",
 	]
 	if cfg.day_settle_pipeline != expected_pipeline:
 		report.add_error("V-M4-cfg-domain", CoreConfig.CFG_MAIN_ID,
-				"day_settle_pipeline %s != 五步定序 %s" % [
+				"day_settle_pipeline %s != 六步定序 %s" % [
 						str(cfg.day_settle_pipeline), str(expected_pipeline)])
+	# M4 增补批：轻度奖励带宽六字段 min ≥ 0 且 min ≤ max
+	for band_name: String in ["quest_light_reward_exp", "quest_light_reward_gold",
+			"quest_light_reward_reputation"]:
+		var band_min: int = int(cfg.get(band_name + "_min"))
+		var band_max: int = int(cfg.get(band_name + "_max"))
+		if band_min < 0 or band_min > band_max:
+			report.add_error("V-M4-cfg-domain", CoreConfig.CFG_MAIN_ID,
+					"%s 带 [%d, %d] 非法（须 0 ≤ min ≤ max）" % [band_name, band_min, band_max])
 	for positive_name: String in ["initial_gold", "exp_per_level_base", "level_cap",
 			"levelup_all_attrs", "levelup_tendency_bonus", "skill_points_birth",
 			"skill_points_per_level", "skill_unlock_cost", "injury_rest_days",

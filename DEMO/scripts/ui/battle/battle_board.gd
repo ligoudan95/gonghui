@@ -45,12 +45,8 @@ const DAMAGE_OUTLINE_SIZE: int = 4
 ## 飘字文案模板（B-8：暴击/普通两态——文案单源，改措辞只动此处）
 const DAMAGE_TEXT_CRIT: String = "暴击 %d"
 const DAMAGE_TEXT_NORMAL: String = "%d"
-## 飘字配色与 tips 行配色（本文件视觉常量——暴击/普通/tips 两行）
-const COLOR_DAMAGE_CRIT: Color = Color(1.0, 0.4, 0.3)
-const COLOR_DAMAGE_NORMAL: Color = Color(1.0, 0.9, 0.6)
-const COLOR_TIPS_LINE1: Color = Color(0.98, 0.6, 0.5)
-const COLOR_TIPS_LINE2: Color = Color(0.85, 0.88, 0.9)
-
+## 飘字配色与 tips 行配色（S4-M4-3-d：入表——cfg ui_damage_*/ui_tips_* 字段
+## 消费经 _OverlayColor 同款 color_of 读取口；UiTheme 兜底常量锚定）
 ## 战斗上下文（setup 注入）
 var context: BattleSetup.BattleContext = null
 ## 格子像素尺寸
@@ -69,6 +65,30 @@ func _OverlayColor(field: StringName, fallback: Color) -> Color:
 	## 参数 field：cfg 字段名；fallback：UiTheme 兜底常量
 	## 返回：生效颜色
 	return UiTheme.color_of(context.cfg if context != null else null, field, fallback)
+
+func _DamageCritColor() -> Color:
+	## 飘字暴击色（cfg 表驱动——兜底 UiTheme.DAMAGE_CRIT）
+	## 参数：无
+	## 返回：生效颜色
+	return _OverlayColor(&"ui_damage_crit_color", UiTheme.DAMAGE_CRIT)
+
+func _DamageNormalColor() -> Color:
+	## 飘字普通色（cfg 表驱动——兜底 UiTheme.DAMAGE_NORMAL）
+	## 参数：无
+	## 返回：生效颜色
+	return _OverlayColor(&"ui_damage_normal_color", UiTheme.DAMAGE_NORMAL)
+
+func _TipsLine1Color() -> Color:
+	## tips 第一行色（cfg 表驱动——兜底 UiTheme.TIPS_LINE1）
+	## 参数：无
+	## 返回：生效颜色
+	return _OverlayColor(&"ui_tips_line1_color", UiTheme.TIPS_LINE1)
+
+func _TipsLine2Color() -> Color:
+	## tips 第二行色（cfg 表驱动——兜底 UiTheme.TIPS_LINE2）
+	## 参数：无
+	## 返回：生效颜色
+	return _OverlayColor(&"ui_tips_line2_color", UiTheme.TIPS_LINE2)
 
 ## 字号档位读取口（B-7：cfg ui_font_size_* 优先、UiTheme 兜底）
 func _UiFont(field: StringName, fallback: int) -> int:
@@ -313,12 +333,12 @@ func _EnsureTipsPanel() -> void:
 	box.add_theme_constant_override("separation", 2)
 	_tips_line1 = Label.new()
 	_tips_line1.add_theme_font_size_override("font_size", _UiFont(&"ui_font_size_small", UiTheme.FONT_SMALL))
-	_tips_line1.add_theme_color_override("font_color", COLOR_TIPS_LINE1)
+	_tips_line1.add_theme_color_override("font_color", _TipsLine1Color())
 	_tips_line1.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(_tips_line1)
 	_tips_line2 = Label.new()
 	_tips_line2.add_theme_font_size_override("font_size", _UiFont(&"ui_font_size_minor", UiTheme.FONT_MINOR))
-	_tips_line2.add_theme_color_override("font_color", COLOR_TIPS_LINE2)
+	_tips_line2.add_theme_color_override("font_color", _TipsLine2Color())
 	_tips_line2.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(_tips_line2)
 	_tips_panel.add_child(box)
@@ -371,8 +391,8 @@ func show_damage_number(cell: Vector2i, amount: int, is_crit: bool) -> void:
 	label.text = (DAMAGE_TEXT_CRIT if is_crit else DAMAGE_TEXT_NORMAL) % amount
 	label.add_theme_font_size_override("font_size", _UiFont(&"ui_font_size_large", UiTheme.FONT_LARGE) \
 			if is_crit else _UiFont(&"ui_font_size_body", UiTheme.FONT_BODY))
-	label.add_theme_color_override("font_color", COLOR_DAMAGE_CRIT if is_crit \
-			else COLOR_DAMAGE_NORMAL)
+	label.add_theme_color_override("font_color", _DamageCritColor() if is_crit \
+			else _DamageNormalColor())
 	label.add_theme_color_override("font_outline_color",
 			_OverlayColor(&"ui_badge_outline_color", UiTheme.BADGE_OUTLINE))
 	label.add_theme_constant_override("outline_size", DAMAGE_OUTLINE_SIZE)

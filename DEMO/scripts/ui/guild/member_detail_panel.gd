@@ -95,7 +95,7 @@ func _Rebuild() -> void:
 		var skill: SkillDef = game_data.get_record(skill_id) as SkillDef
 		learned.append("· %s（已解锁）" % (skill.display_name if skill != null else String(skill_id)))
 	if learned.is_empty():
-		learned.append("·（暂无已解锁技能——初始 4 人第 1 技预解锁、招募成员花点解锁）")
+		learned.append("·（暂无已解锁技能——初始队员技能已预解锁、招募成员花点解锁）")
 	for line: String in learned:
 		_MakeLabel("", &"ui_font_size_normal", UiTheme.FONT_NORMAL).text = line
 	var tier_one_ids: Array[StringName] = []

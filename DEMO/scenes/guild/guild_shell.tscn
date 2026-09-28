@@ -85,35 +85,14 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 
 [node name="SideBox" type="VBoxContainer" parent="Layout/MainBox"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 theme_override_constants/separation = 12
 
-[node name="WaitButton" type="Button" parent="Layout/MainBox/SideBox"]
-unique_name_in_owner = true
-layout_mode = 2
-custom_minimum_size = Vector2(320, 56)
-focus_mode = 2
-text = "等待一天"
-
-[node name="PendingButton" type="Button" parent="Layout/MainBox/SideBox"]
-unique_name_in_owner = true
-visible = false
-layout_mode = 2
-custom_minimum_size = Vector2(320, 56)
-focus_mode = 2
-text = "待选倾向"
-
-[node name="SettleInfoLabel" type="Label" parent="Layout/MainBox/SideBox"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_font_sizes/font_size = 16
-autowrap_mode = 2
-size_flags_vertical = 3
-text = ""
-
 [node name="EntryTitle" type="Label" parent="Layout/MainBox/SideBox"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 22
 text = "公会设施与协会"
@@ -139,6 +118,29 @@ custom_minimum_size = Vector2(320, 56)
 focus_mode = 2
 text = "冒险者协会（委托·招募）"
 
+[node name="WaitButton" type="Button" parent="Layout/MainBox/SideBox"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(320, 56)
+focus_mode = 2
+text = "等待一天"
+
+[node name="PendingButton" type="Button" parent="Layout/MainBox/SideBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+custom_minimum_size = Vector2(320, 56)
+focus_mode = 2
+text = "待选倾向"
+
+[node name="SettleInfoLabel" type="Label" parent="Layout/MainBox/SideBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+autowrap_mode = 2
+size_flags_vertical = 3
+text = ""
+
 [node name="DetailHost" type="CenterContainer" parent="."]
 unique_name_in_owner = true
 visible = false
@@ -162,8 +164,8 @@ grow_vertical = 2
 mouse_filter = 1
 
 [connection signal="pressed" from="Layout/TopBar/BackButton" to="." method="_on_back_pressed"]
-[connection signal="pressed" from="Layout/MainBox/SideBox/WaitButton" to="." method="_on_wait_pressed"]
-[connection signal="pressed" from="Layout/MainBox/SideBox/PendingButton" to="." method="_on_pending_pressed"]
 [connection signal="pressed" from="Layout/MainBox/SideBox/DormitoryButton" to="." method="_on_dormitory_pressed"]
 [connection signal="pressed" from="Layout/MainBox/SideBox/TrainingButton" to="." method="_on_training_pressed"]
 [connection signal="pressed" from="Layout/MainBox/SideBox/AssociationButton" to="." method="_on_association_pressed"]
+[connection signal="pressed" from="Layout/MainBox/SideBox/WaitButton" to="." method="_on_wait_pressed"]
+[connection signal="pressed" from="Layout/MainBox/SideBox/PendingButton" to="." method="_on_pending_pressed"]

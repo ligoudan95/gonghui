@@ -13,6 +13,12 @@ signal reassign_requested(serial: int)
 ## 放弃请求（serial）
 signal abandon_requested(serial: int)
 
+## UI 文案单源（M4 增补批：轻度进行中行——改措辞只动此处）
+const UI_TEXTS: Dictionary = {
+	&"state_light_running": "进行中（轻度）",
+	&"light_row_remain": "工期剩 %d 天",
+}
+
 ## 总控配置
 var _cfg: CoreConfig = null
 ## 标题行
@@ -56,22 +62,33 @@ func refresh(instances: Array[QuestInstance], core: GuildCore) -> void:
 		row.add_theme_constant_override("separation", 8)
 		_row_box.add_child(row)
 		var summary: Label = _MakeRowLabel(row)
+		# M4 增补批：LIGHT_RUNNING 轻度行——状态/剩余取工期、放弃按模板、
+		# 不出征不重编队（战斗三操作仅 ACCEPTED 态呈现）
 		var state_text: String = "进行中" if inst.state == QuestInstance.State.IN_PROGRESS else "已接"
+		var remain_text: String = "剩 %d 天" % maxi(0, inst.remaining_days(core.day))
+		if inst.state == QuestInstance.State.LIGHT_RUNNING:
+			state_text = UI_TEXTS[&"state_light_running"]
+			remain_text = String(UI_TEXTS[&"light_row_remain"]) % maxi(0, inst.work_days_left)
 		var member_names: PackedStringArray = []
 		for member_id: StringName in inst.party_ids:
 			var member: AdventurerData = core.find_member(member_id)
 			member_names.append(member.display_name if member != null else String(member_id))
 		var party_text: String = "、".join(member_names) if not member_names.is_empty() else "未编队"
-		summary.text = "%s｜%s｜剩 %d 天｜编队：%s" % [inst.display_name(core.game_data),
-				state_text, maxi(0, inst.remaining_days(core.day)), party_text]
+		summary.text = "%s｜%s｜%s｜编队：%s" % [inst.display_name(core.game_data),
+				state_text, remain_text, party_text]
 		summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var row_tpl: QuestTemplateDef = core.game_data.get_record(inst.template_id) as QuestTemplateDef
 		if inst.state == QuestInstance.State.ACCEPTED:
 			_AddRowButton(row, "出征", "StartButton", inst.serial,
 					func(serial: int) -> void: start_requested.emit(serial))
 			_AddRowButton(row, "重编队", "ReassignButton", inst.serial,
 					func(serial: int) -> void: reassign_requested.emit(serial))
-			var tpl: QuestTemplateDef = core.game_data.get_record(inst.template_id) as QuestTemplateDef
-			if tpl == null or tpl.abandonable:
+			if row_tpl == null or row_tpl.abandonable:
+				_AddRowButton(row, "放弃", "AbandonButton", inst.serial,
+						func(serial: int) -> void: abandon_requested.emit(serial))
+		elif inst.state == QuestInstance.State.LIGHT_RUNNING:
+			# 轻度进行中：仅放弃（可弃时——工期作废立即释放，二次确认在协会屏）
+			if row_tpl == null or row_tpl.abandonable:
 				_AddRowButton(row, "放弃", "AbandonButton", inst.serial,
 						func(serial: int) -> void: abandon_requested.emit(serial))
 		_rows.append(row)

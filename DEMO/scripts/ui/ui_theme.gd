@@ -27,6 +27,12 @@ const CARD_DEBUFF: Color = Color(0.85, 0.35, 0.3)
 const CARD_UNKNOWN: Color = Color(0.6, 0.6, 0.6)
 const CARD_MUTED: Color = Color(0.8, 0.8, 0.8)
 
+# ---- 飘字/tips（S4-M4-3-d：battle_board 飘字与 tips 两行配色入表）----
+const DAMAGE_CRIT: Color = Color(1.0, 0.4, 0.3)
+const DAMAGE_NORMAL: Color = Color(1.0, 0.9, 0.6)
+const TIPS_LINE1: Color = Color(0.98, 0.6, 0.5)
+const TIPS_LINE2: Color = Color(0.85, 0.88, 0.9)
+
 # ---- 覆盖层（B-5：battle_board 范围/路径/确认/阻断兜底）----
 const OVERLAY_MOVE_FILL: Color = Color(0.4, 0.7, 1.0, 0.10)
 const OVERLAY_MOVE_BORDER: Color = Color(0.55, 0.85, 1.0, 0.95)
@@ -80,7 +86,8 @@ const EXPLORE_TARGET_DIM: Color = Color(0.45, 0.45, 0.5)
 ## 判据达成横幅色兜底
 const EXPLORE_GOAL_BANNER: Color = Color(0.35, 0.85, 0.4)
 ## 探索常显图标衬底色兜底（迷雾之上目标点的对比底——2026-09-25 层级修复；
-## cfg 字段 ui_explore_icon_backdrop_color 暂未回填，纯兜底模式）
+## cfg 字段 ui_explore_icon_backdrop_color 已回填 cfg_main 同值——席4 L3，
+## 本常量为未注入/丢表时的兜底）
 const EXPLORE_ICON_BACKDROP: Color = Color(0.02, 0.02, 0.03, 0.62)
 
 # ---- 字号档位（B-7 兜底；cfg 字段 ui_font_size_*）----

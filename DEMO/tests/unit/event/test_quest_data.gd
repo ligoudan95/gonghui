@@ -48,8 +48,8 @@ func test_keepsake_template_fields() -> void:
 	assert_bool(quest.description.is_empty()).is_false()
 
 func test_quest_domain_count() -> void:
-	## 委托域计数恰 9（板刷 8+事件授予 1——M4 批 1 全量；18 案 §4.1 登记行）
-	assert_int(_game_data.get_domain_ids(&"quest/templates").size()).is_equal(9)
+	## 委托域计数恰 12（板刷 11=8 战斗+3 轻度 + 事件授予 1——M4 增补批；18 案 §4.1 登记行）
+	assert_int(_game_data.get_domain_ids(&"quest/templates").size()).is_equal(12)
 	## 暗门标记域 M3 落首行（hm_mine_secret_door——M2 先建后空期结束）
 	assert_int(_game_data.get_domain_ids(&"event/hidden_marks").size()).is_equal(1)
 

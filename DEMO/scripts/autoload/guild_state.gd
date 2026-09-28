@@ -11,9 +11,9 @@
 extends Node
 
 ## 日结算完成（等待/跳过一天或回城补结算逐日——参数 DaySummary）
-signal day_settled(summary)
+signal day_settled(summary: GuildCore.DaySummary)
 ## 回城结算完成（参数 ExpeditionSummary）
-signal expedition_settled(summary)
+signal expedition_settled(summary: GuildCore.ExpeditionSummary)
 ## 设施升级完成（参数设施 id）
 signal facility_upgraded(facility_id: StringName)
 ## 招募入册完成（参数新成员）
@@ -27,6 +27,10 @@ var _save_manager: Node
 var _game_data: Node
 ## 随机源（new_game 建档时 randomize；测试经 bind 前覆写可注入固定种子）
 var _rng: RandomNumberGenerator
+## 最近一次自动存档失败标记（S3-M5-1-b：RETURN_SETTLED 之外的 autosave
+## FAILED 的 UI 感知——与 M-3 的 summary.save_failed 口径对称；guild_shell
+## RefreshAll 消费呈现；每次业务操作入口复位）
+var last_autosave_failed: bool = false
 
 func _ready() -> void:
 	## 引擎回调：建核心并按铁律④链装配依赖（SaveManager 已先于本单例入树）
@@ -58,9 +62,9 @@ func new_game() -> void:
 	_save_manager.new_game()
 	core.setup(_ResolveCfg(), _game_data, _rng)
 	_SyncDay()
-	_save_manager.autosave(SaveData.SavePoint.NEW_GAME)
+	last_autosave_failed = _save_manager.autosave(SaveData.SavePoint.NEW_GAME) != OK
 
-func wait_one_day():
+func wait_one_day() -> GuildCore.DaySummary:
 	## 等待/跳过一天（案 2 §2.2 兜底行为；出征进行中不可用——日历冻结口径）：
 	## 出征锁校验 → settle_one_day → 同步 game_day → autosave(DAY_END) → 信号
 	## 参数：无
@@ -71,11 +75,12 @@ func wait_one_day():
 	var summary := core.settle_one_day()
 	_SyncDay()
 	if _save_manager != null:
-		_save_manager.autosave(SaveData.SavePoint.DAY_END)
+		last_autosave_failed = _save_manager.autosave(SaveData.SavePoint.DAY_END) != OK
 	day_settled.emit(summary)
 	return summary
 
-func settle_expedition(run: ExpeditionRun, outcome: GuildCore.ExpeditionOutcome):
+func settle_expedition(run: ExpeditionRun,
+		outcome: GuildCore.ExpeditionOutcome) -> GuildCore.ExpeditionSummary:
 	## 回城结算业务口：**先释出征锁**（回城即出征结束——锁序保证
 	## RETURN_SETTLED autosave 不被 #26 出征锁跳过；调用方 explore_screen 亦先行
 	## 释锁——双保险单点）→ core 结算 → 同步天数 → **场景锚定公会壳**
@@ -83,6 +88,10 @@ func settle_expedition(run: ExpeditionRun, outcome: GuildCore.ExpeditionOutcome)
 	## 城内时点，不落探索屏裸开）→ autosave(RETURN_SETTLED) → 信号
 	## 参数 run：出征会话；outcome：出口（四出口之一）
 	## 返回：ExpeditionSummary
+	# S3-M5-1-a：壳层幂等早退——run 已结算时 core 返回空摘要，但壳层不得
+	# 再 _SyncDay/autosave/emit（空摘要信号会误导 UI 重复刷新与落盘）
+	if run.settled:
+		return core.settle_expedition(run, outcome)
 	if _save_manager != null:
 		_save_manager.set_expedition_lock(false)
 	var summary := core.settle_expedition(run, outcome)
@@ -156,7 +165,7 @@ func recruit(index: int) -> AdventurerData:
 	var member: AdventurerData = core.recruit(index)
 	if member != null:
 		if _save_manager != null:
-			_save_manager.autosave(SaveData.SavePoint.RECRUIT_DONE)
+			last_autosave_failed = _save_manager.autosave(SaveData.SavePoint.RECRUIT_DONE) != OK
 		member_recruited.emit(member)
 	return member
 
@@ -166,7 +175,7 @@ func upgrade_facility(facility_id: StringName) -> bool:
 	## 返回：true = 升级成功
 	if core.upgrade_facility(facility_id):
 		if _save_manager != null:
-			_save_manager.autosave(SaveData.SavePoint.FACILITY_UPGRADED)
+			last_autosave_failed = _save_manager.autosave(SaveData.SavePoint.FACILITY_UPGRADED) != OK
 		facility_upgraded.emit(facility_id)
 		return true
 	return false

@@ -14,8 +14,8 @@ var _cfg: CoreConfig = null
 var _title_label: Label = null
 ## 成员行容器
 var _row_box: VBoxContainer = null
-## 行按钮记录
-var _row_buttons: Array = []
+## 行按钮记录（低级 1：泛型类型化）
+var _row_buttons: Array[Button] = []
 
 func setup(cfg: CoreConfig) -> void:
 	## 构建总览骨架

@@ -25,6 +25,28 @@ func before_test() -> void:
 	var no_params: Dictionary = {}
 	scene_manager.pending_params = no_params
 	get_tree().root.get_node("SaveManager").set_expedition_lock(false)
+	# M-10：套件卫生统一（探索屏用例触真实 autoload）——统一复位
+	_ResetAutoloadState()
+
+func after_test() -> void:
+	## 用例级后置：清盘（写入的存档不遗留——失败路径也必达）
+	## 参数：无
+	## 返回：无
+	_ResetAutoloadState()
+
+func _ResetAutoloadState() -> void:
+	## 存档目录清盘（含 .bak/.tmp 幂等）+ SaveManager/GuildState 复位
+	## 参数：无
+	## 返回：无
+	for entry_name: String in ["main_save.json", "main_save.json.bak", "main_save.json.tmp"]:
+		DirAccess.remove_absolute("user://saves/" + entry_name)
+	var save_manager: Node = get_tree().root.get_node_or_null("SaveManager")
+	if save_manager != null:
+		save_manager.current = null
+		save_manager.set_expedition_lock(false)
+	var guild_state: Node = get_tree().root.get_node_or_null("GuildState")
+	if guild_state != null:
+		guild_state.core = GuildCore.new()
 
 func _WaitFrames(frames: int) -> void:
 	## 帧等待助手
@@ -92,7 +114,7 @@ func test_explore_screen_renders_fog_and_targets() -> void:
 	var screen: Control = runner.scene() as Control
 	await _WaitFrames(2)
 	# 出征锁生效
-	assert_bool(get_tree().root.get_node("SaveManager")._expedition_lock).is_true()
+	assert_bool(get_tree().root.get_node("SaveManager").is_expedition_locked()).is_true()
 	# 村子段（全亮行）：迷雾遮罩隐藏；矿洞未探格：遮罩可见（浓雾）
 	assert_bool(screen._board._fog_rects[Vector2i(0, 0)].visible).is_false()
 	assert_bool(screen._board._fog_rects[Vector2i(7, 10)].visible).is_true()
@@ -253,7 +275,7 @@ func test_random_encounter_interrupts_movement() -> void:
 	assert_int(scene_manager.current_id).is_equal(2)
 	assert_str(String(battle._return_payload[&"encounter_pack_id"])).is_equal("enc_m1_random_pack")
 	assert_int(battle._return_to).is_equal(SCENE_EXPLORE)
-	assert_bool(get_tree().root.get_node("SaveManager")._expedition_lock).is_true()
+	assert_bool(get_tree().root.get_node("SaveManager").is_expedition_locked()).is_true()
 	(battle.get_node("%BoardLayer") as BattleBoard)  # 战斗板就绪（装配成立）
 	battle.controller.abort_battle()
 
@@ -279,7 +301,7 @@ func test_guild_expedition_roundtrip_lock() -> void:
 	var explore: Control = get_tree().root.find_child("ExploreScreen", true, false) as Control
 	assert_object(explore).is_not_null()
 	assert_int(get_tree().root.get_node("SceneManager").current_id).is_equal(SCENE_EXPLORE)
-	assert_bool(get_tree().root.get_node("SaveManager")._expedition_lock).is_true()
+	assert_bool(get_tree().root.get_node("SaveManager").is_expedition_locked()).is_true()
 	# 判据上下文经出征链路正确注入（run 成员 = 名册引用）
 	assert_int(explore._run.goal_kind).is_equal(QuestTemplateDef.GoalType.CLEAR)
 	assert_str(String(explore._run.goal_param)).is_equal("enc_m1_lair_pack")
@@ -291,7 +313,7 @@ func test_guild_expedition_roundtrip_lock() -> void:
 	(explore.get_node("%RetreatConfirm") as ConfirmationDialog).confirmed.emit()
 	await _WaitFrames(2)
 	assert_bool(explore.get_node("%SettlementPanel").visible).is_true()
-	assert_bool(get_tree().root.get_node("SaveManager")._expedition_lock).is_false()
+	assert_bool(get_tree().root.get_node("SaveManager").is_expedition_locked()).is_false()
 	assert_int(core.day).is_equal(2)
 	assert_int(get_tree().root.get_node("SaveManager").current.save_point)\
 			.is_equal(SaveData.SavePoint.RETURN_SETTLED)
@@ -445,12 +467,15 @@ func test_touch_hotzone_at_least_48() -> void:
 # --------------------------------------------------------------------------
 
 func test_w301_board_scale_engages_and_bottom_stays_onscreen() -> void:
-	## W3-01：1920×1080 布局下——①板面缩放真实介入（board.scale.y < 1.0：
+	## W3-01：1920×1080 窗口下——①板面缩放真实介入（board.scale.y < 1.0：
 	## 15×15 图设计高 900 > 宿主剩余高，修复前 CenterContainer 宿主 min 随
 	## 板面膨胀到 900 → fit 恒 1.0 机制空转）；②底部操作区不出屏
 	## （BottomBox 全局底边 ≤ 视口底边）。
-	## 环境注：headless gdUnit 视口为 1920×1920（expand 长宽比无真窗）——
-	## 显式设窗 1920×1080 复现设计布局口径（stretch canvas_items 同步生效）
+	## 环境注：headless gdUnit 无真窗（默认视口 1920×1922）——显式设窗
+	## 1920×1080 复现设计布局口径（stretch canvas_items 同步生效）。
+	## 断言口径（修复批次 5 环境适配）：expand 拉伸下画布=窗÷缩放系数
+	## （基准 1440×900 时 1080p 窗画布=1600×900，绝对值随基准配置漂移）——
+	## 改锁窗口实值+画布宽高比；设窗被绕过（默认 1920×1922）仍可捕获
 	var scene_manager: Node = get_tree().root.get_node("SceneManager")
 	scene_manager.pending_params = {&"expedition_run": _MakeQuestRun(&"q_lair_purge")}
 	var runner: GdUnitSceneRunner = scene_runner(EXPLORE_SCENE)
@@ -458,7 +483,12 @@ func test_w301_board_scale_engages_and_bottom_stays_onscreen() -> void:
 	await _WaitFrames(2)
 	screen.get_window().size = Vector2i(1920, 1080)
 	await _WaitFrames(4)
-	assert_float(screen.get_viewport_rect().size.y).is_equal_approx(1080.0, 2.0)
+	# 设窗生效断言（锁窗口实值——设窗被绕过时此断言失败）
+	assert_int(screen.get_window().size.x).is_equal(1920)
+	assert_int(screen.get_window().size.y).is_equal(1080)
+	# 画布宽高比 = 窗口宽高比（expand 铺满无黑边）
+	assert_float(screen.get_viewport_rect().size.x
+			/ screen.get_viewport_rect().size.y).is_equal_approx(1920.0 / 1080.0, 0.01)
 	assert_float(screen._board.scale.y).is_less(1.0) \
 			.override_failure_message("板面缩放未介入（scale.y 应 < 1.0——宿主可用高 < 设计高 900）")
 	var viewport_end: float = screen.get_viewport_rect().size.y
@@ -493,3 +523,22 @@ func test_w301_refit_keeps_bottom_onscreen_with_banner() -> void:
 	var host_center_x: float = host.global_position.x + host.size.x * 0.5
 	assert_float(visual.get_center().x).is_equal_approx(host_center_x, 1.0) \
 			.override_failure_message("板面视觉区未在宿主内水平居中")
+
+func test_settlement_body_autowrap_contract() -> void:
+	## 低危 10/11（M-1 相关布局契约）：结算正文 autowrap=AUTOWRAP_WORD（值 2
+	## ——修复单定值；tscn 数值口径对齐 guild_shell 等库内场景先例；长正文
+	## 换行不溢出弹窗）
+	var scene_manager: Node = get_tree().root.get_node("SceneManager")
+	scene_manager.pending_params = {&"expedition_run": _MakeQuestRun(&"q_lost_miner_keepsake")}
+	var runner: GdUnitSceneRunner = scene_runner(EXPLORE_SCENE)
+	await _WaitFrames(2)
+	var body: Label = (runner.scene() as Control).get_node("%SettlementBody") as Label
+	assert_object(body).is_not_null()
+	assert_int(int(body.autowrap_mode)).is_equal(TextServer.AUTOWRAP_WORD)
+	# grow_direction 契约（BUG 修复回归）：CENTER——批次 4 误写 3（BOTH 是
+	# anchors_preset 枚举值，grow_direction 只有 BEGIN=0/CENTER=1/END=2；4.7 无
+	# 具名常量可引，测试内定名锚定）致场景加载 set_v_grow_direction 越界报错
+	const GROW_CENTER: int = 1
+	var panel: Control = (runner.scene() as Control).get_node("%SettlementPanel") as Control
+	assert_int(int(panel.grow_horizontal)).is_equal(GROW_CENTER)
+	assert_int(int(panel.grow_vertical)).is_equal(GROW_CENTER)

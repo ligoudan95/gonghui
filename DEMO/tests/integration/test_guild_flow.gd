@@ -120,18 +120,18 @@ func test_full_chain_accept_to_settle() -> void:
 	# --- 出征：StartButton → 同步段落锁（M4-3：确认成功即置锁——go() 切换
 	# 帧窗内等待按钮已禁用）→ 探索屏挂载 + run 判据上下文 ---
 	(assoc.find_child("StartButton", true, false) as Button).pressed.emit()
-	assert_bool(get_tree().root.get_node("SaveManager")._expedition_lock).is_true()
+	assert_bool(get_tree().root.get_node("SaveManager").is_expedition_locked()).is_true()
 	await _WaitFrames(4)
 	var explore: Control = get_tree().root.find_child("ExploreScreen", true, false) as Control
 	assert_object(explore).is_not_null()
 	assert_int(get_tree().root.get_node("SceneManager").current_id).is_equal(SCENE_EXPLORE)
-	assert_bool(get_tree().root.get_node("SaveManager")._expedition_lock).is_true()
+	assert_bool(get_tree().root.get_node("SaveManager").is_expedition_locked()).is_true()
 	assert_str(String(explore._run.quest_template_id)).is_equal("q_lair_purge")
 	assert_int(explore._run.party.size()).is_equal(3)
 	# --- 回城结算（出口交付模拟）：释锁先行 + 结算面板（summary 驱动）---
 	var gold_before: int = core.gold
 	explore._FinishSession(GuildCore.ExpeditionOutcome.SUCCESS)
-	assert_bool(get_tree().root.get_node("SaveManager")._expedition_lock).is_false()
+	assert_bool(get_tree().root.get_node("SaveManager").is_expedition_locked()).is_false()
 	assert_bool(explore.get_node("%SettlementPanel").visible).is_true()
 	assert_str(explore.get_node("%SettlementBody").text).contains("150")
 	# 3 人下限编队无超额：+150 金/+5 声望；板凳（第 4 人）24 经验；日历 1→2
@@ -540,20 +540,28 @@ func _AssertWithinViewport(host: Control, viewport: Vector2, label: String) -> v
 			.override_failure_message("%s 弹层溢出视口：%s" % [label, str(rect)]).is_true()
 
 func test_guild_screens_layout_contract_1080p() -> void:
-	## W3-01 口径：四新屏 1920×1080 真实视口不溢出（普通容器+手动布局——
-	## 关键分区 global 矩形下缘 ≤ 视口高、右缘 ≤ 视口宽）
+	## W3-01 口径：四新屏 1920×1080 窗口不溢出（普通容器+手动布局——
+	## 关键分区 global 矩形下缘 ≤ 视口高、右缘 ≤ 视口宽）。
+	## 断言口径（修复批次 5 环境适配）：stretch canvas_items/expand 下视口画布
+	## =窗口÷缩放系数（基准 1440×900 时 1080p 窗画布=1600×900，绝对值随基准
+	## 配置漂移）——改锁窗口实值+画布宽高比+根矩形铺满画布；历史失败模式
+	## （headless 无真窗默认 1920×1922=设窗被绕过）由窗口实值断言捕获
 	_NewGame()
 	for scene_path: String in [GUILD_SCENE, ASSOC_SCENE, DORM_SCENE, TRAIN_SCENE]:
 		var runner: GdUnitSceneRunner = scene_runner(scene_path)
 		var screen: Control = runner.scene() as Control
 		screen.get_window().size = Vector2i(1920, 1080)
 		await _WaitFrames(2)
+		# 设窗生效断言（锁窗口实值——设窗被绕过时此断言失败）
+		assert_int(screen.get_window().size.x).is_equal(1920)
+		assert_int(screen.get_window().size.y).is_equal(1080)
 		var viewport: Vector2 = screen.get_viewport_rect().size
-		assert_float(viewport.y).is_equal_approx(1080.0, 2.0)
-		# 全屏根：铺满视口（四角锚定生效）
+		# 画布宽高比 = 窗口宽高比（expand 铺满无黑边；1920×1922 类假窗 1:1 可捕获）
+		assert_float(viewport.x / viewport.y).is_equal_approx(1920.0 / 1080.0, 0.01)
+		# 全屏根：铺满画布（四角锚定生效）
 		var root_rect: Rect2 = screen.get_global_rect()
-		assert_float(root_rect.size.y).is_equal_approx(1080.0, 2.0)
-		assert_float(root_rect.size.x).is_equal_approx(1920.0, 2.0)
+		assert_float(root_rect.size.y).is_equal_approx(viewport.y, 2.0)
+		assert_float(root_rect.size.x).is_equal_approx(viewport.x, 2.0)
 		# 关键分区不溢出（逐屏具名分区——find_child 按节点名，含 unique 名）
 		var probe_names: Array[String] = []
 		match scene_path:
@@ -572,3 +580,52 @@ func test_guild_screens_layout_contract_1080p() -> void:
 					.override_failure_message("%s 分区溢出视口：%s" % [
 							scene_path.get_file(), str(rect)]).is_true()
 		await _WaitFrames(1)
+
+func test_light_quest_full_chain() -> void:
+	## M4 增补批：轻度全链——接卡（轻度信息行）→弹层（1-2 人+开工文案）→
+	## 开工（LIGHT_RUNNING+占用）→等待推进（工期递减）→汇总行文案含板凳
+	## 后缀（拍板①）→实例移除释放
+	_NewGame()
+	var core: GuildCore = _Core()
+	core.board.board.clear()
+	core.board.spawn_on_board(&"q_chore_supply_run", core.day)
+	var assoc: GdUnitSceneRunner = scene_runner(ASSOC_SCENE)
+	(assoc.scene() as Control).RefreshAll()
+	await _WaitFrames(1)
+	# 委托卡轻度分支：标题「轻度·」前缀+工期信息行
+	var card: QuestCard = (assoc.scene() as Control)._board_panel._cards[0]
+	assert_object(card).is_not_null()
+	assert_str(card._title_label.text).contains("轻度·")
+	assert_str(card._info_label.text).contains("工期 2 天")
+	# 弹层：选 1 人确认——按钮文案「派出开工」
+	(assoc.find_child("AcceptButton", true, false) as Button).pressed.emit()
+	await _WaitFrames(1)
+	var screen: Control = assoc.scene() as Control
+	var checks: Array = screen._organize_panel._checks.values()
+	(checks[0] as CheckBox).button_pressed = true
+	assert_str((assoc.find_child("ConfirmButton", true, false) as Button).text).is_equal("派出开工")
+	(assoc.find_child("ConfirmButton", true, false) as Button).pressed.emit()
+	await _WaitFrames(1)
+	# 开工就位：LIGHT_RUNNING+work_days_left+占用+开工提示行
+	assert_int(core.board.accepted.size()).is_equal(1)
+	var inst: QuestInstance = core.board.accepted[0]
+	assert_int(inst.state).is_equal(QuestInstance.State.LIGHT_RUNNING)
+	assert_int(inst.work_days_left).is_equal(2)
+	assert_int(core.board.occupied_member_ids().size()).is_equal(1)
+	assert_str((screen.get_node("%HintLabel") as Label).text).contains("工期 2 天")
+	# --- 等待推进：day+1 工期 1；day+2 归零结算（板凳 3 人各 9 经验后缀）---
+	var shell: GdUnitSceneRunner = scene_runner(GUILD_SCENE)
+	(shell.scene() as Control).RefreshAll()
+	await _WaitFrames(1)
+	(shell.find_child("WaitButton", true, false) as Button).pressed.emit()
+	await _WaitFrames(2)
+	assert_int(inst.work_days_left).is_equal(1)
+	(shell.find_child("WaitButton", true, false) as Button).pressed.emit()
+	await _WaitFrames(2)
+	assert_int(core.board.accepted.size()).is_equal(0)
+	assert_int(core.board.occupied_member_ids().size()).is_equal(0)
+	# 汇总轻提示行：轻度完成条目+板凳后缀（3 人各 9——拍板①）
+	var info: Label = (shell.scene() as Control).get_node("%SettleInfoLabel") as Label
+	assert_str(info.text).contains("轻度委托完成")
+	assert_str(info.text).contains("+60 金")
+	assert_str(info.text).contains("板凳 3 人各得 9 经验")

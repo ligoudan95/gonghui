@@ -20,6 +20,15 @@ const POPUP_Z_INDEX: int = 100
 ## 弹层最小宽（Z2-13：给 autowrap 留换行空间；占位 UI 结构参数——
 ## EVENT_PANEL_WIDTH 同豁免口径）
 const ORGANIZE_PANEL_MIN_WIDTH: int = 560
+## 人力区间兜底（模板查无时的展示兜底——校验权威在 GuildCore 门面）
+const FALLBACK_PARTY_MIN: int = 1
+const FALLBACK_PARTY_MAX: int = 4
+
+## UI 文案单源（M4 增补批：轻度弹层适配——改措辞只动此处）
+const UI_TEXTS: Dictionary = {
+	&"light_open_hint": "确认后立即开工：工期 %d 天（无需出征，占用至完成或放弃）",
+	&"light_confirm": "派出开工",
+}
 
 ## 总控配置
 var _cfg: CoreConfig = null
@@ -102,8 +111,8 @@ func open(inst: QuestInstance, core: GuildCore) -> void:
 	_serial = inst.serial
 	_core = core
 	_tpl = core.game_data.get_record(inst.template_id) as QuestTemplateDef
-	var party_min: int = _tpl.party_min if _tpl != null else 1
-	var party_max: int = _tpl.party_max if _tpl != null else 4
+	var party_min: int = _tpl.party_min if _tpl != null else FALLBACK_PARTY_MIN
+	var party_max: int = _tpl.party_max if _tpl != null else FALLBACK_PARTY_MAX
 	_title_label.text = "编队：%s（需 %d-%d 人）" % [inst.display_name(core.game_data),
 			party_min, party_max]
 	_hint_label.text = ""
@@ -141,6 +150,13 @@ func open(inst: QuestInstance, core: GuildCore) -> void:
 		_member_box.add_child(check)
 		_checks[member.unit_id] = check
 	_recommend_label.text = _RecommendSummary()
+	# M4 增补批：轻度弹层适配——提示行与确认钮换轻度文案（confirmed 信号与
+	# 禁选逻辑零改动——路由分流在协会屏 _OnOrganizeConfirmed）
+	if _tpl != null and _tpl.exec_class == QuestTemplateDef.ExecClass.NON_COMBAT:
+		_hint_label.text = String(UI_TEXTS[&"light_open_hint"]) % _tpl.duration_days
+		_confirm_button.text = UI_TEXTS[&"light_confirm"]
+	else:
+		_confirm_button.text = "确认编队"
 	_UpdatePreview()
 	visible = true
 

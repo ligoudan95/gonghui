@@ -168,6 +168,89 @@ func test_continue_with_save_roundtrip() -> void:
 	assert_int(guild_state.core.board.board.size()).is_equal(3)
 	assert_int(guild_state.core.day).is_equal(3)
 
+func test_start_with_save_shows_confirm_before_overwrite() -> void:
+	## P2 拍板回归：已有存档时「开始」先弹覆盖确认——未确认不建新档不切场景；
+	## 确认后覆盖开新档（旧档 day3 → 新档 day1）
+	var guild_state: Node = get_tree().root.get_node("GuildState")
+	guild_state.core = GuildCore.new()
+	guild_state.new_game()
+	guild_state.wait_one_day()
+	guild_state.wait_one_day()
+	assert_int(_save_manager.current.game_day).is_equal(3)
+	_save_manager.current = null
+	guild_state.core = GuildCore.new()
+	var runner: GdUnitSceneRunner = scene_runner(TITLE_SCENE)
+	_PressButton(runner, "StartButton")
+	await get_tree().process_frame
+	# 未确认：覆盖确认弹窗可见、未建新档未切场景
+	var confirm: ConfirmationDialog = runner.find_child("StartConfirm", true, false) as ConfirmationDialog
+	assert_object(confirm).is_not_null()
+	assert_bool(confirm.visible).is_true()
+	assert_object(_save_manager.current).is_null()
+	assert_int(_scene_manager.current_id).is_equal(-1)
+	# 低危 2（取消负路径）：取消后弹窗关闭、旧档完好（仍无新档）、
+	# 再按「开始」仍弹覆盖确认（不被首次弹窗消费掉）；经真实取消钮路径驱动
+	#（内部隐藏+发 canceled）
+	(confirm.get_cancel_button() as Button).pressed.emit()
+	await get_tree().process_frame
+	assert_bool(confirm.visible).is_false()
+	assert_object(_save_manager.current).is_null()
+	_PressButton(runner, "StartButton")
+	await get_tree().process_frame
+	assert_bool(confirm.visible).is_true()
+	# 确认：覆盖开新档（day 1）+ 进公会壳
+	confirm.confirmed.emit()
+	await _AwaitSceneSwap()
+	assert_object(_save_manager.current).is_not_null()
+	assert_int(_save_manager.current.game_day).is_equal(1)
+	assert_int(_scene_manager.current_id).is_equal(SCENE_GUILD_SHELL)
+
+func _WriteLegacySave(version: int) -> void:
+	## 造旧版 schema 存档（v1/v2 双档共用——修复批次 2 单用例拆双档）
+	## 参数 version：schema_version 数值（1 或 2）
+	## 返回：无
+	var dir: DirAccess = DirAccess.open("user://")
+	dir.make_dir_recursive("saves")
+	var file: FileAccess = FileAccess.open("user://saves/main_save.json", FileAccess.WRITE)
+	file.store_string("{\"schema_version\": %d, \"save_point\": 1, \"game_day\": 1, " % version
+			+ "\"mode\": \"demo\", \"scene_id\": \"guild_shell\", "
+			+ "\"saved_unix_time\": 0, \"payload\": {}}")
+	file.close()
+
+func _AssertLegacyRejectFlow() -> void:
+	## 旧版拒载公共流：继续失败禁用+具体原因+开始弹覆盖确认（串联）
+	## 参数：无
+	## 返回：无（协程）
+	var runner: GdUnitSceneRunner = scene_runner(TITLE_SCENE)
+	var continue_button: Button = runner.find_child("ContinueButton", true, false) as Button
+	assert_bool(continue_button.disabled).is_false()
+	_PressButton(runner, "ContinueButton")
+	await get_tree().process_frame
+	assert_bool(continue_button.disabled).is_true()
+	var hint: Label = runner.find_child("HintLabel", true, false) as Label
+	assert_str(hint.text).contains("schema_version")
+	assert_str(hint.text).contains("开新档")
+	# 低危 11（串联流）：继续失败后点「开始」——旧档仍在（拒载不删档），
+	# 覆盖确认照常弹出（P2 门禁不被读档失败旁路）
+	_PressButton(runner, "StartButton")
+	await get_tree().process_frame
+	var confirm: ConfirmationDialog = runner.find_child("StartConfirm", true, false) as ConfirmationDialog
+	assert_object(confirm).is_not_null()
+	assert_bool(confirm.visible).is_true()
+	assert_object(_save_manager.current).is_null()
+
+func test_continue_v1_save_reject_shows_specific_hint() -> void:
+	## C 低级项（旧档提示）回归：v1 schema 旧档拒载——「继续」失败提示带
+	## 具体原因（schema_version 不识别）与开新档指引
+	_WriteLegacySave(1)
+	await _AssertLegacyRejectFlow()
+
+func test_continue_v2_save_reject_shows_specific_hint() -> void:
+	## M4 增补批（schema 升 v3）：v2 档同样拒载（guild 快照实例缺
+	## work_days_left 必填键——v3 起旧档整体拒载走 save_corrupt 通道）
+	_WriteLegacySave(2)
+	await _AssertLegacyRejectFlow()
+
 func test_go_back_returns_to_previous_scene() -> void:
 	## go_back：TITLE→公会壳→go_back 返回上一屏（TITLE）；从未进入场景时 FAILED
 	assert_int(_scene_manager.go(SCENE_TITLE)).is_equal(OK)
@@ -234,3 +317,43 @@ func test_go_rejected_while_switch_pending() -> void:
 ## test_guild_save_failure_keeps_screen（S5-4 存档失败反馈）已随 M4 批 2
 ## 存档演示三件退役移除——演示触发按钮（保存并返回标题）不复存在；
 ## SaveManager 层的写入容错（FAILED 返回/原子写回滚）由 test_save_manager 单测覆盖。
+
+func test_settings_button_and_panel_contract() -> void:
+	## M4 增补批 3：设置入口契约——设置按钮开面板（两项下拉）→选大档
+	##（headless 跳过窗口尺寸断言只验 cfg）→重进 title 保持→清理复位
+	DirAccess.remove_absolute("user://settings.cfg")
+	var runner: GdUnitSceneRunner = scene_runner(TITLE_SCENE)
+	var settings_button: Button = runner.find_child("SettingsButton", true, false) as Button
+	assert_object(settings_button).is_not_null()
+	settings_button.pressed.emit()
+	await get_tree().process_frame
+	var panel: SettingsPanel = runner.find_child("SettingsPanel", true, false) as SettingsPanel
+	assert_object(panel).is_not_null()
+	assert_bool(panel.visible).is_true()
+	var option: OptionButton = runner.find_child("SizeOption", true, false) as OptionButton
+	assert_object(option).is_not_null()
+	assert_int(option.item_count).is_equal(2)
+	assert_int(option.selected).is_equal(0)
+	# 选大档：持久化落盘（headless 窗口断言跳过——DisplayServer 窗口恒 0）
+	option.select(1)
+	option.item_selected.emit(1)
+	await get_tree().process_frame
+	assert_str(AppSettings.load_window_size()).is_equal(AppSettings.SIZE_LARGE)
+	# 试玩 BUG 修复回归：非 headless 真窗口下选档即改窗口尺寸（gdUnit CI 窗口
+	# MINIMIZED——apply 先恢复 WINDOWED 再 set；headless 窗口恒 (0,0) 跳过）
+	if DisplayServer.get_name() != "headless":
+		assert_vector(DisplayServer.window_get_size()).is_equal(
+					AppSettings.WINDOW_SIZES[AppSettings.SIZE_LARGE])
+	var applied_hint: Label = runner.find_child("SettingsHintLabel", true, false) as Label
+	assert_object(applied_hint).is_not_null()
+	# 关闭 → 重进 title：设置保持大档（每启动 apply 消费）
+	(runner.find_child("CloseSettingsButton", true, false) as Button).pressed.emit()
+	await get_tree().process_frame
+	assert_bool(panel.visible).is_false()
+	var runner2: GdUnitSceneRunner = scene_runner(TITLE_SCENE)
+	await get_tree().process_frame
+	var option2: OptionButton = runner2.find_child("SizeOption", true, false) as OptionButton
+	assert_object(option2).is_not_null()
+	# after 复位：默认档 + 删 cfg（防互染）
+	AppSettings.apply_window_size(AppSettings.SIZE_DEFAULT)
+	DirAccess.remove_absolute("user://settings.cfg")

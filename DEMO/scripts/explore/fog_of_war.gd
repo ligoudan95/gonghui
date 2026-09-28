@@ -62,10 +62,10 @@ func visible_cells(pos: Vector2i) -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
 	if not _InBounds(pos):
 		return cells
-	var r_sq: float = float(_radius) * float(_radius)
+	var r_sq: float = _RadiusSq()
 	for dy: int in range(-_radius, _radius + 1):
 		for dx: int in range(-_radius, _radius + 1):
-			if float(dx) * float(dx) + float(dy) * float(dy) > r_sq:
+			if _DistSq(pos, Vector2i(pos.x + dx, pos.y + dy)) > r_sq:
 				continue
 			var cell: Vector2i = Vector2i(pos.x + dx, pos.y + dy)
 			if _InBounds(cell) and _IsVisibleFrom(pos, cell):
@@ -132,9 +132,8 @@ func _IsVisibleFrom(pos: Vector2i, cell: Vector2i) -> bool:
 	## 端点不算——墙格自身可见，墙后格不可见；口径对齐战棋视线）
 	## 参数 pos：小队所在格；cell：查询格
 	## 返回：true = 当前可见
-	var delta: Vector2i = cell - pos
-	if float(delta.x) * float(delta.x) + float(delta.y) * float(delta.y) \
-			> float(_radius) * float(_radius):
+	# 格心欧氏距离式单源（S2-M2-3-g：_DistSq/_RadiusSq——两处口径不再漂移）
+	if _DistSq(pos, cell) > _RadiusSq():
 		return false
 	return BattleGrid.line_of_sight_clear(pos, cell, _is_opaque)
 
@@ -143,3 +142,17 @@ func _InBounds(cell: Vector2i) -> bool:
 	## 参数 cell：查询格
 	## 返回：true = 界内
 	return cell.x >= 0 and cell.x < _size.x and cell.y >= 0 and cell.y < _size.y
+
+func _RadiusSq() -> float:
+	## 视野半径平方（欧氏圆判定基数——单源）
+	## 参数：无
+	## 返回：半径平方
+	return float(_radius) * float(_radius)
+
+
+func _DistSq(from_cell: Vector2i, to_cell: Vector2i) -> float:
+	## 两格格心距离平方（欧氏——单源）
+	## 参数 from_cell/to_cell：起止格
+	## 返回：距离平方
+	var delta: Vector2i = to_cell - from_cell
+	return float(delta.x) * float(delta.x) + float(delta.y) * float(delta.y)

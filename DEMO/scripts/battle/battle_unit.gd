@@ -188,9 +188,12 @@ func spend_resource(kind: int, amount: int) -> bool:
 
 func take_damage(amount: int) -> bool:
 	## 承伤（减免轨已在 BattleRules 结算，此处直扣）：生命 ≤0 置 alive=false
-	## 即时退场标记（倒地者从目标选择/治疗对象中剔除）
-	## 参数 amount：最终伤害
+	## 即时退场标记（倒地者从目标选择/治疗对象中剔除）；非正值拒收
+	##（S2-M2-3-h 纯防御——负值会凭空回血）
+	## 参数 amount：最终伤害（须为正）
 	## 返回：true = 本次承伤致倒地
+	if amount <= 0:
+		return false
 	current_hp -= amount
 	if current_hp <= 0:
 		current_hp = 0

@@ -50,6 +50,7 @@ text = "回合 —"
 vertical_alignment = 1
 
 [node name="OrderTitle" type="Label" parent="TopBar/TopLayout"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 16
 text = "行动序："
@@ -181,12 +182,12 @@ offset_right = 200.0
 offset_bottom = 80.0
 grow_horizontal = 2
 theme_override_font_sizes/font_size = 18
-text = "（无战斗参数——经公会壳调试入口进入）"
+text = "（无战斗参数——显示待机提示）"
 horizontal_alignment = 1
 
 [node name="RetreatConfirm" type="ConfirmationDialog" parent="."]
 unique_name_in_owner = true
-dialog_text = "确认撤退？撤退将按委托失败结算。"
+dialog_text = "确认撤退？撤退将按委托失败结算，但队伍不会重伤，途中所得将丢弃。"
 ok_button_text = "撤退"
 cancel_button_text = "继续战斗"
 

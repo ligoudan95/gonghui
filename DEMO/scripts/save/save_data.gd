@@ -21,8 +21,10 @@ enum SavePoint {
 ## 存档结构版本（结构变更时递增；旧版拒载走 save_corrupt——拍板⑤。
 ## v2：M4 经营层——payload 增 &"guild" 公会快照键
 ## {day/gold/reputation/board{serial,board[],accepted[]}/recruit_pool{serial,
-## candidates[]}/facility_levels/roster[]/last_party_by_tpl/pending_tendency_levels}）
-const SCHEMA_VERSION: int = 2
+## candidates[]}/facility_levels/roster[]/last_party_by_tpl/pending_tendency_levels}。
+## v3：M4 增补批——轻度委托：QuestInstance 增 LIGHT_RUNNING 态（枚举尾追加，
+## 0-2 原值不动）与 work_days_left 字段（快照必填键——缺键/非法该实例跳过））
+const SCHEMA_VERSION: int = 3
 ## 公会壳场景名（C-4 单源：新档默认场景——SaveManager 占位与 SceneManager
 ## 注册表键同名；SaveManager 引用本常量（勿反向 preload SceneManager））
 const SCENE_GUILD_SHELL: StringName = &"guild_shell"

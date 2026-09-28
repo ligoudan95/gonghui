@@ -1,10 +1,19 @@
 ## 战斗结算面板（ResultPanel，PanelContainer——居中弹出）
-## 职责：终局结算展示——胜（「战斗胜利」+ 奖励占位文案）/ 败（「战败·全队
-## 重伤休养」占位）/ 撤退（「撤退成功·委托失败」占位）+ 战报摘要（回合数/
-## 倒地名单）+ 返回按钮（发出信号由 battle_screen 路由回公会壳）。
-## 数据来源：M1 批 3 方案 §7.1（ResultPanel 文案口径）。
+## 职责：终局结算展示——胜（「战斗胜利」）/ 败（「战败·全队重伤休养」——
+## 天数以回城结算为准，不在本面板硬编码）/ 撤退（「撤退成功·委托失败·
+## 无重伤」P1 口径）+ 战报摘要（回合数/倒地名单）+ 返回按钮（发出信号由
+## battle_screen 路由回公会壳）。
+## 数据来源：M1 批 3 方案 §7.1（ResultPanel 文案口径）；M-1/P1 文案修订。
 class_name ResultPanel
 extends PanelContainer
+
+## 返回按钮文案（M-6 拍板：按去向分流——探索通道（遭遇战/B 出口战胜回探索
+## 屏续跑）=「继续探索」；缺省（回城终结）=「返回公会」——常量惯例对齐
+## battle_screen.COMMON_ATTACK_NAME 先例）
+const RETURN_LABEL_EXPLORE: String = "继续探索"
+const RETURN_LABEL_GUILD: String = "返回公会"
+## 面板最小尺寸（S5-M5-1-h：原 Vector2 字面量提常量）
+const PANEL_MIN_SIZE: Vector2 = Vector2(420, 0)
 
 ## 返回按钮按下信号（battle_screen 连接并路由场景切换）
 signal return_pressed
@@ -23,7 +32,7 @@ func _ready() -> void:
 	## 返回：无
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 14)
-	box.custom_minimum_size = Vector2(420, 0)
+	box.custom_minimum_size = PANEL_MIN_SIZE
 	_title_label = Label.new()
 	_title_label.add_theme_font_size_override("font_size", 34)
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -34,7 +43,7 @@ func _ready() -> void:
 	_detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(_detail_label)
 	_return_button = Button.new()
-	_return_button.text = "返回公会"
+	_return_button.text = RETURN_LABEL_GUILD
 	# R3-08：占位字号档位化（弹出前布局按档位预估——tscn/默认值不参与体系）
 	_title_label.add_theme_font_size_override("font_size", UiTheme.FONT_HEADING)
 	_detail_label.add_theme_font_size_override("font_size", UiTheme.FONT_NORMAL)
@@ -43,6 +52,13 @@ func _ready() -> void:
 	box.add_child(_return_button)
 	add_child(box)
 	visible = false
+
+func set_return_label(return_to_explore: bool) -> void:
+	## 返回按钮文案分流（M-6 拍板——battle_screen 按 _return_to 通道调用）
+	## 参数 return_to_explore：true = 回探索屏续跑（继续探索）；false = 回公会
+	## 返回：无
+	_return_button.text = RETURN_LABEL_EXPLORE if return_to_explore \
+			else RETURN_LABEL_GUILD
 
 func show_result(result: BattleResult, name_lookup: Callable = Callable(),
 		cfg: CoreConfig = null) -> void:
@@ -63,17 +79,20 @@ func show_result(result: BattleResult, name_lookup: Callable = Callable(),
 			_title_label.text = "战斗胜利"
 			# B-3：金色高亮三处统一（序条/结算/徽章环共用 ui_highlight_gold_color）
 			_title_label.add_theme_color_override("font_color", victory_color)
-			_detail_label.text = "奖励结算（占位文案——M4 委托结算接入）"
+			# M-1：天数/奖励不在本面板硬编码——具体数值以回城结算面板为准
+			_detail_label.text = "奖励与经验将在回城结算时入账。"
 		BattleResult.ResultKind.DEFEAT:
 			_title_label.text = "战败·全队重伤休养"
 			_title_label.add_theme_color_override("font_color",
 					UiTheme.color_of(cfg, &"ui_result_defeat_color", UiTheme.RESULT_DEFEAT))
-			_detail_label.text = "全队重伤休养 3 天（占位文案——M2 战败流程接入）"
+			# M-1：休养天数随宿舍等级浮动——不在本面板硬编码，以回城结算为准
+			_detail_label.text = "全队将重伤休养——天数以回城结算为准。"
 		_:
 			_title_label.text = "撤退成功·委托失败"
 			_title_label.add_theme_color_override("font_color",
 					UiTheme.color_of(cfg, &"ui_result_retreat_color", UiTheme.RESULT_RETREAT))
-			_detail_label.text = "委托按失败结算（占位文案——M2 委托结算接入）"
+			# P1 拍板：撤退=委托失败但无重伤（文案与 RETREAT 单独映射口径同步）
+			_detail_label.text = "委托按失败结算，队伍不会重伤。"
 	var downed_text: String = "、".join(result.downed_units.map(func(unit_id):
 		if name_lookup.is_valid():
 			return String(name_lookup.call(unit_id))

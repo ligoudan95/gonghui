@@ -93,8 +93,10 @@ func start_event(event_id: StringName, run: ExpeditionRun) -> EventView:
 		view.node_id = event_id
 		# 单点视图：无检定事件挂单档出口（UI 直接结算）；有检定挂虚拟检定选项
 		if String(single.check_attr_id).is_empty():
-			# 无检定单档：立即结算（叙述+出口奖励一并落账）
-			_ResolveOutcome(view, single.success_outcome, false, false, null, run)
+			# 无检定单档：立即结算（叙述+出口奖励一并落账；成功语境——
+			# S2-d：无检定结算即终局，_MarkFinalized 拦 choose_option 二次结算）
+			_ResolveOutcome(view, single.success_outcome, false, false, true, null, run)
+			_MarkFinalized(run, event_id)
 		else:
 			view.options.append(_CheckOptionView(&"", single.display_name,
 					single.check_attr_id, single.difficulty_tier, 0))
@@ -167,7 +169,7 @@ func choose_option(event_id: StringName, option_id: StringName, actor: Adventure
 		var single_outcome: EventOutcomeDef = single.success_outcome if is_success \
 				else single.failure_outcome
 		_ResolveOutcome(view, single_outcome, is_crit_success, is_crit_failure,
-				modifier, run)
+				is_success, modifier, run)
 		_MarkFinalized(run, event_id)
 		return view
 	# 链内选项：去向出口（四档修饰在 resolve/终端节点结算时按档叠加）
@@ -181,21 +183,23 @@ func choose_option(event_id: StringName, option_id: StringName, actor: Adventure
 		outcome = option.failure_outcome
 	if outcome != null:
 		_ResolveOutcome(view, outcome, is_crit_success, is_crit_failure,
-				modifier, run)
+				is_success, modifier, run)
 	elif next_node_id != &"":
-		# E1：去向=下一节点型——档位与修饰三参透传（终端节点结算时叠加）
+		# E1：去向=下一节点型——档位与修饰透传（终端节点结算时叠加；
+		# is_success 同传——S2-M1 fallback 分流依据）
 		_FillNodeView(view, next_node_id, run, is_crit_success, is_crit_failure,
-				modifier)
+				is_success, modifier)
 	if view.options.is_empty():
 		_MarkFinalized(run, event_id)
 	return view
 
 func resolve_outcome(outcome: EventOutcomeDef, run: ExpeditionRun) -> EventView:
-	## 出口直解（战后 post_battle 消费口）：A 结算 + 文本视图
+	## 出口直解（战后 post_battle 消费口）：A 结算 + 文本视图（战胜语境——
+	## is_success=true，fallback 取 success 文案）
 	## 参数 outcome：出口（通常 post_battle）；run：运行态
 	## 返回：结算视图（narrative = 结算文本）
 	var view := EventView.new()
-	_ResolveOutcome(view, outcome, false, false, null, run)
+	_ResolveOutcome(view, outcome, false, false, true, null, run)
 	return view
 
 func build_battle_params(outcome: EventOutcomeDef, run: ExpeditionRun) -> BattleParams:
@@ -276,12 +280,14 @@ func _MarkFinalized(run: ExpeditionRun, event_id: StringName) -> void:
 	_finalized_events[run_key][event_id] = true
 
 func _ResolveOutcome(view: EventView, outcome: EventOutcomeDef, is_crit_success: bool,
-		is_crit_failure: bool, modifier: EventModifierDef, run: ExpeditionRun) -> void:
+		is_crit_failure: bool, is_success: bool, modifier: EventModifierDef,
+		run: ExpeditionRun) -> void:
 	## 出口结算：C/D 拦截（enabled_flags 缺注入时按未启用处理=拦截——仅置
 	## intercepted 标记，文本由 UI 层模板承载）；A → 奖励+授予+解锁；B → 战前
 	## 演出视图（宿主路由，奖励战后 post_battle 入账——E2-8）；修饰叠加与损耗
 	## 参数 view：目标视图；outcome：出口；is_crit_success/is_crit_failure：档位；
-	## modifier：本档修饰；run：运行态
+	## is_success：结算语境成败（S2-M1：fallback 文案分流依据——普通失败取
+	## failure 不再误取 success）；modifier：本档修饰；run：运行态
 	## 返回：无（view 回写文本/反馈增量）
 	if outcome == null:
 		return
@@ -291,7 +297,8 @@ func _ResolveOutcome(view: EventView, outcome: EventOutcomeDef, is_crit_success:
 		view.intercepted = true
 		view.pending_outcome = outcome
 		return
-	# 基础结算文本（按档取：plain → success/failure → crit 档）；终端节点
+	# 基础结算文本（按档取：plain → success/failure 按语境成败分流——
+	# S2-M1 根修：普通失败 fallback 不再误取 success 文案）；终端节点
 	# 叙述已先行入 view——结算文本**追加**不覆写（E2：叙述+结算均可见）；
 	# W2-7：默认档即 plain——原「plain 非空且无奖励时取 plain」elif 为死代码已删
 	var text_key: StringName = &"plain"
@@ -300,7 +307,7 @@ func _ResolveOutcome(view: EventView, outcome: EventOutcomeDef, is_crit_success:
 	elif is_crit_failure:
 		text_key = &"crit_failure"
 	var settle_text: String = outcome.texts.get(text_key, outcome.texts.get(
-			&"success" if not is_crit_failure else &"failure", ""))
+			&"success" if is_success else &"failure", ""))
 	if not settle_text.is_empty():
 		if view.narrative.is_empty():
 			view.narrative = settle_text
@@ -336,13 +343,13 @@ func _ResolveOutcome(view: EventView, outcome: EventOutcomeDef, is_crit_success:
 
 func _FillNodeView(view: EventView, node_id: StringName, run: ExpeditionRun,
 		is_crit_success: bool = false, is_crit_failure: bool = false,
-		modifier: EventModifierDef = null) -> void:
+		is_success: bool = true, modifier: EventModifierDef = null) -> void:
 	## 节点视图填充：叙述 + 选项清单（检定选项带属性·难度(线)标注）/ 终端
 	## 节点立即结算（A/C/D 落账、B 挂 pending 宿主路由）；去向节点 id 单源
-	## 回带（E6）；终端结算透传四档档位与修饰（E1）
+	## 回带（E6）；终端结算透传四档档位/成败语境与修饰（E1+S2-M1）
 	## 参数 view：目标视图；node_id：节点 id；run：运行态（终端结算落账）；
 	## is_crit_success/is_crit_failure：到达档位（CHECK 选项去向透传）；
-	## modifier：本档修饰（终端节点结算时叠加）
+	## is_success：结算语境成败（fallback 分流）；modifier：本档修饰
 	## 返回：无
 	var node: EventNodeDef = _Lookup(node_id) as EventNodeDef
 	if node == null:
@@ -353,11 +360,11 @@ func _FillNodeView(view: EventView, node_id: StringName, run: ExpeditionRun,
 		if node.outcome.exit_kind == EventOutcomeDef.ExitKind.B:
 			# B 出口：播叙述+战前结算（初始损耗）后由宿主路由战斗
 			_ResolveOutcome(view, node.outcome, is_crit_success, is_crit_failure,
-					modifier, run)
+					is_success, modifier, run)
 		else:
 			# A/C/D 终端：到达即结算（叙述+奖励/拦截——档位透传 E1）
 			_ResolveOutcome(view, node.outcome, is_crit_success, is_crit_failure,
-					modifier, run)
+					is_success, modifier, run)
 		return
 	for option_id: StringName in node.option_ids:
 		var option: EventOptionDef = _Lookup(option_id) as EventOptionDef
@@ -407,8 +414,8 @@ func _LayoutSlotsOf(token: StringName) -> Array[int]:
 	## 空 token = 默认分配（空序列）
 	## 参数 token：分布 token
 	## 返回：槽位序列（空 = 默认）
-	## 备注（E2-9 登记）：spread 映射正确——8×8 图 4 出生位下首排覆盖
-	## 偏窄属地图出生位配合问题，M3 地图层再调
+	## 备注（E2-9 **销项登记**——第五轮盲审裁定：spread 语义退化确认为
+	## 已知设计取舍，不动数据表、不追加行为；本注释为唯一载体）
 	if token == &"clustered":
 		return [0, 1, 2, 3]
 	if token == &"spread":

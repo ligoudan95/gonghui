@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://gvfc6crudcwu" path="res://scripts/scene_flow/title_screen.gd" id="1_title"]
 
-[node name="TitleScreen" type="Control" unique_id=1530598350]
+[node name="TitleScreen" type="Control" unique_id=1666783616]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -11,7 +11,7 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_title")
 
-[node name="Background" type="ColorRect" parent="." unique_id=1640287609]
+[node name="Background" type="ColorRect" parent="." unique_id=2028697704]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -20,7 +20,7 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0.08, 0.09, 0.12, 1)
 
-[node name="Center" type="CenterContainer" parent="." unique_id=1981393694]
+[node name="Center" type="CenterContainer" parent="." unique_id=2105950093]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -30,40 +30,64 @@ offset_bottom = 2.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="Layout" type="VBoxContainer" parent="Center" unique_id=2081602253]
+[node name="Layout" type="VBoxContainer" parent="Center" unique_id=1015736781]
 layout_mode = 2
 theme_override_constants/separation = 24
 
-[node name="TitleLabel" type="Label" parent="Center/Layout" unique_id=2142365542]
+[node name="TitleLabel" type="Label" parent="Center/Layout" unique_id=716741861]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 64
 text = "传奇冒险公会"
 horizontal_alignment = 1
 
-[node name="VersionLabel" type="Label" parent="Center/Layout" unique_id=710502124]
+[node name="VersionLabel" type="Label" parent="Center/Layout" unique_id=5002587]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 horizontal_alignment = 1
 
-[node name="StartButton" type="Button" parent="Center/Layout" unique_id=615920246]
+[node name="StartButton" type="Button" parent="Center/Layout" unique_id=273517057]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(240, 56)
 layout_mode = 2
 text = "开始"
 
-[node name="ContinueButton" type="Button" parent="Center/Layout" unique_id=647601086]
+[node name="SettingsButton" type="Button" parent="Center/Layout"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(240, 56)
+layout_mode = 2
+text = "设置"
+
+[node name="ContinueButton" type="Button" parent="Center/Layout" unique_id=824041193]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(240, 56)
 layout_mode = 2
 text = "继续"
 
-[node name="HintLabel" type="Label" parent="Center/Layout" unique_id=1931386958]
+[node name="HintLabel" type="Label" parent="Center/Layout" unique_id=1283561969]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
 horizontal_alignment = 1
 
+[node name="StartConfirm" type="ConfirmationDialog" parent="." unique_id=990550211]
+unique_name_in_owner = true
+ok_button_text = "开始新游戏"
+dialog_text = "已有存档——开始新游戏将覆盖现有存档，确定继续吗？"
+cancel_button_text = "取消"
+
+[node name="SettingsHost" type="Control" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
 [connection signal="pressed" from="Center/Layout/StartButton" to="." method="_on_start_pressed"]
 [connection signal="pressed" from="Center/Layout/ContinueButton" to="." method="_on_continue_pressed"]
+[connection signal="confirmed" from="StartConfirm" to="." method="_on_start_confirm_confirmed"]
+[connection signal="pressed" from="Center/Layout/SettingsButton" to="." method="_on_settings_pressed"]

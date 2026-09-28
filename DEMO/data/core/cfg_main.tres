@@ -20,7 +20,7 @@ enabled_systems = Dictionary[StringName, bool]({
 &"map_explore": true,
 &"npc_place": false,
 &"quest": true,
-&"quest_noncombat": false,
+&"quest_noncombat": true,
 &"second_class": false,
 &"shop": false,
 &"status": true,
@@ -120,6 +120,10 @@ ui_overlay_blocked_border_color = Color(0.45, 0.45, 0.5, 0.85)
 ui_overlay_blocked_slash_color = Color(0.55, 0.55, 0.6, 0.9)
 ui_overlay_path_color = Color(1, 0.9, 0.4, 0.6)
 ui_overlay_confirm_color = Color(1, 0.95, 0.5, 0.75)
+ui_damage_crit_color = Color(1, 0.4, 0.3, 1)
+ui_damage_normal_color = Color(1, 0.9, 0.6, 1)
+ui_tips_line1_color = Color(0.98, 0.6, 0.5, 1)
+ui_tips_line2_color = Color(0.85, 0.88, 0.9, 1)
 ui_log_system_color = Color(0.85, 0.88, 0.9, 1)
 ui_log_damage_color = Color(0.98, 0.55, 0.45, 1)
 ui_log_heal_color = Color(0.5, 0.9, 0.55, 1)
@@ -167,7 +171,7 @@ content_encounter_weights_min = 2
 content_encounter_weights_max = 2
 calendar_week_days = 7
 calendar_week_display = true
-day_settle_pipeline = Array[String](["day_advance", "recovery", "recruit_refresh", "quest_countdown", "summary"])
+day_settle_pipeline = Array[String](["day_advance", "recovery", "recruit_refresh", "quest_countdown", "quest_noncombat_advance", "summary"])
 initial_gold = 500
 recruit_pool_capacity = 3
 recruit_cost_low = 225
@@ -188,10 +192,16 @@ quest_board_size = 3
 quest_week_draw = 3
 quest_excess_bonus_per_head = 0.15
 quest_replace_time_limit = 3
-content_quest_templates_min = 9
-content_quest_templates_max = 9
-content_quest_board_min = 8
-content_quest_board_max = 8
+content_quest_templates_min = 12
+content_quest_templates_max = 12
+content_quest_board_min = 11
+content_quest_board_max = 11
+quest_light_reward_exp_min = 10
+quest_light_reward_exp_max = 60
+quest_light_reward_gold_min = 20
+quest_light_reward_gold_max = 120
+quest_light_reward_reputation_min = 0
+quest_light_reward_reputation_max = 5
 content_quest_grant_min = 1
 content_quest_grant_max = 1
 content_facilities_min = 2

@@ -24,6 +24,28 @@ func before_test() -> void:
 	var no_params: Dictionary = {}
 	scene_manager.pending_params = no_params
 	get_tree().root.get_node("SaveManager").set_expedition_lock(false)
+	# M-10：套件卫生统一（P1/P4 用例触真实 GuildState 写档）——统一复位
+	_ResetAutoloadState()
+
+func after_test() -> void:
+	## 用例级后置：清盘（写入的存档不遗留——失败路径也必达）
+	## 参数：无
+	## 返回：无
+	_ResetAutoloadState()
+
+func _ResetAutoloadState() -> void:
+	## 存档目录清盘（含 .bak/.tmp 幂等）+ SaveManager/GuildState 复位
+	## 参数：无
+	## 返回：无
+	for entry_name: String in ["main_save.json", "main_save.json.bak", "main_save.json.tmp"]:
+		DirAccess.remove_absolute("user://saves/" + entry_name)
+	var save_manager: Node = get_tree().root.get_node_or_null("SaveManager")
+	if save_manager != null:
+		save_manager.current = null
+		save_manager.set_expedition_lock(false)
+	var guild_state: Node = get_tree().root.get_node_or_null("GuildState")
+	if guild_state != null:
+		guild_state.core = GuildCore.new()
 
 func _WaitFrames(frames: int) -> void:
 	## 帧等待助手
@@ -174,7 +196,7 @@ func test_chain1_full_clear_quest_to_delivery() -> void:
 	(screen.get_node("%SettlementButton") as Button).pressed.emit()
 	await _WaitFrames(4)
 	assert_object(get_tree().root.find_child("GuildShell", true, false)).is_not_null()
-	assert_bool(get_tree().root.get_node("SaveManager")._expedition_lock).is_false()
+	assert_bool(get_tree().root.get_node("SaveManager").is_expedition_locked()).is_false()
 
 func test_chain2_secret_door_success_and_failure_branches() -> void:
 	## 验收②暗门双分支：感知 20 队（调整值 +5·除数 2，极难线 17）——
@@ -293,7 +315,7 @@ func test_chain4_retreat_discards_and_new_session_resets() -> void:
 	# 回城（通道②撤退解锁）→ 新出征：实例重置
 	(screen.get_node("%SettlementButton") as Button).pressed.emit()
 	await _WaitFrames(4)
-	assert_bool(get_tree().root.get_node("SaveManager")._expedition_lock).is_false()
+	assert_bool(get_tree().root.get_node("SaveManager").is_expedition_locked()).is_false()
 	assert_object(get_tree().root.find_child("GuildShell", true, false)).is_not_null()
 	# 新出征：实例重置（M4 批 2：出征入口移驻协会屏——同构 run 直开探索屏
 	# 验证会话重置语义）
@@ -340,7 +362,7 @@ func test_lock_channel_defeat_terminates_and_unlocks() -> void:
 	assert_bool(screen.get_node("%SettlementBody").text.contains("收获申报")).is_false()
 	(screen.get_node("%SettlementButton") as Button).pressed.emit()
 	await _WaitFrames(4)
-	assert_bool(get_tree().root.get_node("SaveManager")._expedition_lock).is_false()
+	assert_bool(get_tree().root.get_node("SaveManager").is_expedition_locked()).is_false()
 
 func test_lock_channel_all_downed_after_victory_terminates() -> void:
 	## 锁通道④全倒地：胜利但全队倒地回传 → 占位终结（委托失败）→ 回城解锁
@@ -351,7 +373,63 @@ func test_lock_channel_all_downed_after_victory_terminates() -> void:
 	assert_str(screen.get_node("%SettlementBody").text).contains("全员倒地")
 	(screen.get_node("%SettlementButton") as Button).pressed.emit()
 	await _WaitFrames(4)
-	assert_bool(get_tree().root.get_node("SaveManager")._expedition_lock).is_false()
+	assert_bool(get_tree().root.get_node("SaveManager").is_expedition_locked()).is_false()
+
+func test_p1_battle_retreat_maps_retreat_no_injury() -> void:
+	## P1 拍板回归：战斗层撤退（ResultKind.RETREAT）单独映射 RETREAT 出口
+	##（不与 DEFEAT 同轨）——结算标题=委托失败、正文含「无重伤」且无休养行、
+	## 名册全员保持健康（撤退不触发重伤）
+	var guild_state: Node = get_tree().root.get_node("GuildState")
+	guild_state.core = GuildCore.new()
+	guild_state.new_game()
+	var core: GuildCore = guild_state.core
+	core.board.board.clear()
+	var inst: QuestInstance = core.board.spawn_on_board(&"q_lair_purge", core.day)
+	var party: Array[StringName] = [core.roster[0].unit_id, core.roster[1].unit_id,
+			core.roster[2].unit_id]
+	assert_bool(core.accept_quest(inst.serial, party)).is_true()
+	assert_bool(core.start_expedition(inst.serial)).is_true()
+	var run: ExpeditionRun = guild_state.build_expedition_run(inst)
+	var screen: Control = await _ResumeExplore(run,
+			_MakeResult(BattleResult.ResultKind.RETREAT, 12, false))
+	assert_bool(screen.get_node("%SettlementPanel").visible).is_true()
+	assert_str(screen.get_node("%SettlementTitle").text).contains("委托失败")
+	assert_str(screen.get_node("%SettlementBody").text).contains("无重伤")
+	assert_bool(screen.get_node("%SettlementBody").text.contains("休养")).is_false()
+	# RETREAT≠DEFEAT：名册无人进重伤休养
+	for adv: AdventurerData in core.roster:
+		assert_int(adv.status).is_equal(AdventurerData.Status.HEALTHY)
+
+func test_p1_retreat_with_downed_member_still_no_injury() -> void:
+	## 低危 3（P1 输入形态补全）：战斗中已有队员倒地时撤退——RETREAT 分支
+	## 先于 all_downed/DEFEAT 判定，倒地≠重伤，仍走无重伤口径（名册全员健康）
+	var guild_state: Node = get_tree().root.get_node("GuildState")
+	guild_state.core = GuildCore.new()
+	guild_state.new_game()
+	var core: GuildCore = guild_state.core
+	core.board.board.clear()
+	var inst: QuestInstance = core.board.spawn_on_board(&"q_lair_purge", core.day)
+	var party: Array[StringName] = [core.roster[0].unit_id, core.roster[1].unit_id,
+			core.roster[2].unit_id]
+	assert_bool(core.accept_quest(inst.serial, party)).is_true()
+	assert_bool(core.start_expedition(inst.serial)).is_true()
+	var run: ExpeditionRun = guild_state.build_expedition_run(inst)
+	# 回传结果：roster[0] 倒地（终局 0 血）、roster[1] 存活——unit_id 对真名册
+	var result := BattleResult.new()
+	result.kind = BattleResult.ResultKind.RETREAT
+	var stats: Array[Dictionary] = []
+	stats.append({&"unit_id": core.roster[0].unit_id, &"end_hp": 0, &"downed": true})
+	stats.append({&"unit_id": core.roster[1].unit_id, &"end_hp": 12, &"downed": false})
+	result.end_stats = stats
+	var screen: Control = await _ResumeExplore(run, result)
+	# 倒地已真实带回（输入形态成立）
+	assert_bool(run.downed.get(core.roster[0], false)).is_true()
+	assert_bool(screen.get_node("%SettlementPanel").visible).is_true()
+	assert_str(screen.get_node("%SettlementTitle").text).contains("委托失败")
+	assert_str(screen.get_node("%SettlementBody").text).contains("无重伤")
+	# 撤退（含带倒地者）不触发重伤——全名册保持健康
+	for adv: AdventurerData in core.roster:
+		assert_int(adv.status).is_equal(AdventurerData.Status.HEALTHY)
 
 # --------------------------------------------------------------------------
 # M3 质检修复批（43 项——高危/中危补测）
@@ -584,7 +662,7 @@ func test_l7_free_explore_session_deliverable() -> void:
 	assert_str(screen.get_node("%SettlementBody").text).contains("收获申报")
 	(screen.get_node("%SettlementButton") as Button).pressed.emit()
 	await _WaitFrames(4)
-	assert_bool(get_tree().root.get_node("SaveManager")._expedition_lock).is_false()
+	assert_bool(get_tree().root.get_node("SaveManager").is_expedition_locked()).is_false()
 
 func test_x3_02_board_fits_design_space_with_banner() -> void:
 	## X3-02/X3-16：设计空间 1920×1080 下板面完整可见（含横幅出现重适配），

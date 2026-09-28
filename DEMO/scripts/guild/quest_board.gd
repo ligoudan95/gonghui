@@ -1,5 +1,6 @@
 ## 委托板（QuestBoard，RefCounted 纯逻辑类）
-## 职责：委托板运转与实例状态机——开局预生成/周刷新抽池（板刷池 8 不放回抽 3、
+## 职责：委托板运转与实例状态机——开局预生成/周刷新抽池（板刷池 11 不放回抽 3
+##（M4 增补批 8 战斗+3 轻度混刷）、
 ## 同批不重复、跨周重置）、板上到期三表现（刷新补位/消失/替换）、挂单到期自动
 ## 失败、接取/重编队/出征/放弃的状态迁移与人力占用口径。
 ## 数据来源：案 6 §2.2（运转规则定稿）/§2.4（执行结构与占用 D6）；
@@ -142,8 +143,12 @@ func settle_expirations(day: int) -> Dictionary:
 		result[&"week_refreshed"] = true
 	else:
 		_SettleBoardExpirations(day, result)
-	# 挂单到期失败照常（周刷新日不跳过——案 2 §2.5 口径）
+	# 挂单到期失败照常（周刷新日不跳过——案 2 §2.5 口径）；LIGHT_RUNNING 轻度
+	# 进行中**跳过**（最高风险拦截点：防原板上 5 天时限线误杀进行中轻度——
+	# 轻度生命周期唯一权威=work_days_left 归零自动结算，不经到期线）
 	for inst: QuestInstance in accepted.duplicate():
+		if inst.state == QuestInstance.State.LIGHT_RUNNING:
+			continue
 		if CalendarCore.is_expired(day, inst.expire_day):
 			accepted.erase(inst)
 			result[&"accepted_failed"].append(String(inst.template_id))
@@ -212,6 +217,20 @@ func start(inst: QuestInstance) -> bool:
 	if inst.state != QuestInstance.State.ACCEPTED or not accepted.has(inst):
 		return false
 	inst.state = QuestInstance.State.IN_PROGRESS
+	return true
+
+func start_light(inst: QuestInstance) -> bool:
+	## 轻度开工（M4 增补批）：ACCEPTED → LIGHT_RUNNING + work_days_left 初始化
+	## 为模板 duration_days（一步开工——校验在 GuildCore 门面 start_light_quest）
+	## 参数 inst：挂单实例
+	## 返回：true = 迁移成功；模板查无/态不符返回 false
+	if inst.state != QuestInstance.State.ACCEPTED or not accepted.has(inst):
+		return false
+	var tpl: QuestTemplateDef = game_data.get_record(inst.template_id) as QuestTemplateDef
+	if tpl == null or tpl.duration_days < 1:
+		return false
+	inst.state = QuestInstance.State.LIGHT_RUNNING
+	inst.work_days_left = tpl.duration_days
 	return true
 
 func remove(inst: QuestInstance) -> void:
@@ -316,17 +335,27 @@ func to_snapshot() -> Dictionary:
 
 func restore_snapshot(data: Dictionary) -> void:
 	## 快照恢复（键缺失或实例损坏时保守清空对应槽——存档结构问题在
-	## SaveManager 层已由 schema_version 拦截，此处只做容错重建）
+	## SaveManager 层已由 schema_version 拦截，此处只做容错重建；
+	## **容器类型不符保守清空**（S3-M2 拍板——board/accepted 被破坏成
+	## Dictionary/标量时不再 SCRIPT ERROR，清空重建、读档可继续））
 	## 参数 data：to_snapshot 产出的 Dictionary
 	## 返回：无
 	board.clear()
 	accepted.clear()
 	serial = int(data.get("serial", 1))
-	for inst_data: Dictionary in data.get("board", []):
-		var inst: QuestInstance = QuestInstance.from_dict(inst_data)
-		if inst != null:
-			board.append(inst)
-	for inst_data: Dictionary in data.get("accepted", []):
-		var inst: QuestInstance = QuestInstance.from_dict(inst_data)
-		if inst != null:
-			accepted.append(inst)
+	var board_data: Variant = data.get("board", [])
+	if board_data is Array:
+		for inst_data: Variant in board_data:
+			if not (inst_data is Dictionary):
+				continue
+			var inst: QuestInstance = QuestInstance.from_dict(inst_data)
+			if inst != null:
+				board.append(inst)
+	var accepted_data: Variant = data.get("accepted", [])
+	if accepted_data is Array:
+		for inst_data: Variant in accepted_data:
+			if not (inst_data is Dictionary):
+				continue
+			var inst: QuestInstance = QuestInstance.from_dict(inst_data)
+			if inst != null:
+				accepted.append(inst)

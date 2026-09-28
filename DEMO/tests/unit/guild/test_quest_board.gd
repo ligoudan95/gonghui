@@ -236,18 +236,31 @@ func test_accept_same_template_blocked() -> void:
 	assert_str(_core.last_error).contains("同模板委托已在挂单")
 
 func test_abort_expedition_restores_state() -> void:
-	## M4 回退口：abort_expedition——IN_PROGRESS 回 ACCEPTED + 出征日标记恢复
+	## M4 回退口：abort_expedition——IN_PROGRESS 回 ACCEPTED + 出征日标记按快照
+	## 恢复（缺键保持现值——部分快照不误伤未记录成员）；全量快照（生产形态=
+	## 协会屏 go 失败回退）恢复后可重出征
 	_core.board.board.clear()
 	var inst: QuestInstance = _core.board.spawn_on_board(&"q_lair_purge", 1)
 	assert_bool(_core.accept_quest(inst.serial, _RosterIds(3))).is_true()
 	assert_bool(_core.start_expedition(inst.serial)).is_true()
 	assert_int(_core.roster[0].last_expedition_day).is_equal(1)
+	# 全量快照：全员恢复 0 → 回 ACCEPTED 后当日可重出征（生产路径形态）
+	var full_snapshot: Dictionary = {}
+	for member_id: StringName in inst.party_ids:
+		full_snapshot[String(member_id)] = 0
+	assert_bool(_core.abort_expedition(inst.serial, full_snapshot)).is_true()
+	assert_int(inst.state).is_equal(QuestInstance.State.ACCEPTED)
+	assert_int(_core.roster[0].last_expedition_day).is_equal(0)
+	assert_bool(_core.start_expedition(inst.serial)).is_true()
+	# 部分快照：仅 roster[0] 恢复 0；未记录的 roster[1] 保持当日标记 1——
+	# 当日重出征被「每日一次」拦截（缺键不清 0 的可观察后果）
 	assert_bool(_core.abort_expedition(inst.serial,
 			{String(_core.roster[0].unit_id): 0})).is_true()
 	assert_int(inst.state).is_equal(QuestInstance.State.ACCEPTED)
 	assert_int(_core.roster[0].last_expedition_day).is_equal(0)
 	assert_int(_core.roster[1].last_expedition_day).is_equal(1)
-	assert_bool(_core.start_expedition(inst.serial)).is_true()
+	assert_bool(_core.start_expedition(inst.serial)).is_false()
+	assert_str(_core.last_error).contains("每日一次")
 
 func test_setup_resets_accepted_and_badge() -> void:
 	## G-1 回归：同 core 连续两次 setup——挂单清空/占用释放/角标复位

@@ -249,15 +249,15 @@ func test_same_template_copies_settle_by_serial_and_progress() -> void:
 	run.quest_serial = inst.serial
 	_core.settle_expedition(run, GuildCore.ExpeditionOutcome.SUCCESS)
 	# 出征实例（IN_PROGRESS）已移除；板上副本仍在板
-	assert_int(_core.board.find_accepted(inst.serial) != null).is_equal(false)
-	assert_int(_core.board.find_on_board(board_copy.serial) != null).is_equal(true)
+	assert_object(_core.board.find_accepted(inst.serial)).is_null()
+	assert_object(_core.board.find_on_board(board_copy.serial)).is_not_null()
 	assert_int(_core.board.in_progress_count()).is_equal(0)
 	# 未携带 serial 的旧式 run：IN_PROGRESS 优先匹配同样命中（再造一组）
 	var inst_b: QuestInstance = _SpawnAndStart(&"q_north_survey", 2)
 	_core.board.spawn_on_board(&"q_north_survey", 1)
 	var legacy_run := _MakeRun(&"q_north_survey", 2)
 	_core.settle_expedition(legacy_run, GuildCore.ExpeditionOutcome.RETREAT)
-	assert_int(_core.board.find_accepted(inst_b.serial) != null).is_equal(false)
+	assert_object(_core.board.find_accepted(inst_b.serial)).is_null()
 	assert_int(_core.board.in_progress_count()).is_equal(0)
 
 func test_run_rewards_cashed_in() -> void:
@@ -281,8 +281,11 @@ func test_lock_released_before_return_settled_autosave() -> void:
 	## RETURN_SETTLED autosave 不被 #26 跳过（save_written 收到时点）
 	var save_manager: Node = load(SAVE_MANAGER_SCRIPT).new()
 	add_child(save_manager)
+	# 修复批次 3（套件隔离）：局部 GuildState 不 add_child——避免 _ready 的
+	# bind 命中真 autoload SaveManager 覆写其 provider（局部实例释放后真 SM
+	# 残留悬空 Callable，套件顺序一变即 errors）；手动等价初始化后直用
 	var state: Node = load(GUILD_STATE_SCRIPT).new()
-	add_child(state)
+	state.core = GuildCore.new()
 	var rng := _MakeRng(202)
 	state._rng = rng
 	state.bind(save_manager, _game_data)
@@ -309,3 +312,65 @@ func test_lock_released_before_return_settled_autosave() -> void:
 	assert_bool(FileAccess.file_exists(SAVE_PATH)).is_true()
 	state.free()
 	save_manager.free()
+
+func test_p3_failure_outcomes_cash_zero_event_rewards() -> void:
+	## P3 拍板回归：失败出口零入账——RETREAT/DEFEAT 出口的事件/宝箱累计奖励
+	## 不入账（修复前 _SettleRunRewards 无出口判定，失败也吃途中所得）
+	_SpawnAndStart(&"q_lair_purge", 3)
+	var run := _MakeRun(&"q_lair_purge", 3)
+	run.add_reward(15, 20, 1)
+	var gold_before: int = _core.gold
+	var reputation_before: int = _core.reputation
+	var summary = _core.settle_expedition(run, GuildCore.ExpeditionOutcome.RETREAT)
+	assert_int(_core.gold).is_equal(gold_before)
+	assert_int(_core.reputation).is_equal(reputation_before)
+	assert_int(summary.gold_gained).is_equal(0)
+	assert_int(summary.reputation_gained).is_equal(0)
+	assert_bool(summary.exp_gained.is_empty()).is_true()
+	# DEFEAT 出口同口径（另一会话——零入账+重伤不受途中所得影响）
+	_SpawnAndStart(&"q_lair_purge", 3)
+	var defeat_run := _MakeRun(&"q_lair_purge", 3)
+	defeat_run.add_reward(15, 20, 1)
+	var defeat_summary = _core.settle_expedition(defeat_run,
+			GuildCore.ExpeditionOutcome.DEFEAT)
+	assert_int(_core.gold).is_equal(gold_before)
+	assert_int(_core.reputation).is_equal(reputation_before)
+	assert_int(defeat_summary.gold_gained).is_equal(0)
+	assert_int(defeat_summary.injury_rest_days).is_equal(3)
+
+func test_p4_free_explore_defeat_injures_party() -> void:
+	## P4 拍板回归：自由探索（无委托会话）战败——同战败重伤口径（DEFEAT 分支
+	## 移出委托早退路径；修复前无委托会话战败不重伤）
+	var run := _MakeRun(&"", 3)
+	var gold_before: int = _core.gold
+	var summary = _core.settle_expedition(run, GuildCore.ExpeditionOutcome.DEFEAT)
+	assert_int(summary.injury_rest_days).is_equal(3)
+	for index: int in 3:
+		assert_int(_core.roster[index].status).is_equal(AdventurerData.Status.RESTING)
+	# 无奖励入账；板凳成员不受牵连
+	assert_int(_core.gold).is_equal(gold_before)
+	assert_int(_core.roster[3].status).is_equal(AdventurerData.Status.HEALTHY)
+
+func test_m1_injury_remaining_matches_roster_short_trip() -> void:
+	## M-1 拍板口径：面板休养天数=补结算后剩余（与名册一致）——短途 1 天：
+	## 应用 3 − 补结算 1 = 剩 2（修复前面板显示应用值 3 与名册 2 不一致）
+	_SpawnAndStart(&"q_lair_purge", 3)
+	var summary = _core.settle_expedition(_MakeRun(&"q_lair_purge", 3, 1),
+			GuildCore.ExpeditionOutcome.DEFEAT)
+	assert_int(summary.injury_rest_days).is_equal(3)
+	assert_int(summary.injury_rest_days_remaining).is_equal(2)
+	for index: int in 3:
+		assert_int(_core.roster[index].rest_days).is_equal(2)
+		assert_int(_core.roster[index].status).is_equal(AdventurerData.Status.RESTING)
+
+func test_m1_injury_remaining_matches_roster_long_trip() -> void:
+	## M-1 拍板口径：长途 3 天——补结算期休养耗尽，剩余 0、全员已恢复
+	##（面板不再出休养行——与名册一致）
+	_SpawnAndStart(&"q_lair_purge", 3)
+	var summary = _core.settle_expedition(_MakeRun(&"q_lair_purge", 3, 3),
+			GuildCore.ExpeditionOutcome.DEFEAT)
+	assert_int(summary.injury_rest_days).is_equal(3)
+	assert_int(summary.injury_rest_days_remaining).is_equal(0)
+	for index: int in 3:
+		assert_int(_core.roster[index].status).is_equal(AdventurerData.Status.HEALTHY)
+		assert_int(_core.roster[index].rest_days).is_equal(0)

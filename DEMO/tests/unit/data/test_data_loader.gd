@@ -16,6 +16,8 @@ var _game_data: Node
 var _original_cfg_text: String = ""
 ## 热重载用例的 map_m1 原文缓存（W4-11 同口径兜底还原）
 var _original_map_text: String = ""
+## 技能表探针字段还原缓存（S3-M1 用例——after 兜底还原）
+var _original_skill_text: String = ""
 
 func after() -> void:
 	## 套件后置：热重载用例兜底还原（原文缓存非空 = 用例中断未还原）
@@ -33,6 +35,12 @@ func after() -> void:
 		map_restorer.store_string(_original_map_text)
 		map_restorer.close()
 		_original_map_text = ""
+	if not _original_skill_text.is_empty():
+		var skill_restorer: FileAccess = FileAccess.open(
+				"res://data/class/skills/skl_arcanist_bewitch.tres", FileAccess.WRITE)
+		skill_restorer.store_string(_original_skill_text)
+		skill_restorer.close()
+		_original_skill_text = ""
 
 func before() -> void:
 	## 套件前置：实例化 GameData 脚本节点并显式初始化（扫描全数据域）
@@ -200,3 +208,34 @@ func test_game_config_shares_instance_with_game_data() -> void:
 	assert_object(game_config._config) \
 			.is_same(_game_data.get_record(CoreConfig.CFG_MAIN_ID)) \
 			.override_failure_message("GameConfig 与 GameData 的 cfg_main 须共享同一实例")
+
+func test_s3m1_reload_skill_domain_preserves_resource_fields() -> void:
+	## S3-M1 回归：skills 域热重载 resource_* 业务字段保真——原 copy_props
+	## `begins_with("resource_")` 前缀判据误伤（resource_cost/resource_type
+	## 被当内建跳过，旧引用见旧值）。改盘 resource_cost 10 → 99 → reload →
+	## 旧实例同址且新值生效；还原后复原
+	var skill_path: String = "res://data/class/skills/skl_arcanist_bewitch.tres"
+	_original_skill_text = FileAccess.open(skill_path, FileAccess.READ).get_as_text()
+	var before: SkillDef = _game_data.get_record(&"skl_arcanist_bewitch") as SkillDef
+	assert_int(before.resource_cost).is_equal(10)
+	# ①改盘：resource_cost 10 → 99
+	var probe_line: String = "resource_cost = 10"
+	assert_bool(_original_skill_text.contains(probe_line)).is_true()
+	var writer: FileAccess = FileAccess.open(skill_path, FileAccess.WRITE)
+	writer.store_string(_original_skill_text.replace(probe_line, "resource_cost = 99"))
+	writer.close()
+	# ②热重载：内存值更新 + 同址刷新
+	_game_data.reload_domain(&"class/skills")
+	var reloaded: SkillDef = _game_data.get_record(&"skl_arcanist_bewitch") as SkillDef
+	assert_int(reloaded.resource_cost).is_equal(99) \
+			.override_failure_message("resource_cost 被前缀判据误伤——热重载旧值残留")
+	assert_object(reloaded).is_same(before)
+	# ③还原
+	var restorer: FileAccess = FileAccess.open(skill_path, FileAccess.WRITE)
+	restorer.store_string(_original_skill_text)
+	restorer.close()
+	_game_data.reload_domain(&"class/skills")
+	assert_int((_game_data.get_record(&"skl_arcanist_bewitch") as SkillDef)
+			.resource_cost).is_equal(10)
+	_original_skill_text = ""
+

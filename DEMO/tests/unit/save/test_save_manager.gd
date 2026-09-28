@@ -92,7 +92,7 @@ func test_roundtrip_consistency() -> void:
 	_save_manager.current = null
 	var loaded: SaveData = _save_manager.load_game()
 	assert_object(loaded).is_not_null()
-	assert_int(loaded.schema_version).is_equal(2)
+	assert_int(loaded.schema_version).is_equal(SaveData.SCHEMA_VERSION)
 	assert_int(loaded.save_point).is_equal(SaveData.SavePoint.RETURN_SETTLED)
 	assert_int(loaded.game_day).is_equal(42)
 	assert_str(loaded.mode).is_equal("demo")
@@ -122,7 +122,7 @@ func test_expedition_lock_blocks_autosave() -> void:
 	var unlocked: String = _ReadSaveText()
 	assert_str(unlocked).is_not_equal(baseline)
 
-func test_save_point_enum_has_four_values() -> void:
+func test_save_point_enum_values_persist() -> void:
 	## SavePoint 枚举恰五值（#26 定稿四时点 + M4 追加 NEW_GAME——枚举尾追加，
 	## 既有序号不变；v2 起 payload 增 &"guild" 公会快照键）
 	assert_int(SaveData.SavePoint.size()).is_equal(5)
@@ -298,14 +298,14 @@ func test_expedition_lock_reset_on_new_game_and_load() -> void:
 	# new_game 路径：锁 → 新档建立 → 锁解除
 	_save_manager.set_expedition_lock(true)
 	_save_manager.new_game()
-	assert_bool(_save_manager._expedition_lock).is_false() \
+	assert_bool(_save_manager.is_expedition_locked()).is_false() \
 			.override_failure_message("new_game 后出征锁应重置（S5-3）")
 	# load 路径：锁 → 解除 current → load_game 成功 → 锁解除
 	_save_manager.set_expedition_lock(true)
 	_save_manager.current = null
 	var loaded: SaveData = _save_manager.load_game()
 	assert_object(loaded).is_not_null()
-	assert_bool(_save_manager._expedition_lock).is_false() \
+	assert_bool(_save_manager.is_expedition_locked()).is_false() \
 			.override_failure_message("load_game 成功后出征锁应重置（S5-3）")
 
 func test_is_int_like_rejects_bool() -> void:

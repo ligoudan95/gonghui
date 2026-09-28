@@ -52,6 +52,10 @@ const UI_TEXTS: Dictionary = {
 	&"target_done": "目标已达成——回村口出口交付。",
 	&"move_blocked": "那边过不去。",
 	&"path_blocked": "（此路当前不通。）",
+	&"status_line": "委托『%s』｜%s｜耗时 %d 天｜HP：%s",
+	&"hp_downed": "倒地",
+	&"hp_group_prefix": "HP：",
+	&"status_join": "｜",
 	&"quest_granted": "新委托『%s』已加入挂单列表。",
 	&"quest_grant_dup": "这桩委托已经在挂单里了。",
 	&"treasure_opened": "撬开矿箱——+%d 金。",
@@ -59,15 +63,21 @@ const UI_TEXTS: Dictionary = {
 	&"encounter_won": "遭遇战胜利——原地整备，继续前进。",
 	&"all_downed": "全员倒地——队伍被抬回了公会，这次出征到此为止。",
 	&"battle_defeat": "队伍败退——委托失败。",
-	&"retreat_failed": "撤退回城——委托未达成，出征进度不保留。",
+	&"battle_defeat_free": "队伍败退——探索中止。",
+	&"battle_retreat": "从战斗中撤退——委托失败，队伍平安回城（无重伤）。",
+	&"battle_retreat_free": "从战斗中撤退——探索中止，队伍平安回城（无重伤）。",
+	&"retreat_failed": "撤退回城——委托未达成、无重伤，出征进度不保留。",
+	&"retreat_free_failed": "撤退回城——探索中止、无重伤，出征进度不保留。",
 	&"settle_success": "委托达成",
 	&"settle_free_explore": "自由探索结束",
 	&"settle_failed": "委托失败",
+	&"settle_free_failed": "探索中止",
 	&"settle_body": "收获申报：%d 经验 · %d 金 · %d 声望（途中所得一并计入）｜出征耗时 %d 天",
 	&"settle_bench": "留守训练：%d 名板凳成员各分享 %d 经验。",
-	&"settle_injury": "全队负伤，需休养 %d 天（自回城日起算）——休养期间不可出征。",
+	&"settle_injury": "全队负伤，需休养 %d 天——休养期间不可出征。",
 	&"settle_granted": "新委托入单：%s（到协会挂单区查看）。",
 	&"settle_days": "你们在外期间公会照常运转——日历已推进 %d 天。",
+	&"settle_rewards_voided": "队伍未能全功而归——途中所得未入账，收获全部作废。",
 	&"settle_save_failed": "⚠ 存档写入失败——本次结算进度未落盘，请重试或从最近存档继续。",
 	&"route_failed": "进入战斗失败——请重试。",
 	&"map_missing": "探索图数据缺失——无法开始探索。（占位提示——M4 出征层接管）",
@@ -160,7 +170,10 @@ func _ready() -> void:
 	%RetreatConfirm.confirmed.connect(_OnRetreatConfirmConfirmed)
 	%SettlementButton.pressed.connect(_OnSettleReturnPressed)
 	gui_input.connect(_OnGuiInput)
-	get_node("/root/SaveManager").set_expedition_lock(true)
+	# S3-M5-1-d：SaveManager 空守卫（同文件他处 get_node_or_null 惯例）
+	var save_manager: Node = get_node_or_null("/root/SaveManager")
+	if save_manager != null:
+		save_manager.set_expedition_lock(true)
 	_ApplyFontTiers()
 	# 图数据缺失降级（L8）：提示 + 回城出口——不废屏（数据错误不惩罚玩家——RETREAT 口径）
 	if _map_def == null:
@@ -315,10 +328,13 @@ func _FitBoard() -> void:
 	_board.center_in_host(%BoardHost.size)
 
 func _FitBoardInitial() -> void:
-	## 首帧适配（布局落定后取实际可用空间；后续经 resized 信号重适配）
+	## 首帧适配（布局落定后取实际可用空间；后续经 resized 信号重适配；
+	## S4-M4-3-k：await 期间屏可能已终结/板面已拆——有效性早退防悬空访问）
 	## 参数：无
 	## 返回：无（协程——fire-and-forget）
 	await get_tree().process_frame
+	if _board == null or not is_inside_tree():
+		return
 	_FitBoard()
 
 func _RefreshBoard() -> void:
@@ -361,14 +377,16 @@ func _RefreshStatus() -> void:
 			push_warning("explore_screen: 委托模板 '%s' 查无" % _run.quest_template_id)
 	var hp_parts: PackedStringArray = []
 	for adv: AdventurerData in _run.party:
-		var tag: String = "倒地" if _run.downed.get(adv, false) else str(int(_run.hp.get(adv, 0)))
+		var tag: String = String(UI_TEXTS[&"hp_downed"]) if _run.downed.get(adv, false) \
+				else str(int(_run.hp.get(adv, 0)))
 		hp_parts.append("%s:%s" % [adv.display_name, tag])
 	# 状态行分组（2026-09-25 层级修复顺手项）：组间全角｜分隔、HP 组加前缀标签；
 	# W3-06：自由探索会话（goal_kind == -1）状态段显专属文案（不再借用
-	# 「判据已达成」——无判据会话谈达成语义错位）
+	# 「判据已达成」——无判据会话谈达成语义错位）；
+	# S4-M4-4：格式串与分隔字面量入 UI_TEXTS 单源（本文件最后一个漏网内联串）
 	var status_segment: String = UI_TEXTS[&"free_status"] if _run.goal_kind == -1 \
 			else (UI_TEXTS[&"goal_done"] if _ExitActive() else UI_TEXTS[&"goal_pending"])
-	%StatusLabel.text = "委托『%s』｜%s｜耗时 %d 天｜HP：%s" % [quest_name,
+	%StatusLabel.text = String(UI_TEXTS[&"status_line"]) % [quest_name,
 			status_segment, _run.total_days(), " ".join(hp_parts)]
 	%GoalBanner.visible = _goal.is_done()
 
@@ -861,8 +879,16 @@ func _ResumeAfterBattle(result: BattleResult, battle_node_id: StringName,
 		if not _run.downed.get(adv, false):
 			all_downed = false
 			break
+	# P1 拍板：战斗层撤退单独映射 RETREAT（不与 DEFEAT 同轨——撤退=委托失败
+	# 但无重伤）；其余非胜利（DEFEAT）走战败重伤通道；低危 5：自由探索会话
+	# 文案分流（free 专属位）
+	if result.kind == BattleResult.ResultKind.RETREAT:
+		_FinishSession(GuildCore.ExpeditionOutcome.RETREAT,
+				_OutcomeText(&"battle_retreat", &"battle_retreat_free"))
+		return
 	if result.kind != BattleResult.ResultKind.VICTORY:
-		_FinishSession(GuildCore.ExpeditionOutcome.DEFEAT, UI_TEXTS[&"battle_defeat"])
+		_FinishSession(GuildCore.ExpeditionOutcome.DEFEAT,
+				_OutcomeText(&"battle_defeat", &"battle_defeat_free"))
 		return
 	if all_downed:
 		_FinishSession(GuildCore.ExpeditionOutcome.DEFEAT, UI_TEXTS[&"all_downed"])
@@ -932,11 +958,16 @@ func _FinishSession(outcome: int, reason: String = "") -> void:
 		_panel.clear()
 		_HideEventPanel()
 	# 释锁先行（存档成败单点——settle 内部 autosave 不被 #26 出征锁跳过）
-	get_node("/root/SaveManager").set_expedition_lock(false)
-	var summary: Variant = _SettleWithGuild(outcome)
+	# S3-M5-1-d：同上空守卫（释锁失败静默无意义——留痕）
+	var unlock_manager: Node = get_node_or_null("/root/SaveManager")
+	if unlock_manager != null:
+		unlock_manager.set_expedition_lock(false)
+	var summary: GuildCore.ExpeditionSummary = _SettleWithGuild(outcome)
 	var title: String
 	if outcome != GuildCore.ExpeditionOutcome.SUCCESS:
-		title = UI_TEXTS[&"settle_failed"]
+		# 低危 5：自由探索会话失败 title 分流（「委托失败」语义错位——无委托
+		# 会话谈委托失败不通）
+		title = _OutcomeText(&"settle_failed", &"settle_free_failed")
 	elif _run.goal_kind == -1:
 		title = UI_TEXTS[&"settle_free_explore"]
 	else:
@@ -956,17 +987,35 @@ func _FinishSession(outcome: int, reason: String = "") -> void:
 		%SettlementBody.text = _BuildSuccessBody(summary)
 	%SettlementPanel.visible = true
 
-func _SettleWithGuild(outcome: int) -> Variant:
+func _SettleWithGuild(outcome: int) -> GuildCore.ExpeditionSummary:
 	## 回城结算调用（GuildState.settle_expedition）；无公会会话（GuildState
-	## 未装配——M3 旧测试直开口径）返回 null 走占位回退
+	## 未装配——M3 旧测试直开口径）或**演示会话**（低危 4：无参直开的
+	## _MakeDefaultRun 临时队——无委托序号且队长不在名册，不进公会结算防
+	## 误入账/误推日历）返回 null 走占位回退
 	## 参数 outcome：出口枚举值
-	## 返回：ExpeditionSummary；无会话返回 null
+	## 返回：ExpeditionSummary；无会话/演示会话返回 null
 	var guild_state: Node = get_node_or_null("/root/GuildState")
 	if guild_state == null or guild_state.core == null or guild_state.core.cfg == null:
 		return null
+	if _IsDemoSession(guild_state.core):
+		return null
 	return guild_state.settle_expedition(_run, outcome)
 
-func _BuildSuccessBody(summary: Variant) -> String:
+func _IsDemoSession(core: GuildCore) -> bool:
+	## 演示会话判定（低危 4——批次 4 起委托 GuildCore.is_demo_session 静态
+	## 单源：battle_screen 降级结算同口消费，防两处分叉）
+	## 参数 core：公会核心
+	## 返回：true = _MakeDefaultRun 演示口径（结算走占位回退）
+	return GuildCore.is_demo_session(_run, core)
+
+func _OutcomeText(quest_key: StringName, free_key: StringName) -> String:
+	## 会话形态文案取值（低危 5：自由探索 goal_kind==-1 用 free 专属位，
+	## 委托会话用原位）
+	## 参数 quest_key/free_key：委托会话/自由探索会话的文案键
+	## 返回：文案
+	return String(UI_TEXTS[free_key]) if _run.goal_kind == -1 else String(UI_TEXTS[quest_key])
+
+func _BuildSuccessBody(summary: GuildCore.ExpeditionSummary) -> String:
 	## 成功结算正文（ExpeditionSummary 读值拼装——数值单源结算层，UI 只呈现）；
 	## 存档失败（M-3）追加警示行
 	## 参数 summary：ExpeditionSummary
@@ -986,7 +1035,7 @@ func _BuildSuccessBody(summary: Variant) -> String:
 		lines.append(UI_TEXTS[&"settle_save_failed"])
 	return "\n".join(lines)
 
-func _BuildFailureBody(summary: Variant, reason: String) -> String:
+func _BuildFailureBody(summary: GuildCore.ExpeditionSummary, reason: String) -> String:
 	## 失败结算正文（X3-04：无「收获申报」行；战败带重伤行；「新委托入单」
 	## 与成功通道对称拼委托名——席3 L-4；补结算期间挂单到期失败明细；
 	## 存档失败（M-3）追加警示行）
@@ -995,8 +1044,13 @@ func _BuildFailureBody(summary: Variant, reason: String) -> String:
 	var lines: PackedStringArray = []
 	if not reason.is_empty():
 		lines.append(reason)
-	if summary.injury_rest_days > 0:
-		lines.append(UI_TEXTS[&"settle_injury"] % summary.injury_rest_days)
+	# S4-M4-3 拍板：战败/撤退终结统一补「途中所得作废」提示行（P3 后失败奖励
+	# 不入账——正文此前无任何解释；委托/自由探索共用，恒显不拼数值）
+	lines.append(UI_TEXTS[&"settle_rewards_voided"])
+	# M-1 口径统一：休养天数消费补结算后剩余值（与名册一致——长途出征补结算
+	# 期已恢复则不出本行）
+	if summary.injury_rest_days_remaining > 0:
+		lines.append(UI_TEXTS[&"settle_injury"] % summary.injury_rest_days_remaining)
 	if not summary.quests_granted.is_empty():
 		lines.append(UI_TEXTS[&"settle_granted"] % _GrantedNames(summary))
 	lines.append(UI_TEXTS[&"settle_days"] % summary.days_settled)
@@ -1004,7 +1058,7 @@ func _BuildFailureBody(summary: Variant, reason: String) -> String:
 		lines.append(UI_TEXTS[&"settle_save_failed"])
 	return "\n".join(lines)
 
-func _GrantedNames(summary: Variant) -> String:
+func _GrantedNames(summary: GuildCore.ExpeditionSummary) -> String:
 	## 授予委托名拼接（成功/失败正文共用——对称文案单源）
 	## 参数 summary：ExpeditionSummary
 	## 返回：顿号连接的委托名
@@ -1032,10 +1086,12 @@ func _OnRetreatPressed() -> void:
 	%RetreatConfirm.popup_centered()
 
 func _OnRetreatConfirmConfirmed() -> void:
-	## 撤退确认：失败通道终结（RETREAT 出口——无奖励无重伤；run 丢弃）
+	## 撤退确认：失败通道终结（RETREAT 出口——无奖励无重伤；run 丢弃）；
+	## 低危 5/7：自由探索会话文案分流 + 「无重伤」表述（与战斗层口径对齐）
 	## 参数：无
 	## 返回：无
-	_FinishSession(GuildCore.ExpeditionOutcome.RETREAT, UI_TEXTS[&"retreat_failed"])
+	_FinishSession(GuildCore.ExpeditionOutcome.RETREAT,
+			_OutcomeText(&"retreat_failed", &"retreat_free_failed"))
 
 func _OnGuiInput(event: InputEvent) -> void:
 	## 点按跳过 D20 演出

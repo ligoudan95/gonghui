@@ -13,6 +13,11 @@ const ATTR_NAMES: Dictionary = {
 	&"luck": "幸运",
 }
 
+## UI 文案单源（M4 增补批：轻度信息行格式串——改措辞只动此处）
+const UI_TEXTS: Dictionary = {
+	&"light_info_format": "剩余 %d 天｜派 %d-%d 人 · 工期 %d 天 · 无需出征",
+}
+
 ## 总控配置（setup 注入）
 var _cfg: CoreConfig = null
 ## 名称行（加急前缀+名称+等级档）
@@ -25,6 +30,8 @@ var _reward_label: Label = null
 var _desc_label: Label = null
 ## 接取按钮
 var _accept_button: Button = null
+## 当前展示实例序号（refresh 写入——接取请求回抛；声明集中文件头）
+var _serial: int = 0
 
 ## 接取请求信号（serial=实例序号）
 signal accept_requested(serial: int)
@@ -54,8 +61,6 @@ func setup(cfg: CoreConfig) -> void:
 	_accept_button.pressed.connect(func() -> void: accept_requested.emit(_serial))
 	box.add_child(_accept_button)
 
-var _serial: int = 0
-
 func _MakeLabel(parent: Node, field: StringName, fallback: int) -> Label:
 	## 建标签（字号档位表驱动）
 	## 参数 parent：父容器；field/fallback：cfg 字段与兜底档位
@@ -80,13 +85,19 @@ func refresh(inst: QuestInstance, game_data: Node, day: int) -> void:
 		return
 	_title_label.text = "%s（等级 %d）" % [inst.display_name(game_data), tpl.level_tier]
 	var remain: int = maxi(0, inst.remaining_days(day))
-	var recommend: PackedStringArray = []
-	for attr_id: StringName in tpl.recommend_attrs:
-		recommend.append(String(ATTR_NAMES.get(attr_id, String(attr_id))))
 	var region: RegionDef = game_data.get_record(tpl.region_id) as RegionDef
 	var region_name: String = region.display_name if region != null else String(tpl.region_id)
-	_info_label.text = "剩余 %d 天｜推荐：%s｜人力 %d-%d｜区域：%s" % [
-			remain, " ".join(recommend), tpl.party_min, tpl.party_max, region_name]
+	# M4 增补批：轻度分支——工期/无需出征信息行（标题经 display_name 自动带
+	# 「轻度·」前缀；不显推荐属性行——轻度无检定消费）
+	if tpl.exec_class == QuestTemplateDef.ExecClass.NON_COMBAT:
+		_info_label.text = String(UI_TEXTS[&"light_info_format"]) % [
+				remain, tpl.party_min, tpl.party_max, tpl.duration_days]
+	else:
+		var recommend: PackedStringArray = []
+		for attr_id: StringName in tpl.recommend_attrs:
+			recommend.append(String(ATTR_NAMES.get(attr_id, String(attr_id))))
+		_info_label.text = "剩余 %d 天｜推荐：%s｜人力 %d-%d｜区域：%s" % [
+				remain, " ".join(recommend), tpl.party_min, tpl.party_max, region_name]
 	_reward_label.text = "奖励：%d 金 / %d 经验 / %d 声望" % [
 			tpl.reward.gold, tpl.reward.exp, tpl.reward.reputation] if tpl.reward != null \
 			else "奖励：—"

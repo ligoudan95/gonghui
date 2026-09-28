@@ -42,9 +42,9 @@ func test_enemy_def_count() -> void:
 	assert_int(_game_data.get_domain(&"battle/enemies").size()).is_equal(3)
 
 func test_enemy_pack_and_naming_counts() -> void:
-	## battle/enemy_packs 域 3 配置；命名登记表 155 条（R5-08 勘正：64 tres + 9 spr_ + 12 tend_）（M0 批 2 的 48 条 +
+	## battle/enemy_packs 域 3 配置；命名登记表 158 条（M4 增补批 +3 轻度）（R5-08 勘正：64 tres + 9 spr_ + 12 tend_）（M0 批 2 的 48 条 +
 	## M1 批 1 战斗域 14 条：btm×2 / tile×6 / eqp×6；M2 事件域 28 条；M3 探索层 29 条；
 	## M4 经营层 13 条：fac×2 / adv 种子×4 / 板刷 q×7）
 	assert_int(_game_data.get_domain(&"battle/enemy_packs").size()).is_equal(3)
 	var registry: NamingRegistry = _game_data.get_record(&"naming_registry")
-	assert_int(registry.entries.size()).is_equal(155)
+	assert_int(registry.entries.size()).is_equal(158)

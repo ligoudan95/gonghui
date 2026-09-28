@@ -142,12 +142,18 @@ func to_snapshot() -> Dictionary:
 	}
 
 func restore_snapshot(data: Dictionary) -> void:
-	## 快照恢复（实例损坏条目跳过——存档结构问题由 schema_version 前置拦截）
+	## 快照恢复（实例损坏条目跳过——存档结构问题由 schema_version 前置拦截；
+	## **容器类型不符保守清空**（S3-M2 拍板——candidates 被破坏成 Dictionary/
+	## 标量时不再 SCRIPT ERROR，清空重建、读档可继续））
 	## 参数 data：to_snapshot 产出的 Dictionary
 	## 返回：无
 	candidates.clear()
 	serial = int(data.get("serial", 1))
-	for candidate_data: Dictionary in data.get("candidates", []):
-		var candidate: AdventurerData = AdventurerData.from_dict(candidate_data)
-		if candidate != null:
-			candidates.append(candidate)
+	var candidate_data: Variant = data.get("candidates", [])
+	if candidate_data is Array:
+		for entry: Variant in candidate_data:
+			if not (entry is Dictionary):
+				continue
+			var candidate: AdventurerData = AdventurerData.from_dict(entry)
+			if candidate != null:
+				candidates.append(candidate)

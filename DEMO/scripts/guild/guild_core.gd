@@ -20,6 +20,24 @@ enum ExpeditionOutcome {
 	GOAL_FAILED,
 }
 
+## 轻度委托完成结果（M4 增补批：日结算 quest_noncombat_advance 步产出——
+## DaySummary.light_completed 载荷，UI 汇总行消费）
+class LightQuestResult:
+	## 模板 id
+	var template_id: StringName = &""
+	## 展示名（带「轻度·」前缀）
+	var display_name: String = ""
+	## 金入账（含超额）
+	var gold: int = 0
+	## 经验入账（出战者各得全额含超额）
+	var exp: int = 0
+	## 声望入账（不吃超额）
+	var reputation: int = 0
+	## 板凳分享人数（拍板①：0 = 无健康板凳或分享为 0）
+	var bench_member_count: int = 0
+	## 板凳人均经验（首值——全队同额）
+	var bench_exp_per_member: int = 0
+
 ## 日结算汇总（案 2 §2.4 第 10 步「汇总通知」的数据载荷——恢复完成/委托
 ## 到期明细/新候选；UI 批 2 消费）
 class DaySummary:
@@ -39,6 +57,8 @@ class DaySummary:
 	var accepted_failed: Array[String] = []
 	## 新候选姓名
 	var new_candidate_names: Array[String] = []
+	## 轻度委托完成明细（M4 增补批——quest_noncombat_advance 步写入）
+	var light_completed: Array[LightQuestResult] = []
 
 ## 回城结算摘要（settle_expedition 返回——批 2 结算面板消费）
 class ExpeditionSummary:
@@ -58,8 +78,11 @@ class ExpeditionSummary:
 	var levels_gained: Dictionary = {}
 	## 板凳经验明细（String(unit_id) -> int）
 	var bench_exp: Dictionary = {}
-	## 战败重伤休养天数（非战败为 0）
+	## 战败重伤休养天数（应用值=injury_rest_days()；非战败为 0）
 	var injury_rest_days: int = 0
+	## 补结算后剩余休养天数（M-1 口径统一：面板消费值——与名册一致；长途出征
+	## 补结算期恢复时为 0；非战败为 0）
+	var injury_rest_days_remaining: int = 0
 	## 回城转挂单的新授予模板 id
 	var quests_granted: Array[StringName] = []
 	## 补结算天数（= run.total_days()）
@@ -100,6 +123,20 @@ var game_data: Node
 var rng: RandomNumberGenerator
 ## 最近一次门面校验失败原因（批 2 UI 提示消费；成功操作清空）
 var last_error: String = ""
+
+static func is_demo_session(run: ExpeditionRun, core: GuildCore) -> bool:
+	## 演示会话判定（静态共用口——修复批次 4 中危 5：explore_screen 结算与
+	## battle_screen 降级撤退一致消费）：无委托序号**且**队长不在名册——
+	## 生产出征必经 GuildState.build_expedition_run（quest_serial 注入+真名册队）
+	## 参数 run：出征运行态；core：公会核心（名册查询）
+	## 返回：true = _MakeDefaultRun 演示口径（结算一律走占位回退，不入账不推日历）
+	if run == null:
+		return true
+	if run.quest_serial != 0:
+		return false
+	if run.party.is_empty():
+		return true
+	return core == null or core.find_member(run.party[0].unit_id) == null
 
 func attach(cfg: CoreConfig, game_data: Node, rng: RandomNumberGenerator) -> void:
 	## 依赖注入（setup 与 GuildState 读档恢复共用——restore_snapshot 前须先挂依赖）
@@ -201,7 +238,8 @@ func _RosterClassIds() -> Array[StringName]:
 func settle_one_day() -> DaySummary:
 	## 单日结算：按 cfg.day_settle_pipeline 顺序消费步骤键——day_advance（天数+1）
 	## / recovery（重伤休养倒计）/ recruit_refresh（整池刷新）/ quest_countdown
-	##（周刷新或到期三表现+挂单到期失败）/ summary（汇总定稿）；未知键告警跳过
+	##（周刷新或到期三表现+挂单到期失败）/ quest_noncombat_advance（M4 增补批：
+	## 轻度工期推进+归零自动结算）/ summary（汇总定稿）；未知键告警跳过
 	## 参数：无
 	## 返回：DaySummary（恢复完成/到期明细/新候选）
 	var summary := DaySummary.new()
@@ -215,6 +253,8 @@ func settle_one_day() -> DaySummary:
 				_SettleRecruitRefresh(summary)
 			"quest_countdown":
 				_SettleQuestCountdown(summary)
+			"quest_noncombat_advance":
+				_SettleLightQuests(summary)
 			"summary":
 				summary.day = day
 			_:
@@ -280,12 +320,57 @@ func accept_quest(serial_id: int, party_ids: Array[StringName]) -> bool:
 	if inst == null:
 		last_error = "委托不在板上"
 		return false
+	# M4 增补批防御：轻度模板不走接取通道（防 UI 误路由滞留 ACCEPTED——
+	# 轻度一步开工口= start_light_quest）
+	var accept_tpl: QuestTemplateDef = game_data.get_record(inst.template_id) as QuestTemplateDef
+	if accept_tpl != null and accept_tpl.exec_class == QuestTemplateDef.ExecClass.NON_COMBAT:
+		last_error = "轻度委托走「派出开工」（不需编队确认后出征）"
+		return false
 	if board.find_accepted_by_template(inst.template_id) != null:
 		last_error = "同模板委托已在挂单——先完成或放弃再接"
 		return false
 	if not _ValidateParty(inst.template_id, party_ids, null):
 		return false
-	board.accept(inst, party_ids)
+	if not board.accept(inst, party_ids):
+		# S2-M2-3-a：消费状态迁移返回值——失败不记沿用编队记忆（防线面校验
+		# 通过但迁移被拒的窗口）
+		last_error = "接取状态迁移失败（实例已不在板上）"
+		return false
+	last_party_by_tpl[String(inst.template_id)] = party_ids.duplicate()
+	return true
+
+func start_light_quest(serial_id: int, party_ids: Array[StringName]) -> bool:
+	## 轻度委托一步开工（M4 增补批 UI 唯一入口——Q6 拍板）：板上查得 → 模板
+	## exec_class==NON_COMBAT 校验 → 同模板挂单拦截（G-2）→ 编队合法性（1-2
+	## 区间/存在/HEALTHY/占用/去重）→ board.accept + board.start_light → 记
+	## 沿用编队记忆；**不落 last_expedition_day**（不消耗每日一次出征额度——
+	## 轻度占用与出征占用互斥经 occupied_member_ids 天然成立）
+	## 参数 serial_id：板上实例序号；party_ids：派工成员 id
+	## 返回：true = 开工成功（LIGHT_RUNNING+work_days_left 就位；失败原因 last_error）
+	last_error = ""
+	var inst: QuestInstance = board.find_on_board(serial_id)
+	if inst == null:
+		last_error = "委托不在板上"
+		return false
+	var tpl: QuestTemplateDef = game_data.get_record(inst.template_id) as QuestTemplateDef
+	if tpl == null:
+		last_error = "委托模板缺失"
+		return false
+	if tpl.exec_class != QuestTemplateDef.ExecClass.NON_COMBAT:
+		last_error = "战斗委托走编队出征通道（本口仅轻度委托）"
+		return false
+	if board.find_accepted_by_template(inst.template_id) != null:
+		last_error = "同模板委托已在挂单——先完成或放弃再接"
+		return false
+	if not _ValidateParty(inst.template_id, party_ids, null):
+		return false
+	if not board.accept(inst, party_ids):
+		last_error = "接取状态迁移失败（实例已不在板上）"
+		return false
+	if not board.start_light(inst):
+		last_error = "轻度开工状态迁移失败（模板工期非法）"
+		board.remove(inst)
+		return false
 	last_party_by_tpl[String(inst.template_id)] = party_ids.duplicate()
 	return true
 
@@ -301,7 +386,9 @@ func reassign_party(serial_id: int, party_ids: Array[StringName]) -> bool:
 		return false
 	if not _ValidateParty(inst.template_id, party_ids, inst):
 		return false
-	board.reassign(inst, party_ids)
+	if not board.reassign(inst, party_ids):
+		last_error = "重编队状态迁移失败（实例已不在挂单）"
+		return false
 	last_party_by_tpl[String(inst.template_id)] = party_ids.duplicate()
 	return true
 
@@ -337,7 +424,10 @@ func start_expedition(serial_id: int) -> bool:
 		if member.last_expedition_day == day:
 			last_error = "成员 '%s' 今日已出征（每日一次）" % member_id
 			return false
-	board.start(inst)
+	if not board.start(inst):
+		# S2-M2-3-a：同口径——迁移被拒不落出征日标记
+		last_error = "出征状态迁移失败（实例已不在挂单）"
+		return false
 	for member_id: StringName in inst.party_ids:
 		find_member(member_id).last_expedition_day = day
 	return true
@@ -352,9 +442,11 @@ func abandon_quest(serial_id: int) -> bool:
 	if inst == null:
 		last_error = "委托不在挂单"
 		return false
-	if inst.state != QuestInstance.State.ACCEPTED:
+	if inst.state == QuestInstance.State.IN_PROGRESS:
 		last_error = "出征进行中不可放弃（仅挂单可弃）"
 		return false
+	# M4 增补批：LIGHT_RUNNING 轻度进行中放行放弃（无惩罚无奖励工期作废、
+	# 成员立即释放——Q5 拍板）；IN_PROGRESS 战斗维持拒绝
 	var tpl: QuestTemplateDef = game_data.get_record(inst.template_id) as QuestTemplateDef
 	if tpl != null and not tpl.abandonable:
 		last_error = "本委托不可放弃"
@@ -399,7 +491,8 @@ func _ValidateParty(template_id: StringName, party_ids: Array[StringName],
 func abort_expedition(serial_id: int, previous_days: Dictionary = {}) -> bool:
 	## 出征确认回退（M4：协会屏 go() 失败分支消费——释锁后回退 start_expedition
 	## 的状态迁移）：IN_PROGRESS → ACCEPTED + 出征日标记按 previous_days 恢复
-	##（{String(unit_id): int 原值}；缺键回 0）
+	##（{String(unit_id): int 原值}；**缺键保持现值**——部分快照不把未记录成员
+	## 清 0，修复批次 2 回归）
 	## 参数 serial_id：实例序号；previous_days：成员原 last_expedition_day 快照
 	## 返回：true = 回退成功
 	last_error = ""
@@ -409,9 +502,11 @@ func abort_expedition(serial_id: int, previous_days: Dictionary = {}) -> bool:
 		return false
 	inst.state = QuestInstance.State.ACCEPTED
 	for member_id: StringName in inst.party_ids:
+		if not previous_days.has(String(member_id)):
+			continue
 		var member: AdventurerData = find_member(member_id)
 		if member != null:
-			member.last_expedition_day = int(previous_days.get(String(member_id), 0))
+			member.last_expedition_day = int(previous_days[String(member_id)])
 	return true
 
 func find_member(member_id: StringName) -> AdventurerData:
@@ -429,9 +524,11 @@ func find_member(member_id: StringName) -> AdventurerData:
 
 func settle_expedition(run: ExpeditionRun, outcome: ExpeditionOutcome) -> ExpeditionSummary:
 	## 回城结算五步（批 1 纯逻辑；批 2 接 explore_screen 回城口）：
-	## ①委托出口结算（成功=奖励×超额入账+声望；战败=全队重伤休养；撤退/判据
-	## 失败=无奖励无重伤；实例移除+人力释放）②经验结算（出战者各得全额含超额；
-	## 板凳健康成员=基础经验×训练场分享率——拍板④；事件累计奖励入账）
+	## ①委托出口结算（成功=奖励×超额入账+声望；战败=全队重伤休养——P4：重伤
+	## 前置到 _ApplyDefeatInjury，自由探索同口径；撤退/判据失败=无奖励无重伤；
+	## 实例移除+人力释放）②经验结算（出战者各得全额含超额；板凳健康成员=基础
+	## 经验×训练场分享率——拍板④；事件累计奖励入账——P3：仅 SUCCESS 入账，
+	## 失败/撤退出口零入账）
 	## ③日历推进逐日补结算 ④granted_quests 逐个转挂单（18-C6 防重——
 	## **置于补结算之后**：expire_day 以推进后终 day 起算，长途出征不再
 	##「授予即到期」自动失败，M3/Z-2）⑤损耗恢复=DEMO 当日全额
@@ -443,11 +540,18 @@ func settle_expedition(run: ExpeditionRun, outcome: ExpeditionOutcome) -> Expedi
 	if run.settled:
 		return summary
 	run.settled = true
+	# P4：战败重伤移出委托早退路径——自由探索（无委托会话）战败同战败重伤口径
+	if outcome == ExpeditionOutcome.DEFEAT:
+		_ApplyDefeatInjury(run, summary)
 	_SettleQuestOutlet(run, outcome, summary)
-	_SettleRunRewards(run, summary)
+	_SettleRunRewards(run, outcome, summary)
 	for _settle_index: int in run.total_days():
 		summary.day_summaries.append(settle_one_day())
 	summary.days_settled = run.total_days()
+	# M-1 口径统一：面板休养天数=补结算后剩余（与名册一致——全队同值；
+	# 长途出征补结算期可能已恢复归 0）
+	if outcome == ExpeditionOutcome.DEFEAT and not run.party.is_empty():
+		summary.injury_rest_days_remaining = run.party[0].rest_days
 	_ConvertGrantedQuests(run, summary)
 	return summary
 
@@ -456,7 +560,8 @@ func _SettleQuestOutlet(run: ExpeditionRun, outcome: ExpeditionOutcome,
 	## 步骤①：委托出口结算——实例先行移除（补结算不再误判，案 2 §2.5）；
 	## 结算目标匹配=run.quest_serial 精确匹配优先 → 同模板 IN_PROGRESS 优先
 	## → 同模板首匹配（G-2 根修：同模板板上+挂单并存时按模板首匹配会删错
-	## 实例——IN_PROGRESS 残留封锁出征）
+	## 实例——IN_PROGRESS 残留封锁出征）；战败重伤在 _ApplyDefeatInjury
+	##（P4：移出本口——自由探索早退路径同样吃重伤）
 	## 参数 run/outcome/summary：会话 / 出口 / 摘要
 	## 返回：无
 	if run.quest_template_id == &"":
@@ -472,8 +577,8 @@ func _SettleQuestOutlet(run: ExpeditionRun, outcome: ExpeditionOutcome,
 	if outcome == ExpeditionOutcome.SUCCESS:
 		if tpl != null and tpl.reward != null:
 			var excess: int = maxi(0, run.party.size() - tpl.party_min)
-			var rate: float = tpl.excess_bonus_per_head if tpl.excess_bonus_per_head > 0.0 \
-					else cfg.quest_excess_bonus_per_head
+			var rate: float = (tpl.excess_bonus_per_head if tpl.excess_bonus_per_head > 0.0
+					else cfg.quest_excess_bonus_per_head)
 			var multiplier: float = 1.0 + rate * excess
 			var gold_won: int = roundi(tpl.reward.gold * multiplier)
 			var exp_base: int = tpl.reward.exp
@@ -487,21 +592,35 @@ func _SettleQuestOutlet(run: ExpeditionRun, outcome: ExpeditionOutcome,
 			for adv: AdventurerData in run.party:
 				_GainExp(adv, exp_won, summary)
 			_ShareBenchExp(exp_base, run, summary)
-	elif outcome == ExpeditionOutcome.DEFEAT:
-		var rest_days: int = injury_rest_days()
-		summary.injury_rest_days = rest_days
-		for adv: AdventurerData in run.party:
-			adv.status = AdventurerData.Status.RESTING
-			adv.rest_days = rest_days
 	# RETREAT / GOAL_FAILED：无奖励无重伤（判据失败=案 6 §2.4 枚举口径）
 	if inst != null:
 		board.remove(inst)
 
-func _SettleRunRewards(run: ExpeditionRun, summary: ExpeditionSummary) -> void:
-	## 步骤②补充：事件/宝箱累计奖励入账（M3 起只累计、此处入账——案 4 收入表；
-	## 不吃超额系数；事件经验出战者各得全额）
+func _ApplyDefeatInjury(run: ExpeditionRun, summary: ExpeditionSummary) -> void:
+	## 步骤①前置：战败重伤结算（P4 拍板——DEFEAT 分支移出委托早退路径，
+	## 自由探索战败同战败重伤口径）：全队重伤休养=injury_rest_days()（宿舍
+	## 当前级缩减后值）；板凳成员不受牵连
 	## 参数 run/summary：会话 / 摘要
 	## 返回：无
+	if run.party.is_empty():
+		# S2-M2-3-f：空 party 的 DEFEAT 不置重伤天数（防御口径——无人可伤，
+		# 面板也不该出休养行）
+		return
+	var rest_days: int = injury_rest_days()
+	summary.injury_rest_days = rest_days
+	for adv: AdventurerData in run.party:
+		adv.status = AdventurerData.Status.RESTING
+		adv.rest_days = rest_days
+
+func _SettleRunRewards(run: ExpeditionRun, outcome: ExpeditionOutcome,
+		summary: ExpeditionSummary) -> void:
+	## 步骤②补充：事件/宝箱累计奖励入账（**P3 拍板：仅 SUCCESS 入账**——失败/
+	## 撤退出口零入账；M3 起只累计、此处入账——案 4 收入表；不吃超额系数；
+	## 事件经验出战者各得全额）
+	## 参数 run/outcome/summary：会话 / 出口 / 摘要
+	## 返回：无
+	if outcome != ExpeditionOutcome.SUCCESS:
+		return
 	var event_gold: int = int(run.rewards.get(&"gold", 0))
 	var event_exp: int = int(run.rewards.get(&"exp", 0))
 	var event_reputation: int = int(run.rewards.get(&"reputation", 0))
@@ -523,26 +642,93 @@ func _GainExp(adv: AdventurerData, amount: int, summary: ExpeditionSummary) -> v
 	if gained > 0:
 		summary.levels_gained[unit_key] = int(summary.levels_gained.get(unit_key, 0)) + gained
 
+func _SettleLightQuests(summary: DaySummary) -> void:
+	## 轻度工期推进步（M4 增补批：day_settle_pipeline 第 5 步
+	## quest_noncombat_advance——周刷新日照常进入；回城补结算逐日循环自动
+	## 驱动=出征期间照常推进）：遍历 LIGHT_RUNNING 实例 work_days_left-1，
+	## 归零调 _CompleteLightQuest 结算移除（移除即终态单口——幂等）
+	## 参数 summary：汇总（light_completed 明细写入）
+	## 返回：无
+	for inst: QuestInstance in board.accepted.duplicate():
+		if inst.state != QuestInstance.State.LIGHT_RUNNING:
+			continue
+		inst.work_days_left -= 1
+		if inst.work_days_left <= 0:
+			_CompleteLightQuest(inst, summary)
+
+func _CompleteLightQuest(inst: QuestInstance, summary: DaySummary) -> void:
+	## 轻度委托完成结算（工期归零自动——Q2/Q3 拍板）：奖励×超额入账（与
+	## _SettleQuestOutlet 同式——excess=maxi(0, size-party_min)，multiplier=
+	## 1+rate×excess；货币/经验吃超额、声望不吃）；出战成员各得全额经验（含
+	## 超额——悬置倾向走既有 apply_exp 机制）；板凳分享（拍板①：基数=模板基础
+	## 经验不含超额，占 busy=轻度编队——Lv1 每人 30×0.3=9、Lv2=12）；实例
+	## 移除释放占用；summary.light_completed 载荷回带
+	## 参数 inst：归零实例；summary：汇总
+	## 返回：无
+	var tpl: QuestTemplateDef = game_data.get_record(inst.template_id) as QuestTemplateDef
+	if tpl == null or tpl.reward == null:
+		push_warning("GuildCore: 轻度委托模板 '%s' 查无或无奖励——防御性移除" % inst.template_id)
+		board.remove(inst)
+		return
+	var result := LightQuestResult.new()
+	result.template_id = inst.template_id
+	result.display_name = inst.display_name(game_data)
+	var excess: int = maxi(0, inst.party_ids.size() - tpl.party_min)
+	var rate: float = (tpl.excess_bonus_per_head if tpl.excess_bonus_per_head > 0.0
+			else cfg.quest_excess_bonus_per_head)
+	var multiplier: float = 1.0 + rate * excess
+	var gold_won: int = roundi(tpl.reward.gold * multiplier)
+	var exp_won: int = roundi(tpl.reward.exp * multiplier)
+	gold += gold_won
+	reputation += tpl.reward.reputation
+	result.gold = gold_won
+	result.exp = exp_won
+	result.reputation = tpl.reward.reputation
+	for member_id: StringName in inst.party_ids:
+		var member: AdventurerData = find_member(member_id)
+		if member == null:
+			continue
+		GrowthCore.apply_exp(member, exp_won, cfg, game_data, pending_tendency_levels)
+	# 板凳分享（拍板①：基数不含超额；busy=轻度编队——编队成员不得板凳份）
+	var bench_exp: Dictionary = {}
+	var bench_levels: Dictionary = {}
+	_ShareBenchExpCore(tpl.reward.exp, inst.party_ids, bench_exp, bench_levels)
+	result.bench_member_count = bench_exp.size()
+	if not bench_exp.is_empty():
+		result.bench_exp_per_member = int(bench_exp.values()[0])
+	board.remove(inst)
+	summary.light_completed.append(result)
+
 func _ShareBenchExp(base_exp: int, run: ExpeditionRun, summary: ExpeditionSummary) -> void:
-	## 板凳经验分享：板凳健康成员（不在出战队伍）得基础经验×训练场分享率
-	##（拍板④：基数不含超额；休养成员不参与——板凳深度维持机制，案 5 §2.6）
+	## 板凳经验分享（回城结算薄壳——M4 增补批重构：核逻辑并入 _ShareBenchExpCore
+	## 与轻度委托共用拍板①；行为逐位等价，既有板凳用例零改动全绿=重构护栏）
 	## 参数 base_exp/run/summary：基础经验 / 会话 / 摘要
 	## 返回：无
-	var party_ids: Array[StringName] = []
+	var busy_ids: Array[StringName] = []
 	for adv: AdventurerData in run.party:
-		party_ids.append(adv.unit_id)
+		busy_ids.append(adv.unit_id)
+	_ShareBenchExpCore(base_exp, busy_ids, summary.bench_exp, summary.levels_gained)
+
+func _ShareBenchExpCore(base_exp: int, busy_ids: Array[StringName],
+		out_exp: Dictionary, out_levels: Dictionary) -> void:
+	## 板凳分享共用核（M4 增补批拍板①：回城结算与轻度委托共用）——板凳健康
+	## 成员（不在 busy_ids 占用集）得基础经验×训练场分享率（拍板④：基数不含
+	## 超额；休养成员不参与——板凳深度维持机制，案 5 §2.6）
+	## 参数 base_exp：分享基数（模板基础经验）；busy_ids：占用成员 id（出战/
+	## 轻度编队）；out_exp/out_levels：经验与升级明细字典（原地写入）
+	## 返回：无
 	var share_rate: float = bench_share_rate()
 	for adv: AdventurerData in roster:
-		if party_ids.has(adv.unit_id) or adv.status != AdventurerData.Status.HEALTHY:
+		if busy_ids.has(adv.unit_id) or adv.status != AdventurerData.Status.HEALTHY:
 			continue
 		var gained: int = GrowthCore.bench_share_exp(base_exp, share_rate)
 		if gained <= 0:
 			continue
-		summary.bench_exp[String(adv.unit_id)] = gained
+		out_exp[String(adv.unit_id)] = gained
 		var levels: int = GrowthCore.apply_exp(adv, gained, cfg, game_data, pending_tendency_levels)
 		if levels > 0:
-			summary.levels_gained[String(adv.unit_id)] = \
-					int(summary.levels_gained.get(String(adv.unit_id), 0)) + levels
+			out_levels[String(adv.unit_id)] = \
+					int(out_levels.get(String(adv.unit_id), 0)) + levels
 
 func _ConvertGrantedQuests(run: ExpeditionRun, summary: ExpeditionSummary) -> void:
 	## 步骤③：出征会话授予的委托转挂单（18-C6 防重：同模板已在挂单跳过；
@@ -595,7 +781,9 @@ func upgrade_facility(facility_id: StringName) -> bool:
 	if fac == null:
 		last_error = "设施定义缺失"
 		return false
-	var current_level: int = int(facility_levels.get(facility_id, 1))
+	# S2-M2：等级读值 clamp [1, max_level]（同 dorm_capacity 等三处读口径——
+	# 脏档负值负索引从尾取（取到末级费用）+写回非法值持久污染）
+	var current_level: int = clampi(int(facility_levels.get(facility_id, 1)), 1, fac.max_level)
 	if current_level >= fac.max_level:
 		last_error = "设施已满级（%d/%d）" % [current_level, fac.max_level]
 		return false
@@ -687,30 +875,48 @@ func to_snapshot() -> Dictionary:
 
 func restore_snapshot(data: Dictionary) -> void:
 	## 公会快照恢复（load_game provider 回放——全字段重建；结构问题由
-	## schema_version 前置拦截，本口只做容错：缺键回退默认）
+	## schema_version 前置拦截，本口只做容错：缺键回退默认；**容器类型
+	## 不符保守清空对应槽**（S3-M2 拍板——roster 等被破坏成 Dictionary/标量
+	## 时不再 SCRIPT ERROR 中断恢复链，清空重建、读档可继续）
 	## 参数 data：to_snapshot 产出的 Dictionary（JSON 桥数字为 float——统一 int 化）
 	## 返回：无
 	day = int(data.get("day", 1))
 	gold = int(data.get("gold", 0))
 	reputation = int(data.get("reputation", 0))
-	board.restore_snapshot(data.get("board", {}))
-	recruit_pool.restore_snapshot(data.get("recruit_pool", {}))
+	board.restore_snapshot(data.get("board", {}) if data.get("board", {}) is Dictionary else {})
+	recruit_pool.restore_snapshot(
+			data.get("recruit_pool", {}) if data.get("recruit_pool", {}) is Dictionary else {})
 	facility_levels.clear()
-	for fac_key: String in data.get("facility_levels", {}):
-		facility_levels[StringName(fac_key)] = int(data["facility_levels"][fac_key])
+	var facility_data: Variant = data.get("facility_levels", {})
+	if facility_data is Dictionary:
+		for fac_key: String in facility_data:
+			facility_levels[StringName(fac_key)] = int(facility_data[fac_key])
+	elif facility_data is Array:
+		for fac_id: Variant in facility_data:
+			facility_levels[StringName(String(fac_id))] = 1
 	roster.clear()
-	for member_data: Dictionary in data.get("roster", []):
-		var adv: AdventurerData = AdventurerData.from_dict(member_data)
-		if adv != null:
-			roster.append(adv)
+	var roster_data: Variant = data.get("roster", [])
+	if roster_data is Array:
+		for member_data: Variant in roster_data:
+			if not (member_data is Dictionary):
+				continue
+			var adv: AdventurerData = AdventurerData.from_dict(member_data)
+			if adv != null:
+				roster.append(adv)
 	last_party_by_tpl.clear()
-	for tpl_key: String in data.get("last_party_by_tpl", {}):
-		var member_ids: Array[StringName] = []
-		for member_key: String in data["last_party_by_tpl"][tpl_key]:
-			member_ids.append(StringName(member_key))
-		last_party_by_tpl[tpl_key] = member_ids
+	var party_memory_data: Variant = data.get("last_party_by_tpl", {})
+	if party_memory_data is Dictionary:
+		for tpl_key: String in party_memory_data:
+			var member_ids: Array[StringName] = []
+			var raw_ids: Variant = party_memory_data[tpl_key]
+			if raw_ids is Array or raw_ids is PackedStringArray:
+				for member_key: Variant in raw_ids:
+					member_ids.append(StringName(String(member_key)))
+			last_party_by_tpl[tpl_key] = member_ids
 	pending_tendency_levels.clear()
-	for unit_key: String in data.get("pending_tendency_levels", {}):
-		pending_tendency_levels[unit_key] = int(data["pending_tendency_levels"][unit_key])
+	var pending_data: Variant = data.get("pending_tendency_levels", {})
+	if pending_data is Dictionary:
+		for unit_key: String in pending_data:
+			pending_tendency_levels[unit_key] = int(pending_data[unit_key])
 	# M4-1：未查看挂单标记（v2 内加可选字段——旧档缺省 false，不升 schema）
 	has_unseen_grants = bool(data.get("has_unseen_grants", false))

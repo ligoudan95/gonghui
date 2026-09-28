@@ -24,8 +24,8 @@ GameData="*res://scripts/autoload/game_data.gd"
 SaveManager="*res://scripts/autoload/save_manager.gd"
 SceneManager="*res://scripts/autoload/scene_manager.gd"
 Dialogic="*uid://ds2q0uclmolvu"
-_mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
 GuildState="*res://scripts/autoload/guild_state.gd"
+_mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
 
 [dialogic]
 
@@ -35,8 +35,8 @@ layout/style_directory={}
 
 [display]
 
-window/size/viewport_width=1920
-window/size/viewport_height=1080
+window/size/viewport_width=1440
+window/size/viewport_height=900
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
