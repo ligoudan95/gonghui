@@ -20,135 +20,150 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0.1, 0.11, 0.09, 1)
 
-[node name="Center" type="CenterContainer" parent="."]
+[node name="Layout" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 12.0
+offset_right = -16.0
+offset_bottom = -12.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 12
+
+[node name="TopBar" type="HBoxContainer" parent="Layout"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="DayLabel" type="Label" parent="Layout/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "第 1 天·周一"
+
+[node name="GoldLabel" type="Label" parent="Layout/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "0 金"
+
+[node name="ReputationLabel" type="Label" parent="Layout/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "声望 0"
+
+[node name="TopSpacer" type="Control" parent="Layout/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="BackButton" type="Button" parent="Layout/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(160, 48)
+focus_mode = 2
+text = "返回标题"
+
+[node name="MainBox" type="HBoxContainer" parent="Layout"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 24
+
+[node name="RosterPanel" type="PanelContainer" parent="Layout/MainBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="RosterHost" type="VBoxContainer" parent="Layout/MainBox/RosterPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="SideBox" type="VBoxContainer" parent="Layout/MainBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="WaitButton" type="Button" parent="Layout/MainBox/SideBox"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(320, 56)
+focus_mode = 2
+text = "等待一天"
+
+[node name="PendingButton" type="Button" parent="Layout/MainBox/SideBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+custom_minimum_size = Vector2(320, 56)
+focus_mode = 2
+text = "待选倾向"
+
+[node name="SettleInfoLabel" type="Label" parent="Layout/MainBox/SideBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+autowrap_mode = 2
+size_flags_vertical = 3
+text = ""
+
+[node name="EntryTitle" type="Label" parent="Layout/MainBox/SideBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "公会设施与协会"
+
+[node name="DormitoryButton" type="Button" parent="Layout/MainBox/SideBox"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(320, 56)
+focus_mode = 2
+text = "宿舍"
+
+[node name="TrainingButton" type="Button" parent="Layout/MainBox/SideBox"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(320, 56)
+focus_mode = 2
+text = "训练场"
+
+[node name="AssociationButton" type="Button" parent="Layout/MainBox/SideBox"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(320, 56)
+focus_mode = 2
+text = "冒险者协会（委托·招募）"
+
+[node name="DetailHost" type="CenterContainer" parent="."]
+unique_name_in_owner = true
+visible = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 1
 
-[node name="Layout" type="VBoxContainer" parent="Center"]
-layout_mode = 2
-theme_override_constants/separation = 24
-
-[node name="HeaderLabel" type="Label" parent="Center/Layout"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 48
-text = "公会主场景（占位）"
-horizontal_alignment = 1
-
-[node name="SaveInfoLabel" type="Label" parent="Center/Layout"]
+[node name="LevelupHost" type="CenterContainer" parent="."]
 unique_name_in_owner = true
-layout_mode = 2
-theme_override_font_sizes/font_size = 22
-text = ""
-horizontal_alignment = 1
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
 
-[node name="SaveWarnLabel" type="Label" parent="Center/Layout"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_font_sizes/font_size = 16
-text = ""
-horizontal_alignment = 1
-
-[node name="SaveAndBackButton" type="Button" parent="Center/Layout"]
-unique_name_in_owner = true
-layout_mode = 2
-custom_minimum_size = Vector2(240, 56)
-focus_mode = 2
-text = "保存并返回标题"
-
-[node name="BackButton" type="Button" parent="Center/Layout"]
-unique_name_in_owner = true
-layout_mode = 2
-custom_minimum_size = Vector2(240, 56)
-focus_mode = 2
-text = "返回标题"
-
-[node name="ExpeditionSeparator" type="HSeparator" parent="Center/Layout"]
-layout_mode = 2
-
-[node name="ExpeditionTitle" type="Label" parent="Center/Layout"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 20
-text = "出征（M3 占位·M4 出征层接管）"
-horizontal_alignment = 1
-
-[node name="PartyClassRow" type="HBoxContainer" parent="Center/Layout"]
-layout_mode = 2
-alignment = 1
-theme_override_constants/separation = 16
-
-[node name="CheckWarrior" type="CheckBox" parent="Center/Layout/PartyClassRow"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 2
-button_pressed = true
-text = "战士"
-
-[node name="CheckRogue" type="CheckBox" parent="Center/Layout/PartyClassRow"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 2
-button_pressed = true
-text = "盗贼"
-
-[node name="CheckMage" type="CheckBox" parent="Center/Layout/PartyClassRow"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 2
-button_pressed = true
-text = "法师"
-
-[node name="CheckPriest" type="CheckBox" parent="Center/Layout/PartyClassRow"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 2
-button_pressed = true
-text = "牧师"
-
-[node name="CheckRanger" type="CheckBox" parent="Center/Layout/PartyClassRow"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 2
-button_pressed = false
-text = "游侠"
-
-[node name="CheckArcanist" type="CheckBox" parent="Center/Layout/PartyClassRow"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 2
-button_pressed = false
-text = "奇术师"
-
-[node name="ExpeditionQuestRow" type="HBoxContainer" parent="Center/Layout"]
-layout_mode = 2
-alignment = 1
-theme_override_constants/separation = 16
-
-[node name="ExpeditionExploreButton" type="Button" parent="Center/Layout/ExpeditionQuestRow"]
-unique_name_in_owner = true
-layout_mode = 2
-custom_minimum_size = Vector2(320, 48)
-focus_mode = 2
-text = "出征·探索「没能回家的托米」"
-
-[node name="ExpeditionPurgeButton" type="Button" parent="Center/Layout/ExpeditionQuestRow"]
-unique_name_in_owner = true
-layout_mode = 2
-custom_minimum_size = Vector2(320, 48)
-focus_mode = 2
-text = "出征·清剿「清剿哥布林营地」"
-
-[node name="ExpeditionWarnLabel" type="Label" parent="Center/Layout"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_font_sizes/font_size = 16
-text = ""
-horizontal_alignment = 1
-
-[connection signal="pressed" from="Center/Layout/SaveAndBackButton" to="." method="_on_save_and_back_pressed"]
-[connection signal="pressed" from="Center/Layout/BackButton" to="." method="_on_back_pressed"]
-[connection signal="pressed" from="Center/Layout/ExpeditionQuestRow/ExpeditionExploreButton" to="." method="_on_expedition_explore_pressed"]
-[connection signal="pressed" from="Center/Layout/ExpeditionQuestRow/ExpeditionPurgeButton" to="." method="_on_expedition_purge_pressed"]
+[connection signal="pressed" from="Layout/TopBar/BackButton" to="." method="_on_back_pressed"]
+[connection signal="pressed" from="Layout/MainBox/SideBox/WaitButton" to="." method="_on_wait_pressed"]
+[connection signal="pressed" from="Layout/MainBox/SideBox/PendingButton" to="." method="_on_pending_pressed"]
+[connection signal="pressed" from="Layout/MainBox/SideBox/DormitoryButton" to="." method="_on_dormitory_pressed"]
+[connection signal="pressed" from="Layout/MainBox/SideBox/TrainingButton" to="." method="_on_training_pressed"]
+[connection signal="pressed" from="Layout/MainBox/SideBox/AssociationButton" to="." method="_on_association_pressed"]

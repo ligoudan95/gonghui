@@ -713,9 +713,10 @@ func test_move_range_restored_after_cancel_taps() -> void:
 
 
 func test_degraded_exit_releases_expedition_lock() -> void:
-	## X2-M1（M3 质检）：return_to=EVENT_SCREEN 但装配降级（无 battle_params）——
-	## 「返回公会壳」前置 _return_to=-1，锁随 _exit_tree 释放
-	## （防回会话口径跳过解锁——锁卡 true 跳过全部 autosave）
+	## X2-M1（M3 质检；M4 批 2 起会话宿主唯一=EXPLORE_SCREEN——原 EVENT_SCREEN
+	## 用例随演示宿主拆除改挂探索回向）：return_to=EXPLORE_SCREEN 但装配降级
+	##（无 battle_params）——「返回公会壳」前置 _return_to=-1，锁随 _exit_tree
+	## 释放（防回会话口径跳过解锁——锁卡 true 跳过全部 autosave）
 	var save_manager: Node = get_tree().root.get_node("SaveManager")
 	save_manager.set_expedition_lock(true)
 	var scene_manager: Node = get_tree().root.get_node("SceneManager")

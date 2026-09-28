@@ -16,6 +16,11 @@ display_name = "没能回家的托米"
 goal_param = &"tp_old_well"
 region_id = &"reg_mine"
 map_id = &"map_m1_village_mine"
+time_limit_days = 7
 reward = SubResource("Resource_dihlx")
 acquire_channel = 1
-comment = "【占位·试玩校准】案 18 §2.3 事件授予专用（18-C3）；目标=老井暗窖 tp_old_well；奖励 150金/80经验/声望5"
+abandonable = true
+expire_behavior = 1
+issuer = "托米的日记"
+description = "撤离那晚，托米没能从老井暗窖出来——他的工具包和这个月的工钱都还留在下面。最后一页只有一行：「谁捡到这本子，替我去村口，跟她说一声。」"
+comment = "【占位·试玩校准】案 18 §2.3 事件授予专用（18-C3 不入周刷新池）；目标=老井暗窖 tp_old_well；时限 7 天例外（挂单不走板上到期表现——expire_behavior 值无实效）；奖励 150金/80经验/声望5；M4 补 issuer/description（C8 三要素：谁托=日记、要什么=带回遗物、回报感）并改 abandonable=true（案 6 §2.4 P2）"

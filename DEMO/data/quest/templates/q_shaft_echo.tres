@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="QuestTemplateDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/reward_def.gd" id="1_rwd"]
+[ext_resource type="Script" path="res://scripts/data_defs/quest_template_def.gd" id="2_qtd"]
+
+[sub_resource type="Resource" id="Resource_rwd"]
+script = ExtResource("1_rwd")
+exp = 80
+gold = 150
+reputation = 5
+
+[resource]
+script = ExtResource("2_qtd")
+id = &"q_shaft_echo"
+display_name = "竖井回声"
+goal_type = 1
+goal_param = &"tp_mine_south_shaft"
+region_id = &"reg_mine"
+map_id = &"map_m1_village_mine"
+party_min = 2
+party_max = 4
+time_limit_days = 5
+reward = SubResource("Resource_rwd")
+abandonable = true
+expire_behavior = 1
+recommend_attrs = Array[StringName]([&"perception", &"constitution"])
+issuer = "守夜人"
+description = "南竖井半夜有敲击声，一下一下，很有规律。去确认那里现在没有东西。"
+comment = "【占位·试玩校准】案 18 §2.6 定稿行 6：explore→tp_mine_south_shaft；2-4 人/5 天/消失（一次性确认类）；建议按 3-4 人编队出征；公共字段=案 18 §2.6（普通/战斗/档 1/全矿洞/150金·80经验·声望5/超额 0=走 cfg 0.15）"

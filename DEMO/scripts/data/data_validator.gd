@@ -9,7 +9,9 @@
 ## + 第四轮审计补强（2026-09-26：W4-15 V-M3-quest-reward 奖励量级带 /
 ## W5-6 V-M3-map-connectivity 图连通性 / W2-13 fog-region 一致性 /
 ## W4-06 chain-point 反向断言 / W2-6 普攻重复挂载 / W2-9 空敌清单 /
-## W4-13 空揭示表 / W4-03 cfg 值域与 base_expedition_days 加严）。
+## W4-13 空揭示表 / W4-03 cfg 值域与 base_expedition_days 加严）
+## + M4 批 1 新增（V-M4 五组：quest-template 板刷扩展字段 / quest-count 计数带 /
+## fac-domain 设施域 / adv-seed 初始种子 / cfg-domain 经营层参数扩展）。
 ## 用法：DataValidator.run_all(game_data)——game_data 为 GameData 自动加载单例或其实例。
 class_name DataValidator
 extends RefCounted
@@ -57,6 +59,10 @@ const SKILL_ORPHAN_WHITELIST: Array[StringName] = []
 ## preload 脚本常量，headless 测试无 autoload 节点也可取）
 const GameConfigScript: GDScript = preload("res://scripts/autoload/game_config.gd")
 
+## SceneManager 脚本引用（SCENE_REGISTRY 常量——V-M4-fac-domain 的
+## scene_id ∈ 注册表校验消费；跨层校验工具口径，V-B2 先例——被引类不反向依赖）
+const SceneManagerScript: GDScript = preload("res://scripts/autoload/scene_manager.gd")
+
 ## 域 -> id 前缀规范（core/assets 域走白名单例外）
 const DOMAIN_PREFIXES: Dictionary[StringName, Array] = {
 	&"class/classes": [&"cls_"],
@@ -81,6 +87,9 @@ const DOMAIN_PREFIXES: Dictionary[StringName, Array] = {
 	&"map/target_points": [&"tp_"],
 	&"map/encounter_weights": [&"encw_"],
 	&"world/regions": [&"reg_"],
+	# ---- M4 经营层域 ----
+	&"guild/facilities": [&"fac_"],
+	&"adventurer/instances": [&"adv_"],
 }
 
 static func run_all(game_data: Node) -> ValidationReport:
@@ -159,6 +168,12 @@ static func run_all(game_data: Node) -> ValidationReport:
 	# ---- 第四轮审计新增（2026-09-26：W4-15 委托奖励量级带 / W5-6 图连通性）----
 	_CheckQuestRewardDomain(report, game_data)
 	_CheckExploreMapConnectivity(report, game_data)
+	# ---- M4 批 1 新增（V-M4 五组：经营层域——板刷模板/委托计数/设施/种子/cfg 扩展）----
+	_CheckGuildQuestTemplate(report, game_data)
+	_CheckGuildQuestCounts(report, game_data)
+	_CheckGuildFacilityDomain(report, game_data)
+	_CheckGuildAdvSeed(report, game_data)
+	_CheckGuildCfgDomain(report, game_data)
 	return report
 
 # --------------------------------------------------------------------------
@@ -1012,7 +1027,9 @@ static func _CheckCfgDomains(report: ValidationReport, game_data: Node) -> void:
 			"content_enemies", "content_packs", "content_maps", "content_tiles",
 			"content_equip", "content_map_count", "content_interact_points",
 			"content_target_points", "content_encounter_weights",
-			"content_event_chains", "content_event_singles"]:
+			"content_event_chains", "content_event_singles",
+			"content_quest_templates", "content_quest_board", "content_quest_grant",
+			"content_facilities", "content_adv_seeds"]:
 		var band_min: int = int(cfg.get(band_name + "_min"))
 		var band_max: int = int(cfg.get(band_name + "_max"))
 		if band_min < 0 or band_min > band_max:
@@ -1161,6 +1178,8 @@ static func _CheckCfgFallbacks(report: ValidationReport, game_data: Node) -> voi
 		["ui_explore_target_active_color", UiTheme.EXPLORE_TARGET_ACTIVE],
 		["ui_explore_target_dim_color", UiTheme.EXPLORE_TARGET_DIM],
 		["ui_explore_goal_banner_color", UiTheme.EXPLORE_GOAL_BANNER],
+		# 席4 L3：常显图标衬底色入校验清单（回填消除纯代码兜底）
+		["ui_explore_icon_backdrop_color", UiTheme.EXPLORE_ICON_BACKDROP],
 	]
 	for pair: Array in color_pairs:
 		var raw_color: Variant = cfg.get(pair[0])
@@ -2041,6 +2060,214 @@ static func _CheckExploreMapConnectivity(report: ValidationReport, game_data: No
 			report.add_error("V-M3-map-connectivity", target.id,
 					"点位 (%d, %d) 自 start_cell 不可达（基础连通断裂）" % [
 							target.cell.x, target.cell.y])
+
+# --------------------------------------------------------------------------
+# M4 经营层域（V-M4 五组）
+# --------------------------------------------------------------------------
+
+static func _CheckGuildQuestTemplate(report: ValidationReport, game_data: Node) -> void:
+	## V-M4-quest-template：委托模板板刷扩展字段——BOARD 模板 expire_behavior
+	## 枚举值域 / recommend_attrs 必填且 ∈ 七属性 / issuer、description 必填；
+	## 全模板 excess_bonus_per_head ∈ [0,1]（0=走 cfg 统一值——拍板③）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"quest/templates"):
+		var quest := record as QuestTemplateDef
+		_CheckEnumRange(report, quest.id, "QuestTemplateDef.expire_behavior",
+				quest.expire_behavior, QuestTemplateDef.ExpireBehavior.size() - 1)
+		if quest.excess_bonus_per_head < 0.0 or quest.excess_bonus_per_head > 1.0:
+			report.add_error("V-M4-quest-template", quest.id,
+					"excess_bonus_per_head %f 越界 [0, 1]" % quest.excess_bonus_per_head)
+		if quest.acquire_channel != QuestTemplateDef.AcquireChannel.BOARD:
+			# 挂单委托（事件授予）不走板上到期表现——板刷字段仅 BOARD 模板强制
+			continue
+		if quest.recommend_attrs.is_empty():
+			report.add_error("V-M4-quest-template", quest.id,
+					"recommend_attrs 为空（板刷模板必填——推荐编队提示）")
+		for attr_id: StringName in quest.recommend_attrs:
+			if not _SevenAttrs().has(attr_id):
+				report.add_error("V-M4-quest-template", quest.id,
+						"recommend_attrs 项 '%s' 不在七属性集" % attr_id)
+		if quest.issuer.is_empty():
+			report.add_error("V-M4-quest-template", quest.id, "issuer 为空（文案钩子必填）")
+		if quest.description.is_empty():
+			report.add_error("V-M4-quest-template", quest.id, "description 为空（文案钩子必填）")
+
+static func _CheckGuildQuestCounts(report: ValidationReport, game_data: Node) -> void:
+	## V-M4-quest-count：委托域计数带——模板总数（cfg content_quest_templates
+	## [9,9]）+ BOARD 渠道（content_quest_board [8,8]）+ EVENT_GRANT 渠道
+	##（content_quest_grant [1,1]，warning 级——加内容改表即可）
+	## 参数：报告 / GameData
+	## 返回：无
+	_CheckCountBand(report, game_data, "<quest/templates>", "content_quest_templates",
+			"委托模板", game_data.get_domain_ids(&"quest/templates").size(), 9, "V-M4-quest-count")
+	var board_count: int = 0
+	var grant_count: int = 0
+	for record: Resource in _DomainRecords(game_data, &"quest/templates"):
+		var quest := record as QuestTemplateDef
+		if quest.acquire_channel == QuestTemplateDef.AcquireChannel.BOARD:
+			board_count += 1
+		elif quest.acquire_channel == QuestTemplateDef.AcquireChannel.EVENT_GRANT:
+			grant_count += 1
+	_CheckCountBand(report, game_data, "<quest/templates>", "content_quest_board",
+			"板刷渠道模板", board_count, 8, "V-M4-quest-count")
+	_CheckCountBand(report, game_data, "<quest/templates>", "content_quest_grant",
+			"事件授予渠道模板", grant_count, 1, "V-M4-quest-count")
+
+static func _CheckGuildFacilityDomain(report: ValidationReport, game_data: Node) -> void:
+	## V-M4-fac-domain：设施定义——kind 枚举 / max_level ∈ [1,2] / levels 逐级
+	## 恰合（行数=上限且 level 序连续）/ 花费合法（Lv1 ≥ 0 初始级、Lv ≥ 2 正数）/
+	## 按 kind 检查效果字段值域与单调（宿舍容量正数且严格递增+缩减不减；
+	## 训练场分享率 ∈ (0,1] 且递增）/ scene_id ∈ SceneManager.SCENE_REGISTRY
+	##（跨层校验工具口径，V-B2 先例）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"guild/facilities"):
+		var fac := record as FacilityDef
+		_CheckEnumRange(report, fac.id, "FacilityDef.facility_kind",
+				fac.facility_kind, FacilityDef.FacilityKind.size() - 1)
+		if fac.max_level < 1 or fac.max_level > 2:
+			report.add_error("V-M4-fac-domain", fac.id,
+					"max_level %d 越界 [1, 2]（DEMO 豁免上限 2 级）" % fac.max_level)
+		if fac.levels.size() != fac.max_level:
+			report.add_error("V-M4-fac-domain", fac.id,
+					"levels 行数 %d != max_level %d（逐级恰合）" % [
+							fac.levels.size(), fac.max_level])
+			continue
+		for level_index: int in fac.levels.size():
+			var level_row: FacilityLevelDef = fac.levels[level_index]
+			if level_row.level != level_index + 1:
+				report.add_error("V-M4-fac-domain", fac.id,
+						"levels[%d].level %d != %d（等级序不连续）" % [
+								level_index, level_row.level, level_index + 1])
+			if level_index == 0 and level_row.upgrade_cost < 0:
+				report.add_error("V-M4-fac-domain", fac.id,
+						"Lv1 upgrade_cost %d 为负（初始级无升级语义，0 合法）" % level_row.upgrade_cost)
+			if level_index > 0 and level_row.upgrade_cost <= 0:
+				report.add_error("V-M4-fac-domain", fac.id,
+						"Lv%d upgrade_cost %d 非正（升级级必须正数）" % [
+								level_row.level, level_row.upgrade_cost])
+		match fac.facility_kind:
+			FacilityDef.FacilityKind.DORMITORY:
+				_CheckFacilityMonotonic(report, fac, "dorm_capacity", true)
+				_CheckFacilityMonotonic(report, fac, "rest_days_reduction", false)
+				for level_row: FacilityLevelDef in fac.levels:
+					if level_row.dorm_capacity <= 0:
+						report.add_error("V-M4-fac-domain", fac.id,
+								"Lv%d dorm_capacity %d 非正" % [
+										level_row.level, level_row.dorm_capacity])
+					if level_row.rest_days_reduction < 0:
+						report.add_error("V-M4-fac-domain", fac.id,
+								"Lv%d rest_days_reduction %d 为负" % [
+										level_row.level, level_row.rest_days_reduction])
+			FacilityDef.FacilityKind.TRAINING:
+				_CheckFacilityMonotonic(report, fac, "bench_share_rate", true)
+				for level_row: FacilityLevelDef in fac.levels:
+					if level_row.bench_share_rate <= 0.0 or level_row.bench_share_rate > 1.0:
+						report.add_error("V-M4-fac-domain", fac.id,
+								"Lv%d bench_share_rate %f 越界 (0, 1]" % [
+										level_row.level, level_row.bench_share_rate])
+		if String(fac.scene_id).is_empty():
+			report.add_error("V-M4-fac-domain", fac.id, "scene_id 为空")
+		elif not SceneManagerScript.SCENE_REGISTRY.has(fac.scene_id):
+			report.add_error("V-M4-fac-domain", fac.id,
+					"scene_id '%s' 不在 SceneManager.SCENE_REGISTRY" % fac.scene_id)
+
+static func _CheckFacilityMonotonic(report: ValidationReport, fac: FacilityDef,
+		field_name: String, strict: bool) -> void:
+	## 设施效果字段单调性检查（V-M4-fac-domain 内部口——效果随等级不回退；
+	## strict=true 严格递增（容量），false 非递减（休养缩减））
+	## 参数 report/fac/field_name/strict：报告 / 设施 / 字段名 / 是否严格
+	## 返回：无
+	for level_index: int in range(1, fac.levels.size()):
+		var previous_value: float = float(fac.levels[level_index - 1].get(field_name))
+		var current_value: float = float(fac.levels[level_index].get(field_name))
+		var violated: bool = current_value < previous_value \
+				or (strict and current_value <= previous_value)
+		if violated:
+			report.add_error("V-M4-fac-domain", fac.id,
+					"%s 非单调（Lv%d %s -> Lv%d %s）" % [
+							field_name, fac.levels[level_index - 1].level,
+							str(previous_value), fac.levels[level_index].level, str(current_value)])
+
+static func _CheckGuildAdvSeed(report: ValidationReport, game_data: Node) -> void:
+	## V-M4-adv-seed：初始种子——计数带 [4,4] / class_id 可解析为职业表 /
+	## pre_unlocked 恒 true / 四行职业集合恰为{战士,盗贼,法师,牧师}（17-C7）
+	## 参数：报告 / GameData
+	## 返回：无
+	_CheckCountBand(report, game_data, "<adventurer/instances>", "content_adv_seeds",
+			"冒险者初始种子", game_data.get_domain_ids(&"adventurer/instances").size(),
+			4, "V-M4-adv-seed")
+	var expected_classes: Array[StringName] = [
+		&"cls_warrior", &"cls_rogue", &"cls_mage", &"cls_priest",
+	]
+	var actual_classes: Array[StringName] = []
+	for record: Resource in _DomainRecords(game_data, &"adventurer/instances"):
+		var seed_def := record as AdventurerSeedDef
+		if not seed_def.pre_unlocked:
+			report.add_error("V-M4-adv-seed", seed_def.id,
+					"pre_unlocked 须恒 true（初始 4 人第 1 技预解锁——17 案 §3.6）")
+		var cls: ClassDef = game_data.get_record(seed_def.class_id) as ClassDef
+		if cls == null:
+			report.add_error("V-M4-adv-seed", seed_def.id,
+					"class_id '%s' 不可解析（class/classes 域）" % seed_def.class_id)
+			continue
+		if not actual_classes.has(seed_def.class_id):
+			actual_classes.append(seed_def.class_id)
+	actual_classes.sort()
+	var sorted_expected: Array[StringName] = expected_classes.duplicate()
+	sorted_expected.sort()
+	if actual_classes != sorted_expected:
+		report.add_error("V-M4-adv-seed", &"<adventurer/instances>",
+				"职业集合 %s != 定稿集合 %s（17-C7：战士/盗贼/法师/牧师）" % [
+						str(actual_classes), str(sorted_expected)])
+
+static func _CheckGuildCfgDomain(report: ValidationReport, game_data: Node) -> void:
+	## V-M4-cfg-domain：总控配置 M4 经营层扩展——三档花费递增 / 档界
+	## 0 < line_low < line_high / 池容量 ≥ 1 / 名池非空 / 周天数 = 7 /
+	## pipeline 键集恰合五步序 / initial_gold 正 / 休养基础 ≥ 1 / 替换时限 ≥ 1 /
+	## 成长与委托参数正数 / 超额加成率 ∈ (0,1]
+	## 参数：报告 / GameData
+	## 返回：无
+	var cfg: CoreConfig = game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
+	if cfg == null:
+		return
+	if not (cfg.recruit_cost_low < cfg.recruit_cost_mid
+			and cfg.recruit_cost_mid < cfg.recruit_cost_high):
+		report.add_error("V-M4-cfg-domain", CoreConfig.CFG_MAIN_ID,
+				"招募三档花费须递增（%d < %d < %d）" % [
+						cfg.recruit_cost_low, cfg.recruit_cost_mid, cfg.recruit_cost_high])
+	if cfg.recruit_cost_line_low <= 0 or cfg.recruit_cost_line_low >= cfg.recruit_cost_line_high:
+		report.add_error("V-M4-cfg-domain", CoreConfig.CFG_MAIN_ID,
+				"招募档界须 0 < %d < %d" % [
+						cfg.recruit_cost_line_low, cfg.recruit_cost_line_high])
+	if cfg.recruit_pool_capacity < 1:
+		report.add_error("V-M4-cfg-domain", CoreConfig.CFG_MAIN_ID,
+				"recruit_pool_capacity %d < 1" % cfg.recruit_pool_capacity)
+	if cfg.recruit_name_pool.is_empty():
+		report.add_error("V-M4-cfg-domain", CoreConfig.CFG_MAIN_ID,
+				"recruit_name_pool 为空（招募命名无来源）")
+	if cfg.calendar_week_days != 7:
+		report.add_error("V-M4-cfg-domain", CoreConfig.CFG_MAIN_ID,
+				"calendar_week_days %d != 7（DEMO 七日一周冻结口径）" % cfg.calendar_week_days)
+	var expected_pipeline: Array[String] = [
+		"day_advance", "recovery", "recruit_refresh", "quest_countdown", "summary",
+	]
+	if cfg.day_settle_pipeline != expected_pipeline:
+		report.add_error("V-M4-cfg-domain", CoreConfig.CFG_MAIN_ID,
+				"day_settle_pipeline %s != 五步定序 %s" % [
+						str(cfg.day_settle_pipeline), str(expected_pipeline)])
+	for positive_name: String in ["initial_gold", "exp_per_level_base", "level_cap",
+			"levelup_all_attrs", "levelup_tendency_bonus", "skill_points_birth",
+			"skill_points_per_level", "skill_unlock_cost", "injury_rest_days",
+			"quest_board_size", "quest_week_draw", "quest_replace_time_limit"]:
+		if int(cfg.get(positive_name)) <= 0:
+			report.add_error("V-M4-cfg-domain", CoreConfig.CFG_MAIN_ID,
+					"%s ≤ 0" % positive_name)
+	if cfg.quest_excess_bonus_per_head <= 0.0 or cfg.quest_excess_bonus_per_head > 1.0:
+		report.add_error("V-M4-cfg-domain", CoreConfig.CFG_MAIN_ID,
+				"quest_excess_bonus_per_head %f 越界 (0, 1]" % cfg.quest_excess_bonus_per_head)
+
 
 static func _AllDomains(game_data: Node) -> Array[StringName]:
 	## 全部数据域键（C-1 单源：从 GameData.DOMAIN_SCHEMA 键集派生——域清单

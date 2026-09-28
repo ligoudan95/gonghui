@@ -21,4 +21,9 @@ party_min = 3
 party_max = 4
 time_limit_days = 5
 reward = SubResource("Resource_iitnk")
-comment = "【占位·试玩校准】案 18 §2.6 定稿行（P1 提前落）；CLEAR 判据 enc_m1_lair_pack；人力 3-4（2026-09-25 M3 质检拍板改回案文定稿）；时限 5 天；奖励 150金/80经验/声望5"
+abandonable = true
+expire_behavior = 0
+recommend_attrs = Array[StringName]([&"strength", &"constitution"])
+issuer = "矿工代表"
+description = "矿道深处的火光彻夜不熄——工头带着喽啰们扎了营。端了它，矿工才敢复工。"
+comment = "【占位·试玩校准】案 18 §2.6 定稿行 1（M3 P1 提前落、M4 补齐板刷字段）：CLEAR 判据 enc_m1_lair_pack；人力 3-4（2026-09-25 M3 质检拍板改回案文定稿）；时限 5 天；到期表现=刷新；奖励 150金/80经验/声望5；M4 改 abandonable=true（案 6 §2.4 P2 挂单可放弃）"

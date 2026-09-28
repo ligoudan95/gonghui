@@ -7,10 +7,11 @@
 ## 环境：gdUnit 帧内真 autoload；步进演出 override 0 加速；检定/遭遇全定种子。
 extends GdUnitTestSuite
 
-## SceneId 数值（SceneManager：GUILD_SHELL=1 / BATTLE_SCREEN=2 / EXPLORE_SCREEN=4）
+## SceneId 数值（SceneManager——M4 批 2 起 EVENT_SCREEN 拆除重排：
+## GUILD_SHELL=1 / BATTLE_SCREEN=2 / EXPLORE_SCREEN=3）
 const SCENE_GUILD: int = 1
 const SCENE_BATTLE: int = 2
-const SCENE_EXPLORE: int = 4
+const SCENE_EXPLORE: int = 3
 
 func before_test() -> void:
 	## 用例前置：复位 SceneManager 可变状态 + 出征锁
@@ -293,11 +294,11 @@ func test_chain4_retreat_discards_and_new_session_resets() -> void:
 	(screen.get_node("%SettlementButton") as Button).pressed.emit()
 	await _WaitFrames(4)
 	assert_bool(get_tree().root.get_node("SaveManager")._expedition_lock).is_false()
-	var guild: Control = get_tree().root.find_child("GuildShell", true, false) as Control
-	assert_object(guild).is_not_null()
-	(guild.find_child("ExpeditionExploreButton", true, false) as Button).pressed.emit()
-	await _WaitFrames(4)
-	var fresh: Control = get_tree().current_scene as Control
+	assert_object(get_tree().root.find_child("GuildShell", true, false)).is_not_null()
+	# 新出征：实例重置（M4 批 2：出征入口移驻协会屏——同构 run 直开探索屏
+	# 验证会话重置语义）
+	var fresh_run: ExpeditionRun = _MakeQuestRun(&"q_lair_purge")
+	var fresh: Control = await _OpenExplore(fresh_run)
 	assert_object(fresh).is_not_null()
 	assert_bool(fresh._run.consumed_events.is_empty()).is_true()
 	assert_int(int(fresh._run.rewards[&"gold"])).is_equal(0)
@@ -759,3 +760,35 @@ func test_w214_missing_post_battle_skips_panel_and_continues() -> void:
 	screen._OnCellPressed(Vector2i(7, 2))
 	await _WaitFrames(8)
 	assert_bool(run.party_pos == Vector2i(7, 2)).is_true()
+
+func test_g2_all_downed_finish_session_idempotent() -> void:
+	## G-2/H1 回归：全倒地前置拦截终结后——残留通道（战前确认/重复 _FinishSession）
+	## 不再二次结算（日历/货币不重复推进）；B 出口战前确认在会话终结后为空操作
+	var guild_state: Node = get_tree().root.get_node("GuildState")
+	guild_state.core = GuildCore.new()
+	guild_state.new_game()
+	var core: GuildCore = guild_state.core
+	core.board.board.clear()
+	var inst: QuestInstance = core.board.spawn_on_board(&"q_lair_purge", core.day)
+	var party: Array[StringName] = [core.roster[0].unit_id, core.roster[1].unit_id,
+			core.roster[2].unit_id]
+	assert_bool(core.accept_quest(inst.serial, party)).is_true()
+	assert_bool(core.start_expedition(inst.serial)).is_true()
+	var run: ExpeditionRun = guild_state.build_expedition_run(inst)
+	var screen: Control = await _OpenExplore(run)
+	# 全员倒地 → 路由前置拦截 → 终结（DEFEAT 通道）一次
+	for adv: AdventurerData in run.party:
+		run.downed[adv] = true
+	var routed: bool = screen._RouteEncounter(&"enc_m1_lair_pack", &"evp_mine_lair")
+	assert_bool(routed).is_false()
+	await _WaitFrames(2)
+	assert_bool(screen.get_node("%SettlementPanel").visible).is_true()
+	var day_after: int = core.day
+	var gold_after: int = core.gold
+	# 残留通道二次触发：不重复结算/推进
+	screen._FinishSession(GuildCore.ExpeditionOutcome.RETREAT)
+	screen._OnBattleIntroPressed()
+	await _WaitFrames(2)
+	assert_int(core.day).is_equal(day_after)
+	assert_int(core.gold).is_equal(gold_after)
+	assert_bool(screen.get_node("%SettlementPanel").visible).is_true()

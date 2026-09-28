@@ -1,11 +1,10 @@
 ## 委托模板定义（QuestTemplateDef）
-## 职责：委托板的模板行——目标（类型+参数）、人力区间、时限、奖励与
-## 获取渠道；M2 落事件授予 1 行（q_lost_miner_keepsake），板刷 8 行 M4 补。
-## 数据来源：案 6《委托与声望》（模板字段）；案 18 §2.3/§2.6（DEMO 内容）。
+## 职责：委托板的模板行——目标（类型+参数）、人力区间、时限、奖励、获取渠道、
+## 到期表现与推荐编队提示；M2 落事件授予 1 行（q_lost_miner_keepsake），
+## M3 提前落板刷首行（q_lair_purge），M4 补齐板刷 8 行全量（案 18 §2.6 定稿）。
+## 数据来源：案 6《委托与声望》（模板字段）；案 18 §2.3/§2.6（DEMO 内容）；
+## 案 17 §3.7（超额加成口径——模板字段位，0=走 cfg 统一值，拍板③）。
 ## id 命名规范：quest/templates 域，q_ 前缀，文件名与 id 同名。
-## M4 扩字段预留（E13 勘正——P-9 核心）：到期行为（到期表现/自动失败口径——
-## 事件授予挂单不走板上到期表现）、关联链（委托与事件链/地图域关联引用）、
-## 推荐编队（人力区间之外的属性/职业倾向提示）——落地时随案 6 增补+校验。
 class_name QuestTemplateDef
 extends Resource
 
@@ -38,6 +37,13 @@ enum AcquireChannel {
 	STORY,
 }
 
+## 板上到期表现（案 6 §2.2 三表现：刷新补位/移除/替换——挂单委托不适用本字段）
+enum ExpireBehavior {
+	REFRESH,
+	VANISH,
+	REPLACE,
+}
+
 ## 委托 id（如 &"q_lost_miner_keepsake"）
 @export var id: StringName = &""
 ## 中文名（如「没能回家的托米」）
@@ -67,12 +73,27 @@ enum AcquireChannel {
 @export var reward: RewardDef
 ## 获取渠道
 @export var acquire_channel: AcquireChannel = AcquireChannel.BOARD
-## 可放弃（普通=false 板刷口径反之；主线恒不可弃）
+## 可放弃（普通/事件授予=true 可弃；主线恒不可弃——案 6 §2.4 P2 拍板：
+## 挂单可主动放弃、无惩罚无奖励；原注释「普通=false」系 M2 未启用期误注，
+## M4 随放弃通道落地更正）
 @export var abandonable: bool = false
 ## 失败可重试
 @export var retry_on_fail: bool = false
 ## 稀有权重（0=常规——板刷稀有池权重）
 @export var rare_weight: int = 0
+## 板上到期表现（刷新=移除+板刷池补位不与在板重复 / 消失=仅移除 /
+## 替换=同模板新实例「加急·」前缀+时限走 cfg quest_replace_time_limit+奖励不变；
+## 事件授予模板不适用——挂单到期走自动失败通道）
+@export var expire_behavior: ExpireBehavior = ExpireBehavior.REFRESH
+## 推荐属性对（推荐编队提示——非强制；V-M4-quest-template 校验 ∈ 七属性）
+@export var recommend_attrs: Array[StringName] = []
+## 发布人（文案钩子——案 18 §2.6「谁托」；UI 委托卡展示）
+@export var issuer: String = ""
+## 委托描述（文案钩子——案 18 §2.6；UI 委托卡展示）
+@export var description: String = ""
+## 超额人数奖励加成率（每人 +本值；0 = 走 cfg 统一值 quest_excess_bonus_per_head
+## ——拍板③：模板字段位承载，仅货币+经验适用、声望不加）
+@export var excess_bonus_per_head: float = 0.0
 
 ## 设计备注（【占位·试玩校准】等标注与数据来源说明，Inspector 可编辑）
 @export var comment: String = ""

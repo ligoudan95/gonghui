@@ -45,6 +45,9 @@ var DOMAIN_SCHEMA: Dictionary[StringName, Array] = {
 	&"map/target_points": [TargetPointDef],
 	&"map/encounter_weights": [EncounterWeightDef],
 	&"world/regions": [RegionDef],
+	# ---- M4 经营层域（guild/facilities + adventurer/instances；quest/templates 已有）----
+	&"guild/facilities": [FacilityDef],
+	&"adventurer/instances": [AdventurerSeedDef],
 }
 
 ## id -> 资源记录 索引

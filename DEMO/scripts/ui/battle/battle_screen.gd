@@ -52,7 +52,7 @@ func _ready() -> void:
 	var params: Dictionary = scene_manager.take_pending_params()
 	var battle_params: BattleParams = params.get(&"battle_params", null) as BattleParams
 	# M2 批 3：返回路由参数化（return_to 缺省公会壳保持 M1 行为；回传包
-	# 供 event_screen 战后续跑——expedition_run 引用+事件/节点锚点透传回带，
+	# 供探索屏战后续跑——expedition_run 引用+事件/节点锚点透传回带，
 	# 战后 battle_result 以**合并键**写入不整体替换（E3-01①断链修复））
 	# M3 批 3：回传包增 encounter_pack_id（探索屏遭遇战通道——与
 	# battle_node_id 键区分战后续跑分叉）
@@ -617,16 +617,15 @@ func _LosRequiredOf(skill_id: StringName) -> bool:
 
 ## 返回目的地（return_to 参数注入；缺省 GUILD_SHELL——M1 行为不变）
 var _return_to: int = -1
-## 回传数据（战后 run 状态+锚点+战斗结果——event_screen 续跑消费）
+## 回传数据（战后 run 状态+锚点+战斗结果——explore_screen 续跑消费）
 var _return_payload: Dictionary = {}
 
 func _HoldsExpeditionLock() -> bool:
-	## 出征锁接管判定（M3 批 3：EVENT_SCREEN 或 EXPLORE_SCREEN 回向均由
-	## 宿主屏 _ready 接管持有——本屏不释放，帧内连续无空窗）
+	## 出征锁接管判定（M3 批 3；M4 批 2 起 EXPLORE_SCREEN 唯一会话宿主——
+	## event_screen 已随拍板①拆除，回向由宿主屏 _ready 接管持有，帧内连续无空窗）
 	## 参数：无
-	## 返回：true = 返回探索/事件会话（锁随会话移交）
-	return _return_to == SceneManagerScript.SceneId.EVENT_SCREEN \
-			or _return_to == SceneManagerScript.SceneId.EXPLORE_SCREEN
+	## 返回：true = 返回探索会话（锁随会话移交）
+	return _return_to == SceneManagerScript.SceneId.EXPLORE_SCREEN
 
 func _exit_tree() -> void:
 	## 引擎回调：离树释放出征锁（E2-4：回事件屏/探索屏时锁由宿主屏 _ready

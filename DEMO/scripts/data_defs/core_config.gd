@@ -256,6 +256,9 @@ enum Mode {
 @export var ui_explore_target_dim_color: Color = Color(0, 0, 0, 0)
 ## 判据达成横幅色
 @export var ui_explore_goal_banner_color: Color = Color(0, 0, 0, 0)
+## 探索常显图标衬底色（目标点在迷雾之上的对比底——席4 L3 回填，
+## 消除纯代码兜底）
+@export var ui_explore_icon_backdrop_color: Color = Color(0, 0, 0, 0)
 ## 探索图计数带（M3：DEMO 总图 1 恒定断言）
 @export var content_map_count_min: int = 0
 @export var content_map_count_max: int = 0
@@ -268,6 +271,68 @@ enum Mode {
 ## 遭遇权重计数带（M3：DEMO 2 恒定断言）
 @export var content_encounter_weights_min: int = 0
 @export var content_encounter_weights_max: int = 0
+
+# ---- M4 经营层参数（案 2 日历 / 案 4 经济 / 案 5 招募与成长 / 案 6 委托）----
+## 周天数（七日一周——周刷新与星期展示的周期基准；V-M4-cfg-domain 锚定 7）
+@export var calendar_week_days: int = 0
+## 星期显示开关（案 2 §2.1 历法显示 DEMO 必做 #19）
+@export var calendar_week_display: bool = false
+## 日结算管线步骤键（顺序消费——案 2 §2.4 固定顺序表驱动；V-M4-cfg-domain
+## 校验键集恰合五步序）
+@export var day_settle_pipeline: Array[String] = []
+## 初始资金（案 17 §3.7：500 金）
+@export var initial_gold: int = 0
+## 招募池容量（案 17 §3.7：DEMO 简化 3）
+@export var recruit_pool_capacity: int = 0
+## 招募花费三档（属性总和分档价——<74 → low / 74-77 → mid / ≥78 → high）
+@export var recruit_cost_low: int = 0
+@export var recruit_cost_mid: int = 0
+@export var recruit_cost_high: int = 0
+## 招募花费档界（下界 74 / 上界 78——避开高频中值 75/77/79，案 17 §3.7）
+@export var recruit_cost_line_low: int = 0
+@export var recruit_cost_line_high: int = 0
+## 招募占位名池（【占位·试玩校准】——拍板⑦：招募命名走 cfg 名池）
+@export var recruit_name_pool: Array[String] = []
+## 升级经验曲线基数（升级所需经验 = 本值 × 当前等级——17-C5：100×L）
+@export var exp_per_level_base: int = 0
+## 等级上限（DEMO = 5，17-C5）
+@export var level_cap: int = 0
+## 每级全属性成长值（17-C3：全额口径 +1）
+@export var levelup_all_attrs: int = 0
+## 每级倾向侧重属性额外成长值（17-C3：+1）
+@export var levelup_tendency_bonus: int = 0
+## 出生技能点（17 案 §3.6：1 点）
+@export var skill_points_birth: int = 0
+## 每级技能点（17 案 §3.6：1 点/级）
+@export var skill_points_per_level: int = 0
+## 档 1 技能解锁花费（技能点/个，17 案 §3.6）
+@export var skill_unlock_cost: int = 0
+## 重伤休养基础天数（仅战败触发；宿舍缩减归 fac_ 表，案 17 §3.5：3 天）
+@export var injury_rest_days: int = 0
+## 委托板名义数量（DEMO 占位取 3——案 6 §5；允许板空不承诺恒定）
+@export var quest_board_size: int = 0
+## 周刷新/开局预生成抽板数（板刷池 8 不放回抽 3 上板——P-9）
+@export var quest_week_draw: int = 0
+## 超额人数奖励加成率统一值（结算值 ×(1+本值×超额人数)，货币+经验适用、
+## 声望不加；模板 excess_bonus_per_head > 0 时覆盖本值——拍板③）
+@export var quest_excess_bonus_per_head: float = 0.0
+## 替换到期表现的新实例时限（「加急·」3 天——案 18 §2.6 自洽注）
+@export var quest_replace_time_limit: int = 0
+## 委托模板计数带（M4：DEMO 合计 9=板刷 8+事件授予 1）
+@export var content_quest_templates_min: int = 0
+@export var content_quest_templates_max: int = 0
+## 板刷渠道模板计数带（M4：8 恒定断言）
+@export var content_quest_board_min: int = 0
+@export var content_quest_board_max: int = 0
+## 事件授予渠道模板计数带（M4：1 恒定断言）
+@export var content_quest_grant_min: int = 0
+@export var content_quest_grant_max: int = 0
+## 设施定义计数带（M4：宿舍+训练场 2 恒定断言）
+@export var content_facilities_min: int = 0
+@export var content_facilities_max: int = 0
+## 冒险者初始种子计数带（M4：初始 4 人恒定断言）
+@export var content_adv_seeds_min: int = 0
+@export var content_adv_seeds_max: int = 0
 
 ## 设计备注（【占位·试玩校准】等标注与数据来源说明，Inspector 可编辑）
 @export var comment: String = ""

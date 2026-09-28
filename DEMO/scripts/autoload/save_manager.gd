@@ -150,6 +150,13 @@ func set_expedition_lock(locked: bool) -> void:
 	## 返回：无
 	_expedition_lock = locked
 
+func is_expedition_locked() -> bool:
+	## 出征锁读取（M4 经营层消费：等待/跳过一天的日历冻结校验、回城结算
+	## 前的锁序判断——原 set 只写不读，M4 补读取口）
+	## 参数：无
+	## 返回：true = 出征中（日历冻结、autosave 跳过）
+	return _expedition_lock
+
 func register_snapshot_provider(sys_name: StringName, save_fn: Callable, restore_fn: Callable) -> void:
 	## 注册系统快照 provider（M1+ 各系统扩展点）：autosave 时 payload[sys_name]=
 	## save_fn() 返回值；load 后以 payload[sys_name] 调 restore_fn
@@ -253,6 +260,10 @@ func _ReadSaveTextWithFallback() -> String:
 		push_warning("SaveManager: 正本无法打开（错误码 %d），尝试 .bak 兜底" % _last_primary_open_error)
 		file = FileAccess.open(BAK_PATH, FileAccess.READ)
 		if file == null:
+			# 席3 L-6：正本与 .bak 双不可读——留痕（此前静默空串，读档侧只见
+			# 「无法打开」文案不知兜底也失败）
+			push_warning("SaveManager: 兜底 .bak 亦不可读（错误码 %d）——无可用存档文本" \
+					% FileAccess.get_open_error())
 			return ""
 	var text: String = file.get_as_text()
 	file.close()

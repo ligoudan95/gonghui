@@ -48,6 +48,12 @@ var fog: FogOfWar = null
 var random_encounters_fired: int = 0
 ## 本次出征承接的委托模板 id（空 = 无委托自由探索）
 var quest_template_id: StringName = &""
+## 承接委托的实例序号（0 = 未携带——M3 旧流/G-2 前旧档；GuildState.
+## build_expedition_run 注入，结算按序号精确匹配防同模板并存误删）
+var quest_serial: int = 0
+## 已结算标记（G-2 幂等：GuildCore.settle_expedition 置位——重复结算调用
+## 返回空摘要，不重复入账/推日历/转挂单）
+var settled: bool = false
 ## 判据类型（QuestTemplateDef.GoalType 快照；-1 = 无判据）
 var goal_kind: int = -1
 ## 判据参数（tp_ / enc_——按 goal_kind 取义）

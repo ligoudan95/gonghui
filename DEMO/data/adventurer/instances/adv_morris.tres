@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="AdventurerSeedDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/adventurer_seed_def.gd" id="1_asd"]
+
+[resource]
+script = ExtResource("1_asd")
+id = &"adv_morris"
+display_name = "莫瑞斯"
+class_id = &"cls_priest"
+source = 0
+pre_unlocked = true
+comment = "【占位·试玩校准】初始 4 人种子（17-C7）；牧师位——意志第二倾向覆盖意志检定题材"

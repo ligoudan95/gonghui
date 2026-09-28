@@ -16,8 +16,13 @@ enum SceneId {
 	TITLE,
 	GUILD_SHELL,
 	BATTLE_SCREEN,
-	EVENT_SCREEN,
+	# EVENT_SCREEN 已随 M4 批 2 事件演示宿主拆除（拍板①）——事件会话宿主
+	# 唯一归 explore_screen（EventPanel 内嵌双宿主收口为单宿主）
 	EXPLORE_SCREEN,
+	# ---- M4 经营层场景（协会屏批 2；设施两屏拍板⑥三独立场景）----
+	ASSOCIATION_SCREEN,
+	GUILD_DORMITORY,
+	GUILD_TRAINING_GROUND,
 }
 
 ## 切换完成信号（from_id=切换前场景、to_id=目标场景；发起切换即发，
@@ -31,8 +36,11 @@ const SCENE_REGISTRY: Dictionary = {
 	&"title": {&"id": SceneId.TITLE, &"path": "res://scenes/title/title_screen.tscn"},
 	&"guild_shell": {&"id": SceneId.GUILD_SHELL, &"path": "res://scenes/guild/guild_shell.tscn"},
 	&"battle_screen": {&"id": SceneId.BATTLE_SCREEN, &"path": "res://scenes/battle/battle_screen.tscn"},
-	&"event_screen": {&"id": SceneId.EVENT_SCREEN, &"path": "res://scenes/event/event_screen.tscn"},
 	&"explore_screen": {&"id": SceneId.EXPLORE_SCREEN, &"path": "res://scenes/explore/explore_screen.tscn"},
+	# M4 经营层场景（协会屏/宿舍/训练场——拍板⑥三独立场景）
+	&"association_screen": {&"id": SceneId.ASSOCIATION_SCREEN, &"path": "res://scenes/guild/association_screen.tscn"},
+	&"guild_dormitory": {&"id": SceneId.GUILD_DORMITORY, &"path": "res://scenes/guild/guild_dormitory.tscn"},
+	&"guild_training_ground": {&"id": SceneId.GUILD_TRAINING_GROUND, &"path": "res://scenes/guild/guild_training_ground.tscn"},
 }
 
 ## 当前场景 id（未进入任何场景时 = -1）

@@ -1,6 +1,7 @@
 ## SaveManager 存档管理器单元测试（M0 批 3，事务类——失败即阻塞级）
-## 覆盖：往返一致、出征锁（锁时跳过/解锁可写）、SavePoint 恰四值、
-## 损坏容错（坏 JSON 不崩+信号）、schema_version 不识别拒载、has_save 翻转、
+## 覆盖：往返一致、出征锁（锁时跳过/解锁可写）、SavePoint 恰五值
+##（M4 追加 NEW_GAME）、损坏容错（坏 JSON 不崩+信号）、schema_version
+## 不识别拒载（M4 起 v2——旧 v1 拒载口径不变，拍板⑤）、has_save 翻转、
 ## 三段式 rename 加固（成功零 .bak 残留 / 正本缺失 .bak 兜底读 /
 ## 中断现场恢复写作——盲审批 3 B-2）。
 ## 隔离：每用例 before/after 清理 user://saves/（防用例间与真实存档互染；
@@ -91,7 +92,7 @@ func test_roundtrip_consistency() -> void:
 	_save_manager.current = null
 	var loaded: SaveData = _save_manager.load_game()
 	assert_object(loaded).is_not_null()
-	assert_int(loaded.schema_version).is_equal(1)
+	assert_int(loaded.schema_version).is_equal(2)
 	assert_int(loaded.save_point).is_equal(SaveData.SavePoint.RETURN_SETTLED)
 	assert_int(loaded.game_day).is_equal(42)
 	assert_str(loaded.mode).is_equal("demo")
@@ -122,12 +123,14 @@ func test_expedition_lock_blocks_autosave() -> void:
 	assert_str(unlocked).is_not_equal(baseline)
 
 func test_save_point_enum_has_four_values() -> void:
-	## SavePoint 枚举恰四值（#26 定稿四时点）
-	assert_int(SaveData.SavePoint.size()).is_equal(4)
+	## SavePoint 枚举恰五值（#26 定稿四时点 + M4 追加 NEW_GAME——枚举尾追加，
+	## 既有序号不变；v2 起 payload 增 &"guild" 公会快照键）
+	assert_int(SaveData.SavePoint.size()).is_equal(5)
 	assert_int(SaveData.SavePoint.DAY_END).is_equal(0)
 	assert_int(SaveData.SavePoint.RETURN_SETTLED).is_equal(1)
 	assert_int(SaveData.SavePoint.FACILITY_UPGRADED).is_equal(2)
 	assert_int(SaveData.SavePoint.RECRUIT_DONE).is_equal(3)
+	assert_int(SaveData.SavePoint.NEW_GAME).is_equal(4)
 
 func test_corrupt_json_tolerated() -> void:
 	## 损坏容错：坏 JSON→load_game 返回 null + save_corrupt 信号，进程不崩

@@ -18,9 +18,9 @@ func before() -> void:
 	_game_data.initialize_data()
 
 func test_run_all_clean() -> void:
-	## 全库校验应零错误零警告（121 条记录 = M0 49 + M1 战斗域 14 + M2 事件 29 + M3 探索层 29；计数带全部命中预期）
+	## 全库校验应零错误零警告（134 条记录 = M0 49 + M1 战斗域 14 + M2 事件 29 + M3 探索层 29 + M4 经营层 13；计数带全部命中预期）
 	var report: ValidationReport = DataValidator.run_all(_game_data)
-	assert_int(report.checked_count).is_equal(121)
+	assert_int(report.checked_count).is_equal(134)
 	assert_int(report.errors.size()).is_equal(0)
 	assert_int(report.warnings.size()).is_equal(0)
 	assert_bool(report.is_ok()).is_true()

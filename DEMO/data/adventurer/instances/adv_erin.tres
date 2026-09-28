@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="AdventurerSeedDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/adventurer_seed_def.gd" id="1_asd"]
+
+[resource]
+script = ExtResource("1_asd")
+id = &"adv_erin"
+display_name = "艾琳"
+class_id = &"cls_mage"
+source = 0
+pre_unlocked = true
+comment = "【占位·试玩校准】初始 4 人种子（17-C7）；法师位——智力主属性"

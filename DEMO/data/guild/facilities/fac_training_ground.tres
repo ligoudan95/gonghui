@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="FacilityDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/facility_level_def.gd" id="1_flv"]
+[ext_resource type="Script" path="res://scripts/data_defs/facility_def.gd" id="2_fdf"]
+
+[sub_resource type="Resource" id="Resource_lv1"]
+script = ExtResource("1_flv")
+level = 1
+upgrade_cost = 0
+bench_share_rate = 0.3
+
+[sub_resource type="Resource" id="Resource_lv2"]
+script = ExtResource("1_flv")
+level = 2
+upgrade_cost = 600
+bench_share_rate = 0.4
+
+[resource]
+script = ExtResource("2_fdf")
+id = &"fac_training_ground"
+display_name = "训练场"
+facility_kind = 1
+max_level = 2
+levels = Array[ExtResource("1_flv")]([SubResource("Resource_lv1"), SubResource("Resource_lv2")])
+scene_id = &"guild_training_ground"
+comment = "【占位·试玩校准】案 3 §2.2/案 17 §3.7/§3.11 #10：Lv1 分享率 0.3；Lv2 升级 600·分享率 0.4（先便宜：核心养成 sink 先触达）；DEMO 两级均只开档 1"

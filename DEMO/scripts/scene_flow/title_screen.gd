@@ -65,14 +65,20 @@ func _BuildVersionText() -> String:
 	return "%s · v%s" % [label, version]
 
 func _on_start_pressed() -> void:
-	## 「开始」按钮：新建存档并进入公会壳
+	## 「开始」按钮：新档入口（M4 批 2 接线）——GuildState.new_game（初始资金/
+	## 种子名册/委托板预生成/招募池首刷 + NEW_GAME 存档）→ 公会壳
 	## 参数：无
 	## 返回：无
-	_save_manager().new_game()
-	_scene_manager().go(SceneManagerScript.SceneId.GUILD_SHELL)
+	get_node("/root/GuildState").new_game()
+	var err: Error = _scene_manager().go(SceneManagerScript.SceneId.GUILD_SHELL)
+	if err != OK:
+		push_warning("title_screen: 进入公会壳失败（错误码 %d）" % err)
 
 func _on_continue_pressed() -> void:
-	## 「继续」按钮：读档成功跳存档场景；失败禁用按钮并提示（不崩）
+	## 「继续」按钮：读档（公会快照经 GuildState provider 恢复——回最近城内
+	## 时点；RETURN_SETTLED 存档锚定公会壳）；失败禁用按钮并提示（不崩）；
+	## D-7 轻量版：读档成功但公会快照为空（无经营数据的旧档）——留在标题提示
+	## 开新档，不进公会占位屏
 	## 参数：无
 	## 返回：无
 	var loaded: SaveData = _save_manager().load_game()
@@ -80,8 +86,14 @@ func _on_continue_pressed() -> void:
 		%ContinueButton.disabled = true
 		%HintLabel.text = "存档读取失败，已禁用继续"
 		return
+	var guild_state: Node = get_node_or_null("/root/GuildState")
+	if guild_state != null and not guild_state.has_guild_data():
+		%HintLabel.text = "存档无经营数据（旧版存档）——请开新档"
+		return
 	var target_id: int = _scene_manager().id_from_scene_name(loaded.scene_id)
 	if target_id < 0:
 		# 存档场景名未登记：回退公会壳（M0 唯一业务场景）
 		target_id = SceneManagerScript.SceneId.GUILD_SHELL
-	_scene_manager().go(target_id)
+	var err: Error = _scene_manager().go(target_id)
+	if err != OK:
+		push_warning("title_screen: 进入存档场景失败（错误码 %d）" % err)

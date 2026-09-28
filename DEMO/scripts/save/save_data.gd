@@ -8,16 +8,21 @@
 class_name SaveData
 extends Resource
 
-## 自动存档时点（#26 定稿四时点：日结算/回城结算/设施升级/招募完成）
+## 自动存档时点（#26 定稿四时点：日结算/回城结算/设施升级/招募完成；
+## M4 追加 NEW_GAME 建档时点——枚举尾追加，既有序号不变）
 enum SavePoint {
 	DAY_END,
 	RETURN_SETTLED,
 	FACILITY_UPGRADED,
 	RECRUIT_DONE,
+	NEW_GAME,
 }
 
-## 存档结构版本（结构变更时递增；旧版拒载走 save_corrupt）
-const SCHEMA_VERSION: int = 1
+## 存档结构版本（结构变更时递增；旧版拒载走 save_corrupt——拍板⑤。
+## v2：M4 经营层——payload 增 &"guild" 公会快照键
+## {day/gold/reputation/board{serial,board[],accepted[]}/recruit_pool{serial,
+## candidates[]}/facility_levels/roster[]/last_party_by_tpl/pending_tendency_levels}）
+const SCHEMA_VERSION: int = 2
 ## 公会壳场景名（C-4 单源：新档默认场景——SaveManager 占位与 SceneManager
 ## 注册表键同名；SaveManager 引用本常量（勿反向 preload SceneManager））
 const SCENE_GUILD_SHELL: StringName = &"guild_shell"
@@ -40,7 +45,8 @@ const REQUIRED_KEYS: Array[String] = [
 @export var scene_id: StringName = SCENE_GUILD_SHELL
 ## 写入时刻的 Unix 时间戳（秒）
 @export var saved_unix_time: int = 0
-## 各系统快照（键=系统名 StringName，值=该系统快照 Dictionary；M0 空）
+## 各系统快照（键=系统名 StringName，值=该系统快照 Dictionary；
+## M4 起 &"guild"=公会运行态快照（GuildState provider），其余系统按需扩展）
 @export var payload: Dictionary = {}
 
 func to_dict() -> Dictionary:

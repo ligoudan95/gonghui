@@ -1,6 +1,7 @@
-## 场景流集成测试（M0 批 4，GdUnitSceneRunner）
-## 覆盖：标题→开始→公会壳（信号/状态）、公会壳→保存并返回标题（存档落盘）、
-## 「继续」无档禁用/有档读档往返（验收①）、go_back 行为。
+## 场景流集成测试（M0 批 4，GdUnitSceneRunner；M4 批 2 随正式化更新）
+## 覆盖：标题→开始→公会壳（信号/状态；M4 起「开始」走 GuildState.new_game）、
+## 公会壳→等待一天（DAY_END 存档落盘+HUD 前进）+返回标题导航、「继续」
+## 无档禁用/有档读档往返（公会快照恢复回最近城内时点）、go_back 行为。
 ## 环境口径（批 4 实证修正）：gdUnit CI 运行器（-s MainLoop）在帧内于主循环树
 ## root 挂载真实 autoload 节点（批 1 「不注册 autoload」结论仅限 _initialize 时机
 ## 与 Engine.get_singleton 查询）——场景内 get_node("/root/X") 命中的正是 autoload
@@ -25,7 +26,8 @@ var _save_manager: Node
 var _scene_manager: Node
 
 func before_test() -> void:
-	## 用例级前置：取 root 下真 autoload 单例并复位可变状态；清存档目录
+	## 用例级前置：取 root 下真 autoload 单例并复位可变状态；清存档目录；
+	## GuildState 核心重置（M4 批 2——provider 闭包读字段即时值，重置安全）
 	## 参数：无
 	## 返回：无
 	_CleanSaveDir()
@@ -41,6 +43,9 @@ func before_test() -> void:
 	_scene_manager.previous_id = -1
 	var no_params: Dictionary = {}
 	_scene_manager.pending_params = no_params
+	var guild_state: Node = root.get_node_or_null("GuildState")
+	if guild_state != null:
+		guild_state.core = GuildCore.new()
 
 func after_test() -> void:
 	## 用例级后置：清理存档目录（autoload 单例不释放）
@@ -100,21 +105,28 @@ func test_title_start_to_guild_shell() -> void:
 	assert_object(_save_manager.current).is_not_null()
 	assert_int(_save_manager.current.game_day).is_equal(1)
 
-func test_guild_shell_save_and_back_to_title() -> void:
-	## 公会壳→「保存并返回标题」：DAY_END 存档落盘 + 标题场景挂树
-	_save_manager.new_game()
-	_save_manager.current.game_day = 2
+func test_guild_shell_wait_day_saves_and_back_button() -> void:
+	## 公会壳「等待一天」（M4 批 2 正式化——原存档演示三件退役）：DAY_END 存档
+	## 落盘 + HUD 天数前进；「返回标题」纯导航回标题（不触存档——五时点自动存档）
+	var guild_state: Node = get_tree().root.get_node("GuildState")
+	guild_state.new_game()
 	var runner: GdUnitSceneRunner = scene_runner(GUILD_SCENE)
-	_PressButton(runner, "SaveAndBackButton")
-	await _AwaitSceneSwap()
+	_PressButton(runner, "WaitButton")
+	await get_tree().process_frame
 	assert_bool(_save_manager.has_save()).is_true()
-	assert_object(get_tree().root.find_child("TitleScreen", true, false)).is_not_null()
-	assert_int(_scene_manager.current_id).is_equal(SCENE_TITLE)
-	# 落盘内容与触发时点一致
 	var loaded: SaveData = _save_manager.load_game()
 	assert_object(loaded).is_not_null()
 	assert_int(loaded.save_point).is_equal(SaveData.SavePoint.DAY_END)
 	assert_int(loaded.game_day).is_equal(2)
+	assert_int(_save_manager.current.game_day).is_equal(2)
+	# HUD 展示第 2 天
+	var day_label: Label = get_tree().root.find_child("DayLabel", true, false) as Label
+	assert_object(day_label).is_not_null()
+	assert_str(day_label.text).contains("第 2 天")
+	_PressButton(runner, "BackButton")
+	await _AwaitSceneSwap()
+	assert_object(get_tree().root.find_child("TitleScreen", true, false)).is_not_null()
+	assert_int(_scene_manager.current_id).is_equal(SCENE_TITLE)
 
 func test_continue_disabled_without_save() -> void:
 	## 无档时「继续」按钮 disabled（_ready 按 has_save 决定）
@@ -124,12 +136,17 @@ func test_continue_disabled_without_save() -> void:
 	assert_bool(continue_button.disabled).is_true()
 
 func test_continue_with_save_roundtrip() -> void:
-	## 有档→「继续」→进公会壳且展示 save_point/game_day 与存档一致（验收①）
-	# 造档：day=3、时点 RETURN_SETTLED、场景 guild_shell
-	var seed_save: SaveData = _save_manager.new_game()
-	seed_save.game_day = 3
+	## 有档→「继续」→进公会壳回最近城内时点（M4 批 2：公会快照经 GuildState
+	## provider 恢复——HUD 天数与存档一致；验收① 口径延续）
+	# 造档（生产口径：GuildState.new_game + 等待两天至 day3 → RETURN_SETTLED 时点）
+	var guild_state: Node = get_tree().root.get_node("GuildState")
+	guild_state.new_game()
+	guild_state.wait_one_day()
+	guild_state.wait_one_day()
+	assert_int(_save_manager.current.game_day).is_equal(3)
 	assert_int(_save_manager.autosave(SaveData.SavePoint.RETURN_SETTLED)).is_equal(OK)
 	_save_manager.current = null
+	guild_state.core = GuildCore.new()
 	# 标题 _ready：has_save → 继续可用
 	var runner: GdUnitSceneRunner = scene_runner(TITLE_SCENE)
 	var continue_button: Button = runner.find_child("ContinueButton", true, false) as Button
@@ -142,12 +159,14 @@ func test_continue_with_save_roundtrip() -> void:
 	assert_object(_save_manager.current).is_not_null()
 	assert_int(_save_manager.current.game_day).is_equal(3)
 	assert_int(_save_manager.current.save_point).is_equal(SaveData.SavePoint.RETURN_SETTLED)
-	# 公会壳展示锚点与存档一致（save_point 名 / game_day / mode）
-	var info_label: Label = get_tree().root.find_child("SaveInfoLabel", true, false) as Label
-	assert_object(info_label).is_not_null()
-	assert_str(info_label.text).is_not_empty()
-	assert_str(info_label.text).contains("回城结算")
-	assert_str(info_label.text).contains("3")
+	# 公会 HUD 与恢复的公会快照一致（第 3 天）
+	var day_label: Label = get_tree().root.find_child("DayLabel", true, false) as Label
+	assert_object(day_label).is_not_null()
+	assert_str(day_label.text).contains("第 3 天")
+	# 公会核心恢复等价（名册/委托板规模）
+	assert_int(guild_state.core.roster.size()).is_equal(4)
+	assert_int(guild_state.core.board.board.size()).is_equal(3)
+	assert_int(guild_state.core.day).is_equal(3)
 
 func test_go_back_returns_to_previous_scene() -> void:
 	## go_back：TITLE→公会壳→go_back 返回上一屏（TITLE）；从未进入场景时 FAILED
@@ -212,15 +231,6 @@ func test_go_rejected_while_switch_pending() -> void:
 	assert_int(_scene_manager.current_id).is_equal(SCENE_TITLE)
 	await _AwaitSceneSwap()
 
-func test_guild_save_failure_keeps_screen() -> void:
-	## 存档失败反馈（S5-4）：无运行态（current 为 null）按「保存并返回标题」
-	## → autosave FAILED → 提示保存失败并留在公会壳（标题屏不出现）
-	_save_manager.current = null
-	var runner: GdUnitSceneRunner = scene_runner(GUILD_SCENE)
-	_PressButton(runner, "SaveAndBackButton")
-	await _AwaitSceneSwap()
-	# 未发起标题切换（场景树残留不作为判据——current_id 为准）
-	assert_int(_scene_manager.current_id).is_not_equal(SCENE_TITLE)
-	var warn_label: Label = get_tree().root.find_child("SaveWarnLabel", true, false) as Label
-	assert_object(warn_label).is_not_null()
-	assert_str(warn_label.text).contains("存档写入失败")
+## test_guild_save_failure_keeps_screen（S5-4 存档失败反馈）已随 M4 批 2
+## 存档演示三件退役移除——演示触发按钮（保存并返回标题）不复存在；
+## SaveManager 层的写入容错（FAILED 返回/原子写回滚）由 test_save_manager 单测覆盖。

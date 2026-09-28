@@ -51,9 +51,9 @@ func test_domain_counts() -> void:
 	assert_int(_game_data.get_domain(&"event/hidden_marks").size()).is_equal(1)
 
 func test_full_library_clean() -> void:
-	## 全库正样本：121 资源零错误零警告（含挂起规则激活后的链触发点/委托判据闭环）
+	## 全库正样本：134 资源零错误零警告（含挂起规则激活后的链触发点/委托判据闭环；M4 后 134）
 	var report: ValidationReport = DataValidator.run_all(_game_data)
-	assert_int(report.checked_count).is_equal(121)
+	assert_int(report.checked_count).is_equal(134)
 	assert_int(report.errors.size()).is_equal(0)
 	assert_int(report.warnings.size()).is_equal(0)
 

@@ -10,8 +10,9 @@ extends GdUnitTestSuite
 const GUILD_SCENE: String = "res://scenes/guild/guild_shell.tscn"
 const EXPLORE_SCENE: String = "res://scenes/explore/explore_screen.tscn"
 
-## 探索屏 SceneId（SceneManager.SceneId.EXPLORE_SCREEN）
-const SCENE_EXPLORE: int = 4
+## 探索屏 SceneId（SceneManager.SceneId.EXPLORE_SCREEN——M4 批 2 起
+## EVENT_SCREEN 拆除后枚举重排：TITLE=0/GUILD_SHELL=1/BATTLE=2/EXPLORE=3）
+const SCENE_EXPLORE: int = 3
 
 func before_test() -> void:
 	## 用例前置：复位 SceneManager 可变状态 + 出征锁
@@ -257,29 +258,45 @@ func test_random_encounter_interrupts_movement() -> void:
 	battle.controller.abort_battle()
 
 func test_guild_expedition_roundtrip_lock() -> void:
-	## 公会壳 ↔ 探索屏往返：出征按钮（清剿）→ 探索屏挂载 + 出征锁置位 +
-	## run 判据上下文（CLEAR/enc_m1_lair_pack）；撤退 → 回公会壳 + 锁释放
-	var runner: GdUnitSceneRunner = scene_runner(GUILD_SCENE)
-	var screen: Control = runner.scene() as Control
-	await _WaitFrames(2)
-	(runner.find_child("ExpeditionPurgeButton", true, false) as Button).pressed.emit()
+	## 协会出征链路 ↔ 探索屏往返（M4 批 2：出征入口移驻协会屏挂单管理）：
+	## GuildState 建档 → 定点接取清剿（3 人）+出征确认 → build_expedition_run →
+	## 探索屏挂载 + 出征锁置位 + run 判据上下文（CLEAR/enc_m1_lair_pack）；
+	## 撤退 → GuildState 结算接管（释锁先行+日历推进）→ 回城按钮 → 公会壳
+	var guild_state: Node = get_tree().root.get_node("GuildState")
+	guild_state.new_game()
+	var core: GuildCore = guild_state.core
+	core.board.board.clear()
+	var inst: QuestInstance = core.board.spawn_on_board(&"q_lair_purge", 1)
+	var party: Array[StringName] = [core.roster[0].unit_id, core.roster[1].unit_id,
+			core.roster[2].unit_id]
+	assert_bool(core.accept_quest(inst.serial, party)).is_true()
+	assert_bool(core.start_expedition(inst.serial)).is_true()
+	var run: ExpeditionRun = guild_state.build_expedition_run(inst)
+	assert_object(run).is_not_null()
+	assert_int(get_tree().root.get_node("SceneManager").go(
+			SCENE_EXPLORE, {&"expedition_run": run})).is_equal(OK)
 	await _WaitFrames(4)
 	var explore: Control = get_tree().root.find_child("ExploreScreen", true, false) as Control
 	assert_object(explore).is_not_null()
 	assert_int(get_tree().root.get_node("SceneManager").current_id).is_equal(SCENE_EXPLORE)
 	assert_bool(get_tree().root.get_node("SaveManager")._expedition_lock).is_true()
-	# 判据上下文经按钮链路正确注入
+	# 判据上下文经出征链路正确注入（run 成员 = 名册引用）
 	assert_int(explore._run.goal_kind).is_equal(QuestTemplateDef.GoalType.CLEAR)
 	assert_str(String(explore._run.goal_param)).is_equal("enc_m1_lair_pack")
 	assert_bool(explore._run.party_pos == Vector2i(7, 1)).is_true()
-	# 撤退回城（批 3：确认弹窗 → 失败结算 → 回城）：锁释放 + 回公会壳
+	assert_int(explore._run.party.size()).is_equal(3)
+	# 撤退回城（确认弹窗 → 失败结算——GuildState 接管：释锁先行+日历推进+
+	# RETURN_SETTLED 存档 → 回城按钮 → 锁已释放 + 回公会壳
 	(explore.get_node("%RetreatButton") as Button).pressed.emit()
 	(explore.get_node("%RetreatConfirm") as ConfirmationDialog).confirmed.emit()
 	await _WaitFrames(2)
 	assert_bool(explore.get_node("%SettlementPanel").visible).is_true()
+	assert_bool(get_tree().root.get_node("SaveManager")._expedition_lock).is_false()
+	assert_int(core.day).is_equal(2)
+	assert_int(get_tree().root.get_node("SaveManager").current.save_point)\
+			.is_equal(SaveData.SavePoint.RETURN_SETTLED)
 	(explore.get_node("%SettlementButton") as Button).pressed.emit()
 	await _WaitFrames(4)
-	assert_bool(get_tree().root.get_node("SaveManager")._expedition_lock).is_false()
 	assert_object(get_tree().root.find_child("GuildShell", true, false)).is_not_null()
 
 func test_event_panel_hides_after_continue() -> void:

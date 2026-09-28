@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="gonghui"
-config/version="0.1.0"
+config/version="0.4.0"
 run/main_scene="res://scenes/title/title_screen.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
@@ -25,6 +25,7 @@ SaveManager="*res://scripts/autoload/save_manager.gd"
 SceneManager="*res://scripts/autoload/scene_manager.gd"
 Dialogic="*uid://ds2q0uclmolvu"
 _mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
+GuildState="*res://scripts/autoload/guild_state.gd"
 
 [dialogic]
 

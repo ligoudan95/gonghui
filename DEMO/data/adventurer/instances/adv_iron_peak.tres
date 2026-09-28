@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="AdventurerSeedDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/adventurer_seed_def.gd" id="1_asd"]
+
+[resource]
+script = ExtResource("1_asd")
+id = &"adv_iron_peak"
+display_name = "铁峰"
+class_id = &"cls_warrior"
+source = 0
+pre_unlocked = true
+comment = "【占位·试玩校准】初始 4 人种子（17-C7 转正定稿：战士/盗贼/法师/牧师）；属性不落表——开局 roll_fixed_four 中值偏上豁免钳制"
