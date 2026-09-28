@@ -163,6 +163,17 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 1
 
+[node name="DaySummaryHost" type="CenterContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
+
 [connection signal="pressed" from="Layout/TopBar/BackButton" to="." method="_on_back_pressed"]
 [connection signal="pressed" from="Layout/MainBox/SideBox/DormitoryButton" to="." method="_on_dormitory_pressed"]
 [connection signal="pressed" from="Layout/MainBox/SideBox/TrainingButton" to="." method="_on_training_pressed"]

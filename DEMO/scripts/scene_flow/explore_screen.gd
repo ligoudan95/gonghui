@@ -10,7 +10,8 @@
 ## CLEAR 判据）、判据达成→出口激活横幅、终结双通道（出口交付 = 成功（无委托
 ## 自由探索同走成功通道）/ 撤退·战败·全倒地 = 失败）——M4 批 2 接管回城结算：
 ## 释锁先行 → GuildState.settle_expedition（五步结算+RETURN_SETTLED 存档）→
-## 结算面板由 ExpeditionSummary 驱动（正式文案批 3 精修）。
+## 结算面板由 ExpeditionSummary 驱动（正式文案批 3 精修；M5 批 2 增「外出期间
+## 汇总」聚合段——拍板②并入正文，BuildDetailLines 与 DaySummaryPanel 共用）。
 ## 显示层级（2026-09-25 用户拍板）：UI 弹层（事件面板/结算面板，z=
 ## UI_POPUP_Z_INDEX）> 战争迷雾（board Z_FOG）> 已显示内容（board Z_TILE/
 ## Z_CONTENT）；例外：委托目标点常显（+衬底）与视野内小队图标浮于迷雾上
@@ -79,6 +80,18 @@ const UI_TEXTS: Dictionary = {
 	&"settle_days": "你们在外期间公会照常运转——日历已推进 %d 天。",
 	&"settle_rewards_voided": "队伍未能全功而归——途中所得未入账，收获全部作废。",
 	&"settle_save_failed": "⚠ 存档写入失败——本次结算进度未落盘，请重试或从最近存档继续。",
+	# ---- M5 批 2：外出期间汇总段（拍板②并入正文）+ BuildDetailLines 分组键集
+	##（与 DaySummaryPanel.UI_TEXTS 同值语义——共用行拼装防双源）
+	&"settle_period_summary_format": "外出期间汇总：%s。",
+	&"summary_recovered_format": "恢复 %d 人",
+	&"summary_week_refresh": "委托板周刷新",
+	&"summary_board_removed_format": "板上到期 %d 单",
+	&"summary_board_refreshed_format": "刷新补位 %d 单",
+	&"summary_board_replaced_format": "替换加急 %d 单",
+	&"summary_accepted_failed_format": "挂单到期失败 %d 单",
+	&"summary_candidates_format": "新候选：%s",
+	&"summary_light_done_format": "轻度委托完成：%s +%d 金 +%d 经验 +%d 声望",
+	&"summary_light_done_bench_suffix": "（板凳 %d 人各得 %d 经验）",
 	&"route_failed": "进入战斗失败——请重试。",
 	&"map_missing": "探索图数据缺失——无法开始探索。（占位提示——M4 出征层接管）",
 	&"check_roll_detail": "掷出 %d ＋ %d ＝ %d（%s %d）",
@@ -1031,6 +1044,7 @@ func _BuildSuccessBody(summary: GuildCore.ExpeditionSummary) -> String:
 	if not summary.quests_granted.is_empty():
 		lines.append(UI_TEXTS[&"settle_granted"] % _GrantedNames(summary))
 	lines.append(UI_TEXTS[&"settle_days"] % summary.days_settled)
+	_AppendPeriodSummary(lines, summary)
 	if summary.save_failed:
 		lines.append(UI_TEXTS[&"settle_save_failed"])
 	return "\n".join(lines)
@@ -1054,9 +1068,27 @@ func _BuildFailureBody(summary: GuildCore.ExpeditionSummary, reason: String) -> 
 	if not summary.quests_granted.is_empty():
 		lines.append(UI_TEXTS[&"settle_granted"] % _GrantedNames(summary))
 	lines.append(UI_TEXTS[&"settle_days"] % summary.days_settled)
+	_AppendPeriodSummary(lines, summary)
 	if summary.save_failed:
 		lines.append(UI_TEXTS[&"settle_save_failed"])
 	return "\n".join(lines)
+
+func _AppendPeriodSummary(lines: PackedStringArray,
+		summary: GuildCore.ExpeditionSummary) -> void:
+	## 外出期间汇总段（M5 批 2 拍板②：并入结算面板正文——不二连弹窗、不跨
+	## 场景传汇总态）：补结算逐日 day_summaries 聚合 → 有任何非空条目才出行
+	##（单日且无事时维持现状防冗余行）；行拼装复用 DaySummaryPanel.
+	## BuildDetailLines 单源（分组键集已入本屏 UI_TEXTS）
+	## 参数 lines：正文行数组（原地追加）；summary：回城结算摘要
+	## 返回：无
+	if summary.day_summaries.is_empty():
+		return
+	var agg: GuildCore.DaySummary = GuildCore.aggregate_day_summaries(
+			summary.day_summaries)
+	var detail: PackedStringArray = DaySummaryPanel.BuildDetailLines(agg, UI_TEXTS)
+	if detail.is_empty():
+		return
+	lines.append(String(UI_TEXTS[&"settle_period_summary_format"]) % "；".join(detail))
 
 func _GrantedNames(summary: GuildCore.ExpeditionSummary) -> String:
 	## 授予委托名拼接（成功/失败正文共用——对称文案单源）

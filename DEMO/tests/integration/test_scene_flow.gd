@@ -1,7 +1,13 @@
-## 场景流集成测试（M0 批 4，GdUnitSceneRunner；M4 批 2 随正式化更新）
+## 场景流集成测试（M0 批 4，GdUnitSceneRunner；M4 批 2 随正式化更新；
+## M5 批 3 导航契约矩阵收口）
 ## 覆盖：标题→开始→公会壳（信号/状态；M4 起「开始」走 GuildState.new_game）、
 ## 公会壳→等待一天（DAY_END 存档落盘+HUD 前进）+返回标题导航、「继续」
-## 无档禁用/有档读档往返（公会快照恢复回最近城内时点）、go_back 行为。
+## 无档禁用/有档读档往返（公会快照恢复回最近城内时点）、go_back 行为；
+## M5 批 3：SCENE_REGISTRY 完整性（七键资源/id 唯一/名 id 双向闭环）、
+## 各屏按钮→go 目标契约（公会壳四钮/协会+设施三屏返回/battle 回向三态）、
+## 读档直进四城内屏（FACILITY_UPGRADED@两设施屏、RECRUIT_DONE@协会屏、
+## DAY_END@公会壳——_ready 正常+关键数据渲染+协会屏未查看标记进屏即清）、
+## 协会屏存档失败提示（拍板③）/版本号跟随 cfg（M5）。
 ## 环境口径（批 4 实证修正）：gdUnit CI 运行器（-s MainLoop）在帧内于主循环树
 ## root 挂载真实 autoload 节点（批 1 「不注册 autoload」结论仅限 _initialize 时机
 ## 与 Engine.get_singleton 查询）——场景内 get_node("/root/X") 命中的正是 autoload
@@ -12,14 +18,26 @@ extends GdUnitTestSuite
 ## 单例脚本路径
 const SAVE_MANAGER_SCRIPT: String = "res://scripts/autoload/save_manager.gd"
 const SCENE_MANAGER_SCRIPT: String = "res://scripts/autoload/scene_manager.gd"
+## SceneManager 脚本常量引用（SCENE_REGISTRY 读取——M5 批 3）
+const SceneManagerScript: GDScript = preload("res://scripts/autoload/scene_manager.gd")
 
 ## 场景路径
 const TITLE_SCENE: String = "res://scenes/title/title_screen.tscn"
 const GUILD_SCENE: String = "res://scenes/guild/guild_shell.tscn"
+const ASSOC_SCENE: String = "res://scenes/guild/association_screen.tscn"
+const DORM_SCENE: String = "res://scenes/guild/guild_dormitory.tscn"
+const TRAIN_SCENE: String = "res://scenes/guild/guild_training_ground.tscn"
+const BATTLE_SCENE: String = "res://scenes/battle/battle_screen.tscn"
 
-## 场景 id 数值（SceneManager.SceneId：TITLE=0 / GUILD_SHELL=1）
+## 场景 id 数值（SceneManager.SceneId：TITLE=0 / GUILD_SHELL=1 / BATTLE=2 /
+## EXPLORE=3 / ASSOCIATION=4 / DORMITORY=5 / TRAINING_GROUND=6）
 const SCENE_TITLE: int = 0
 const SCENE_GUILD_SHELL: int = 1
+const SCENE_BATTLE_SCREEN: int = 2
+const SCENE_EXPLORE_SCREEN: int = 3
+const SCENE_ASSOCIATION: int = 4
+const SCENE_DORMITORY: int = 5
+const SCENE_TRAINING_GROUND: int = 6
 
 ## 套件级单例实例（before_test 建、after_test 释放）
 var _save_manager: Node
@@ -334,10 +352,11 @@ func test_settings_button_and_panel_contract() -> void:
 	assert_object(option).is_not_null()
 	assert_int(option.item_count).is_equal(2)
 	assert_int(option.selected).is_equal(0)
-	# 选大档：持久化落盘（headless 窗口断言跳过——DisplayServer 窗口恒 0）
-	option.select(1)
-	option.item_selected.emit(1)
+	# 选大档（M5 验收 BUG 修复口径：面板直连 popup.index_pressed——同项/异项
+	## 均触发）：持久化落盘 + 选中态由处理器同步（headless 窗口断言跳过）
+	(option.get_popup() as PopupMenu).emit_signal("index_pressed", 1)
 	await get_tree().process_frame
+	assert_int(option.selected).is_equal(1)
 	assert_str(AppSettings.load_window_size()).is_equal(AppSettings.SIZE_LARGE)
 	# 试玩 BUG 修复回归：非 headless 真窗口下选档即改窗口尺寸（gdUnit CI 窗口
 	# MINIMIZED——apply 先恢复 WINDOWED 再 set；headless 窗口恒 (0,0) 跳过）
@@ -357,3 +376,226 @@ func test_settings_button_and_panel_contract() -> void:
 	# after 复位：默认档 + 删 cfg（防互染）
 	AppSettings.apply_window_size(AppSettings.SIZE_DEFAULT)
 	DirAccess.remove_absolute("user://settings.cfg")
+
+# --------------------------------------------------------------------------
+# M5 批 3：导航契约矩阵收口 + 读档直进 + 协会屏存档失败提示 + 版本号
+# --------------------------------------------------------------------------
+
+func test_scene_registry_completeness() -> void:
+	## 导航契约①registry 完整性：七键场景资源全存在、id 全局唯一、
+	## id_from_scene_name 名→id 双向闭环（未登记名 → -1）
+	var registry: Dictionary = SceneManagerScript.SCENE_REGISTRY
+	assert_int(registry.size()).is_equal(7)
+	var seen_ids: Dictionary = {}
+	for scene_name: StringName in registry:
+		var entry: Dictionary = registry[scene_name]
+		var scene_path: String = entry[&"path"]
+		assert_bool(ResourceLoader.exists(scene_path)).is_true() \
+				.override_failure_message("场景资源缺失：%s" % scene_path)
+		var scene_id: int = entry[&"id"]
+		assert_bool(not seen_ids.has(scene_id)).is_true() \
+				.override_failure_message("场景 id 重复：%d（%s）" % [scene_id, scene_name])
+		seen_ids[scene_id] = true
+		# 双向闭环：registry 登记的 id 与 id_from_scene_name 反查一致
+		assert_int(_scene_manager.id_from_scene_name(scene_name)).is_equal(scene_id) \
+				.override_failure_message("名→id 反查违约：%s" % scene_name)
+	# 未登记名 → -1（title「继续」回退公会壳的判定前提）
+	assert_int(_scene_manager.id_from_scene_name(&"nonexistent_scene")).is_equal(-1)
+
+func test_guild_shell_navigation_buttons_targets() -> void:
+	## 导航契约②公会壳四钮→go 目标：Back→TITLE / 宿舍→GUILD_DORMITORY /
+	## 训练场→GUILD_TRAINING_GROUND / 协会→ASSOCIATION_SCREEN（逐钮逐轮）
+	var guild_state: Node = get_tree().root.get_node("GuildState")
+	var cases: Array = [
+		["BackButton", SCENE_TITLE],
+		["DormitoryButton", SCENE_DORMITORY],
+		["TrainingButton", SCENE_TRAINING_GROUND],
+		["AssociationButton", SCENE_ASSOCIATION],
+	]
+	for entry: Array in cases:
+		guild_state.new_game()
+		var runner: GdUnitSceneRunner = scene_runner(GUILD_SCENE)
+		_PressButton(runner, entry[0])
+		await _AwaitSceneSwap()
+		assert_int(_scene_manager.current_id).is_equal(entry[1]) \
+				.override_failure_message("%s 应导航至场景 %d" % [entry[0], entry[1]])
+		# 复位单例可变状态（下轮 go 前清重入与切换链）
+		_scene_manager.current_id = -1
+		_scene_manager.previous_id = -1
+
+func test_back_buttons_from_assoc_and_facilities() -> void:
+	## 导航契约②（续）：协会屏 BackButton 与两设施屏「返回公会」钮 →
+	## GUILD_SHELL（设施屏返回钮为代码构建无具名——按按钮文本定位）
+	var guild_state: Node = get_tree().root.get_node("GuildState")
+	guild_state.new_game()
+	var assoc_runner: GdUnitSceneRunner = scene_runner(ASSOC_SCENE)
+	_PressButton(assoc_runner, "BackButton")
+	await _AwaitSceneSwap()
+	assert_int(_scene_manager.current_id).is_equal(SCENE_GUILD_SHELL)
+	for scene_path: String in [DORM_SCENE, TRAIN_SCENE]:
+		_scene_manager.current_id = -1
+		_scene_manager.previous_id = -1
+		var runner: GdUnitSceneRunner = scene_runner(scene_path)
+		var pressed: bool = false
+		for button: Button in (runner.scene() as Control) \
+				.find_children("*", "Button", true, false):
+			if button.text == "返回公会":
+				button.pressed.emit()
+				pressed = true
+		assert_bool(pressed).is_true() \
+				.override_failure_message("设施屏缺「返回公会」钮：%s" % scene_path)
+		await _AwaitSceneSwap()
+		assert_int(_scene_manager.current_id).is_equal(SCENE_GUILD_SHELL) \
+				.override_failure_message("设施屏返回未导航公会壳：%s" % scene_path)
+
+func test_battle_return_to_navigation_contract() -> void:
+	## 导航契约②（续）：battle `_return_to` 三态——注入 EXPLORE→回探索屏；
+	## 缺省(-1)→GUILD_SHELL；降级撤退入口自行前置 _return_to=-1→GUILD_SHELL
+	##（battle_screen.gd _OnReturnPressed/_on_retreat_button_pressed 既有行为
+	## 契约化；锁释放语义由 test_battle_ui_flow.test_degraded_exit 锁移交用例
+	## 覆盖——直构实例不随 go 离树，此处只断导航目标）
+	var battle: Control = (load(BATTLE_SCENE) as PackedScene).instantiate()
+	add_child(battle)
+	auto_free(battle)
+	# ①注入回向 EXPLORE_SCREEN → go 目标 3
+	battle._return_to = SCENE_EXPLORE_SCREEN
+	battle._OnReturnPressed()
+	await _AwaitSceneSwap()
+	assert_int(_scene_manager.current_id).is_equal(SCENE_EXPLORE_SCREEN)
+	# ②缺省(-1) → GUILD_SHELL
+	_scene_manager.current_id = -1
+	battle._return_to = -1
+	battle._OnReturnPressed()
+	await _AwaitSceneSwap()
+	assert_int(_scene_manager.current_id).is_equal(SCENE_GUILD_SHELL)
+	# ③降级撤退（context null 分支）：入口自行前置 _return_to=-1 → GUILD_SHELL
+	##（X2-M1：防回会话口径让 _exit_tree 跳过解锁）
+	_scene_manager.current_id = -1
+	battle._return_to = SCENE_EXPLORE_SCREEN
+	battle._on_retreat_button_pressed()
+	await _AwaitSceneSwap()
+	assert_int(_scene_manager.current_id).is_equal(SCENE_GUILD_SHELL)
+	assert_int(battle._return_to).is_equal(-1)
+
+func test_load_direct_dormitory_screen() -> void:
+	## 导航契约③读档直进——FACILITY_UPGRADED@宿舍屏：造档（升宿舍至 Lv2、
+	## scene_id=guild_dormitory）→load→直开宿舍屏→_ready 正常+Lv2 满级态
+	var guild_state: Node = get_tree().root.get_node("GuildState")
+	guild_state.new_game()
+	guild_state.core.gold = 1000
+	_save_manager.current.scene_id = &"guild_dormitory"
+	assert_bool(guild_state.upgrade_facility(&"fac_dormitory")).is_true()
+	assert_int(_save_manager.current.save_point) \
+			.is_equal(SaveData.SavePoint.FACILITY_UPGRADED)
+	_save_manager.current = null
+	guild_state.core = GuildCore.new()
+	var loaded: SaveData = _save_manager.load_game()
+	assert_object(loaded).is_not_null()
+	assert_str(String(loaded.scene_id)).is_equal("guild_dormitory")
+	var runner: GdUnitSceneRunner = scene_runner(DORM_SCENE)
+	var screen: Control = runner.scene() as Control
+	var title_label: Label = screen.find_child("TitleLabel", true, false) as Label
+	assert_str(title_label.text).contains("宿舍（Lv2）")
+	var upgrade_button: Button = screen.find_child("UpgradeButton", true, false) as Button
+	assert_bool(upgrade_button.disabled).is_true()
+	assert_str(upgrade_button.text).is_equal("已满级")
+
+func test_load_direct_training_screen() -> void:
+	## 导航契约③读档直进——FACILITY_UPGRADED@训练场屏：造档（升训练场至
+	## Lv2、scene_id=guild_training_ground）→load→直开训练场屏→Lv2 满级态
+	var guild_state: Node = get_tree().root.get_node("GuildState")
+	guild_state.new_game()
+	guild_state.core.gold = 1000
+	_save_manager.current.scene_id = &"guild_training_ground"
+	assert_bool(guild_state.upgrade_facility(&"fac_training_ground")).is_true()
+	assert_int(_save_manager.current.save_point) \
+			.is_equal(SaveData.SavePoint.FACILITY_UPGRADED)
+	_save_manager.current = null
+	guild_state.core = GuildCore.new()
+	var loaded: SaveData = _save_manager.load_game()
+	assert_object(loaded).is_not_null()
+	assert_str(String(loaded.scene_id)).is_equal("guild_training_ground")
+	var runner: GdUnitSceneRunner = scene_runner(TRAIN_SCENE)
+	var screen: Control = runner.scene() as Control
+	var title_label: Label = screen.find_child("TitleLabel", true, false) as Label
+	assert_str(title_label.text).contains("训练场（Lv2）")
+	var upgrade_button: Button = screen.find_child("UpgradeButton", true, false) as Button
+	assert_bool(upgrade_button.disabled).is_true()
+	assert_str(upgrade_button.text).is_equal("已满级")
+
+func test_load_direct_association_screen() -> void:
+	## 导航契约③读档直进——RECRUIT_DONE@协会屏：造档（招募入册、scene_id=
+	## association_screen、带未查看挂单标记入档）→load→直开协会屏→
+	## _ready 正常+扣款入册显示+**has_unseen_grants 进屏即清**（方案风险 2
+	## 拍板：进协会=已查看，测试锁定该行为）
+	var guild_state: Node = get_tree().root.get_node("GuildState")
+	guild_state.new_game()
+	var cost: int = guild_state.core.recruit_pool.cost_of(
+			guild_state.core.recruit_pool.candidates[0])
+	_save_manager.current.scene_id = &"association_screen"
+	assert_object(guild_state.recruit(0)).is_not_null()
+	assert_int(_save_manager.current.save_point) \
+			.is_equal(SaveData.SavePoint.RECRUIT_DONE)
+	# 未查看挂单标记入档（清除口径的锁定前提）
+	guild_state.core.has_unseen_grants = true
+	assert_int(_save_manager.autosave(SaveData.SavePoint.RECRUIT_DONE)).is_equal(OK)
+	_save_manager.current = null
+	guild_state.core = GuildCore.new()
+	var loaded: SaveData = _save_manager.load_game()
+	assert_object(loaded).is_not_null()
+	assert_str(String(loaded.scene_id)).is_equal("association_screen")
+	assert_int(guild_state.core.roster.size()).is_equal(5)
+	assert_bool(guild_state.core.has_unseen_grants).is_true()
+	var runner: GdUnitSceneRunner = scene_runner(ASSOC_SCENE)
+	var screen: Control = runner.scene() as Control
+	var gold_label: Label = screen.find_child("GoldLabel", true, false) as Label
+	assert_str(gold_label.text).contains(str(500 - cost))
+	# 进协会=已查看：标记清除（方案拍板锁定口径）
+	assert_bool(guild_state.core.has_unseen_grants).is_false()
+
+func test_load_direct_guild_shell() -> void:
+	## 导航契约③读档直进——DAY_END@guild_shell：造档（等待一天）→load→
+	## 直开公会壳→_ready 正常+HUD 第 2 天+等待钮可用（无锁）
+	var guild_state: Node = get_tree().root.get_node("GuildState")
+	guild_state.new_game()
+	guild_state.wait_one_day()
+	assert_int(_save_manager.current.save_point).is_equal(SaveData.SavePoint.DAY_END)
+	_save_manager.current = null
+	guild_state.core = GuildCore.new()
+	var loaded: SaveData = _save_manager.load_game()
+	assert_object(loaded).is_not_null()
+	assert_str(String(loaded.scene_id)).is_equal("guild_shell")
+	assert_int(loaded.save_point).is_equal(SaveData.SavePoint.DAY_END)
+	var runner: GdUnitSceneRunner = scene_runner(GUILD_SCENE)
+	var shell: Control = runner.scene() as Control
+	assert_str((shell.get_node("%DayLabel") as Label).text).contains("第 2 天")
+	assert_bool((shell.get_node("%WaitButton") as Button).disabled).is_false()
+
+func test_association_autosave_failure_hint() -> void:
+	## 拍板③（顺手补）：协会屏存档失败提示——autosave FAILED（注入 current
+	## 置空）→RefreshAll 读 last_autosave_failed 呈现（guild_shell 同款文案）；
+	## 下一次业务成功（autosave OK）后清除——出现/清除语义与 guild_shell 一致
+	var guild_state: Node = get_tree().root.get_node("GuildState")
+	guild_state.new_game()
+	_save_manager.current = null
+	assert_object(guild_state.recruit(0)).is_not_null()
+	assert_bool(guild_state.last_autosave_failed).is_true()
+	var runner: GdUnitSceneRunner = scene_runner(ASSOC_SCENE)
+	var screen: Control = runner.scene() as Control
+	var hint: Label = screen.find_child("HintLabel", true, false) as Label
+	assert_str(hint.text).contains("存档写入失败")
+	# 恢复：读档重建运行态 → 再招募成功（autosave OK）→ 提示清除
+	_save_manager.load_game()
+	screen._OnRecruitRequested(0)
+	assert_bool(guild_state.last_autosave_failed).is_false()
+	var hint_after: Label = screen.find_child("HintLabel", true, false) as Label
+	assert_bool(hint_after.text.contains("存档写入失败")).is_false()
+	assert_str(hint_after.text).contains("入会")
+
+func test_title_version_label_follows_cfg() -> void:
+	## M5 批 3：版本号跟随 cfg.version_label（title_screen._BuildVersionText
+	## 消费 cfg 值无硬编码——M4→M5 只改表值，屏显自动跟随）
+	var runner: GdUnitSceneRunner = scene_runner(TITLE_SCENE)
+	var version_label: Label = runner.find_child("VersionLabel", true, false) as Label
+	assert_object(version_label).is_not_null()
+	assert_str(version_label.text).contains("DEMO M5")

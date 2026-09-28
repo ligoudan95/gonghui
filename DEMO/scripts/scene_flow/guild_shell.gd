@@ -2,7 +2,8 @@
 ## 职责：顶栏 HUD（第 N 天+星期+货币+声望）/ 队伍总览（RosterOverview——行点击
 ## →成员详情弹层：属性/装备/技能/花点解锁/倾向入口）/「等待一天」
 ##（出征中 disabled——日历冻结口径）/ 设施两入口+协会入口（新挂单角标）/
-## 日结算轻提示行（完整汇总弹窗归 M5）/ 升级+倾向选择弹层（LevelupPanel——
+## 日结算轻提示行 + 完整汇总弹窗（DaySummaryPanel——M5 批 2，等待一天成功后
+## 弹出；轻提示行维持现状双保险）/ 升级+倾向选择弹层（LevelupPanel——
 ## pending 队列驱动）；M0 存档演示三件与 M3 占位出征面板已随批 2 退役
 ##（存档走五时点自动存档；出征入口移驻协会屏挂单管理）。
 ## 右栏布局口径（修复批次 5：M4 试玩验收第 1 轮 UI 反馈）：设施协会区块
@@ -52,6 +53,8 @@ var _roster_overview: RosterOverview = null
 var _detail_panel: MemberDetailPanel = null
 ## 升级+倾向选择弹层（批 3）
 var _levelup_panel: LevelupPanel = null
+## 日结算汇总弹窗（M5 批 2——等待一天成功后完整汇总呈现）
+var _day_summary_panel: DaySummaryPanel = null
 
 func _ready() -> void:
 	## 引擎回调：取走跨场景参数 → 装配总览/详情/升级组件 → 字号档位覆写 →
@@ -76,6 +79,10 @@ func _ready() -> void:
 	_levelup_panel.close_requested.connect(_OnLevelupClosed)
 	_levelup_panel.member_changed.connect(_OnMemberChanged)
 	%LevelupHost.add_child(_levelup_panel)
+	_day_summary_panel = DaySummaryPanel.new()
+	_day_summary_panel.setup(_cfg)
+	_day_summary_panel.closed.connect(_OnDaySummaryClosed)
+	%DaySummaryHost.add_child(_day_summary_panel)
 	_guild_state().day_settled.connect(_OnDaySettled)
 	_ApplyFontTiers()
 	RefreshAll()
@@ -166,7 +173,8 @@ func _OnDaySettled(_summary: Variant) -> void:
 
 func _on_wait_pressed() -> void:
 	## 「等待一天」（案 2 §2.2 兜底行为；出征中 disabled——日历冻结）：
-	## GuildState.wait_one_day → 轻提示行（完整汇总弹窗归 M5）
+	## GuildState.wait_one_day → 轻提示行（维持现状）+ 完整汇总弹窗（M5 批 2——
+	## 弹窗关闭后轻提示行仍有当日单行摘要可查，双保险）
 	## 参数：无
 	## 返回：无
 	if not _HasSession():
@@ -178,6 +186,15 @@ func _on_wait_pressed() -> void:
 		return
 	%SettleInfoLabel.text = _SummarizeDay(summary)
 	RefreshAll()
+	_day_summary_panel.open([summary])
+	%DaySummaryHost.visible = true
+
+func _OnDaySummaryClosed() -> void:
+	## 日结算汇总弹窗关闭（隐藏宿主——轻提示行仍持当日摘要）
+	## 参数：无
+	## 返回：无
+	_day_summary_panel.close()
+	%DaySummaryHost.visible = false
 
 func _on_pending_pressed() -> void:
 	## 「待选倾向」直入入口（Z2-3：升级+倾向面板队列模式——不经成员详情）

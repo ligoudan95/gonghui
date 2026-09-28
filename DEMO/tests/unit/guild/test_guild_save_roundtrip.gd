@@ -304,3 +304,133 @@ func test_s3m5b_wait_day_autosave_failure_flagged() -> void:
 	assert_bool(state.last_autosave_failed).is_true()
 	state.free()
 	save_manager.free()
+
+# --------------------------------------------------------------------------
+# 读档一致性矩阵（M5 批 1）：五时点逐一 autosave → 丢弃运行态（关游戏模拟）→
+# load_game → 断言 scene_id 锚定 + core 关键态一致
+# --------------------------------------------------------------------------
+
+func _MakeLocalState() -> Array:
+	## 局部 SaveManager + GuildState 装配（套件隔离口径——手动等价初始化）
+	## 返回：[save_manager, state]（调用方负责 free）
+	var save_manager: Node = load(SAVE_MANAGER_SCRIPT).new()
+	add_child(save_manager)
+	var state: Node = load(GUILD_STATE_SCRIPT).new()
+	state.core = GuildCore.new()
+	state._rng = _MakeRng(521)
+	state.bind(save_manager, _game_data)
+	return [save_manager, state]
+
+func _ReloadAndAssert(state: Node, save_manager: Node, expected_day: int,
+		expected_gold: int, expected_roster: int) -> SaveData:
+	## 读档一致性矩阵共用：丢弃运行态 → load_game → core 关键态一致 + 就绪判定
+	## 参数 state/save_manager：局部 GuildState/SaveManager；expected_*：期望值
+	## 返回：载入的 SaveData（调用方按矩阵再断言 scene_id/save_point）
+	save_manager.current = null
+	state.core = GuildCore.new()
+	var loaded: SaveData = save_manager.load_game()
+	assert_object(loaded).is_not_null()
+	assert_int(state.core.day).is_equal(expected_day)
+	assert_int(state.core.gold).is_equal(expected_gold)
+	assert_int(state.core.roster.size()).is_equal(expected_roster)
+	assert_bool(state.has_guild_data()).is_true()
+	return loaded
+
+func test_reload_matrix_new_game_point() -> void:
+	## 矩阵①NEW_GAME：scene_id=guild_shell、初始态（500 金/4 人/板 3/池 3）一致
+	var local: Array = _MakeLocalState()
+	var save_manager: Node = local[0]
+	var state: Node = local[1]
+	state.new_game()
+	var loaded: SaveData = _ReloadAndAssert(state, save_manager, 1, 500, 4)
+	assert_str(String(loaded.scene_id)).is_equal("guild_shell")
+	assert_int(loaded.save_point).is_equal(SaveData.SavePoint.NEW_GAME)
+	assert_int(loaded.game_day).is_equal(1)
+	assert_int(state.core.board.board.size()).is_equal(3)
+	assert_int(state.core.recruit_pool.candidates.size()).is_equal(3)
+	state.free()
+	save_manager.free()
+
+func test_reload_matrix_day_end_point() -> void:
+	## 矩阵②DAY_END：等待一天 → scene_id 仍锚 guild_shell（城内时点）、
+	## day+1 与名册一致
+	var local: Array = _MakeLocalState()
+	var save_manager: Node = local[0]
+	var state: Node = local[1]
+	state.new_game()
+	state.wait_one_day()
+	var loaded: SaveData = _ReloadAndAssert(state, save_manager, 2, 500, 4)
+	assert_str(String(loaded.scene_id)).is_equal("guild_shell")
+	assert_int(loaded.save_point).is_equal(SaveData.SavePoint.DAY_END)
+	assert_int(loaded.game_day).is_equal(2)
+	state.free()
+	save_manager.free()
+
+func test_reload_matrix_return_settled_point() -> void:
+	## 矩阵③RETURN_SETTLED：回城结算（自由探索会话——事件奖励入账）→
+	## 场景锚定公会壳（GuildState.settle_expedition 内锚定）、结算态入档
+	var local: Array = _MakeLocalState()
+	var save_manager: Node = local[0]
+	var state: Node = local[1]
+	state.new_game()
+	var run := ExpeditionRun.new()
+	run.base_days = 1
+	run.add_reward(15, 20, 1)
+	var summary: Variant = state.settle_expedition(run,
+			GuildCore.ExpeditionOutcome.SUCCESS)
+	assert_int(summary.gold_gained).is_equal(20)
+	var loaded: SaveData = _ReloadAndAssert(state, save_manager, 2, 520, 4)
+	assert_str(String(loaded.scene_id)).is_equal("guild_shell")
+	assert_int(loaded.save_point).is_equal(SaveData.SavePoint.RETURN_SETTLED)
+	assert_int(loaded.game_day).is_equal(2)
+	assert_int(state.core.reputation).is_equal(1)
+	state.free()
+	save_manager.free()
+
+func test_reload_matrix_facility_upgraded_point() -> void:
+	## 矩阵④FACILITY_UPGRADED：设施屏时点 scene_id=设施屏名（fac.scene_id
+	## 数据单源——训练场/宿舍两变体）、升级扣款与等级入档
+	var local: Array = _MakeLocalState()
+	var save_manager: Node = local[0]
+	var state: Node = local[1]
+	state.new_game()
+	state.core.gold = 2000
+	# 训练场变体（600 金）：模拟进设施屏的 go 上报（生产链
+	## SceneManager.go→_ReportSceneToSave 写 scene_id）
+	var train_fac: FacilityDef = state.core.facility_def(&"fac_training_ground")
+	save_manager.current.scene_id = train_fac.scene_id
+	assert_bool(state.upgrade_facility(&"fac_training_ground")).is_true()
+	var loaded: SaveData = _ReloadAndAssert(state, save_manager, 1, 1400, 4)
+	assert_str(String(loaded.scene_id)).is_equal("guild_training_ground")
+	assert_int(loaded.save_point).is_equal(SaveData.SavePoint.FACILITY_UPGRADED)
+	assert_int(int(state.core.facility_levels[&"fac_training_ground"])).is_equal(2)
+	# 宿舍变体（800 金）
+	var dorm_fac: FacilityDef = state.core.facility_def(&"fac_dormitory")
+	save_manager.current.scene_id = dorm_fac.scene_id
+	assert_bool(state.upgrade_facility(&"fac_dormitory")).is_true()
+	var loaded2: SaveData = _ReloadAndAssert(state, save_manager, 1, 600, 4)
+	assert_str(String(loaded2.scene_id)).is_equal("guild_dormitory")
+	assert_int(loaded2.save_point).is_equal(SaveData.SavePoint.FACILITY_UPGRADED)
+	assert_int(int(state.core.facility_levels[&"fac_dormitory"])).is_equal(2)
+	state.free()
+	save_manager.free()
+
+func test_reload_matrix_recruit_done_point() -> void:
+	## 矩阵⑤RECRUIT_DONE：协会屏时点 scene_id=association_screen、
+	## 入册+扣款+招募池消耗入档
+	var local: Array = _MakeLocalState()
+	var save_manager: Node = local[0]
+	var state: Node = local[1]
+	state.new_game()
+	save_manager.current.scene_id = &"association_screen"
+	var cost: int = state.core.recruit_pool.cost_of(
+			state.core.recruit_pool.candidates[0])
+	assert_object(state.recruit(0)).is_not_null()
+	var loaded: SaveData = _ReloadAndAssert(state, save_manager, 1, 500 - cost, 5)
+	assert_str(String(loaded.scene_id)).is_equal("association_screen")
+	assert_int(loaded.save_point).is_equal(SaveData.SavePoint.RECRUIT_DONE)
+	assert_int(loaded.game_day).is_equal(1)
+	# 招募池消耗一致（3 候选入册 1 → 2）
+	assert_int(state.core.recruit_pool.candidates.size()).is_equal(2)
+	state.free()
+	save_manager.free()

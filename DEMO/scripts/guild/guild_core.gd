@@ -305,6 +305,39 @@ static func _ToStringArray(values: Array) -> Array[String]:
 		result.append(String(value))
 	return result
 
+static func aggregate_day_summaries(summaries: Array) -> DaySummary:
+	## 日结算汇总聚合（M5 批 2：DaySummaryPanel.open 与 explore_screen
+	## 「外出期间汇总」行共用口）：day 取末组；week_refreshed 任一 true；
+	## recovered_ids 依序并集去重；board_removed/board_refreshed/board_replaced/
+	## accepted_failed 依序拼接（逐日如实累计不去重）；new_candidate_names 取末组
+	##（逐日池整刷——历史候选名无展示价值）；light_completed 全拼接；
+	## 空数组返回空 DaySummary（day=0——调用方判空不出行）
+	## 参数 summaries：DaySummary 列表（单日 [summary] 或回城补结算逐日多组）
+	## 返回：聚合 DaySummary
+	var agg := DaySummary.new()
+	if summaries.is_empty():
+		return agg
+	for index: int in summaries.size():
+		var summary: DaySummary = summaries[index]
+		if index == summaries.size() - 1:
+			agg.day = summary.day
+			agg.new_candidate_names = summary.new_candidate_names.duplicate()
+		agg.week_refreshed = agg.week_refreshed or summary.week_refreshed
+		for unit_id: StringName in summary.recovered_ids:
+			if not agg.recovered_ids.has(unit_id):
+				agg.recovered_ids.append(unit_id)
+		for tpl_key: String in summary.board_removed:
+			agg.board_removed.append(tpl_key)
+		for tpl_key: String in summary.board_refreshed:
+			agg.board_refreshed.append(tpl_key)
+		for tpl_key: String in summary.board_replaced:
+			agg.board_replaced.append(tpl_key)
+		for tpl_key: String in summary.accepted_failed:
+			agg.accepted_failed.append(tpl_key)
+		for result: LightQuestResult in summary.light_completed:
+			agg.light_completed.append(result)
+	return agg
+
 # --------------------------------------------------------------------------
 # 委托门面（编队校验+状态迁移——案 6 §2.4）
 # --------------------------------------------------------------------------

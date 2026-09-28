@@ -5,6 +5,8 @@
 ## 招募池（RecruitPanel：候选卡+刷新提示）；编队派遣为屏内弹层 OrganizePanel
 ##（选人带占用/休养/当日已出征标记；检定/超额/沿用三预览归批 3）。
 ## 出征链路：挂单「出征」→ GuildState.build_expedition_run → EXPLORE_SCREEN。
+## M5 批 3（拍板③）：顶栏提示行增最近一次自动存档失败感知（guild_shell
+## 同款文案口径——RefreshAll 读 GuildState.last_autosave_failed）。
 ## 数据来源：案 6（委托运转）/案 5 §2.4（招募）；UI 规范=案 15 + UiTheme。
 ## 单例访问：统一 get_node("/root/X")（gdUnit 测试环境惯例）。
 extends Control
@@ -21,6 +23,7 @@ const UI_TEXTS: Dictionary = {
 	&"light_abandon_confirm_text": "放弃进行中的轻度委托？工期作废、无奖励，成员立即释放。",
 	&"light_abandon_confirm_ok": "确认放弃",
 	&"light_abandon_confirm_cancel": "再想想",
+	&"autosave_failed_hint": "⚠ 最近一次自动存档写入失败——进度可能未落盘，请重试操作。",
 }
 
 ## GameData 单例引用
@@ -112,6 +115,11 @@ func RefreshAll() -> void:
 	_board_panel.refresh(core.board.board, _game_data, core.day)
 	_accepted_panel.refresh(core.board.accepted, core)
 	_recruit_panel.refresh(core)
+	# M5 批 3（拍板③顺手补）：最近一次自动存档失败感知——guild_shell 同款
+	## 文案口径与语义（RefreshAll 读标志呈现；标志由 GuildState 业务口每次
+	## 入口复位——本轮成功即清除，不覆写操作成功文案）
+	if _guild_state().last_autosave_failed:
+		%HintLabel.text = UI_TEXTS[&"autosave_failed_hint"]
 
 func _SetHint(text: String) -> void:
 	## 顶栏下方提示行（门面校验失败原因呈现）
