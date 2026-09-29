@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="StatusDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/dot_params.gd" id="1_pznew"]
+[ext_resource type="Script" path="res://scripts/data_defs/status_def.gd" id="2_poisn"]
+
+[sub_resource type="Resource" id="Resource_poisn"]
+script = ExtResource("1_pznew")
+fixed = 2
+ratio = 0.0
+
+[resource]
+script = ExtResource("2_poisn")
+id = &"DEBUFF_poison"
+display_name = "中毒"
+category = 1
+polarity = 1
+dot = SubResource("Resource_poisn")
+default_duration = 2
+allowed_sources = Array[StringName]([&"TILE", &"CHECKIN"])
+comment = "【占位·试玩校准】毒沼踏入染毒（功能一 Q2/Q3 拍板）：踏入/途经毒沼附加、不随离格移除，回合末固定 2 伤持续 2 回合（免判定免减免，同陷阱 D7 口径）；allowed_sources 含 CHECKIN 供探索层战斗带入（build_poison_initial_statuses 通道）；与站位毒 DEBUFF_tile_poison（6 伤·离格移除）两条并存"

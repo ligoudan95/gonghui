@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ExploreTileDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/explore_tile_def.gd" id="1_pzmire"]
+
+[resource]
+script = ExtResource("1_pzmire")
+id = &"etile_poison_swamp"
+display_name = "毒瘴"
+fill_color = Color(0.42, 0.13, 0.5, 1)
+effect_kind = 1
+effect_status_id = &"DEBUFF_poison"
+effect_damage = 2
+comment = "【占位·试玩校准】etile_<语义>：探索层毒瘴（功能一试玩批 Q1/Q3/Q5 拍板）——踏入/途经全队 2 伤（下限 1 止、倒地不扣）+ 染毒标记（状态行·中毒）；遭遇战带入 DEBUFF_poison（2 伤×2 回合，CHECKIN 通道）；配色对齐战棋毒沼 tile_poison_swamp"

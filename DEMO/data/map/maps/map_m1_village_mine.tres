@@ -7,12 +7,13 @@ script = ExtResource("1_sya28")
 id = &"map_m1_village_mine"
 display_name = "村口矿道·总图"
 size = Vector2i(15, 15)
-rows = Array[String](["vvvvvvvvvvvvvvv", "vvvvvvvvvvvvvvv", "vvvvvvvvvvvvvvv", "XXXXXXX.XXXXXXX", "X.............X", "X.XXXXX.XXXXX.X", "X.XXXXX.XXXXX.X", "X.............X", "XXX.XXX.XXX.XXX", "XXX.XXX.XXX.XXX", "X.............X", "XXXX.XX.XX.XXXX", "XXXX.XX.XX.XXXX", "XXX.........XXX", "XXXXXXX.XXXXXXX"])
+rows = Array[String](["vvvvvvvvvvvvvvv", "vvvvvvvvvvvvvvv", "vvvvvvvvvvvvvvv", "XXXXXXX.XXXXXXX", "X.............X", "X.XXXXX.XXXXXSX", "X.XXXXX.XXXXXSX", "X.............X", "XXX.XXX.XXX.XXX", "XXX.XXX.XXX.XXX", "X.............X", "XXXX.XXSXX.XXXX", "XXXX.XXSXX.XXXX", "XXX.........XXX", "XXXXXXX.XXXXXXX"])
 legend = Dictionary[StringName, StringName]({
 &".": &"etile_floor",
 &"X": &"etile_wall",
 &"p": &"etile_path",
-&"v": &"etile_village_ground"
+&"v": &"etile_village_ground",
+&"S": &"etile_poison_swamp"
 })
 region_ids = Array[StringName]([&"reg_village", &"reg_mine"])
 start_cell = Vector2i(7, 1)

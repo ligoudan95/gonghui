@@ -40,6 +40,10 @@ enum Style {
 @export var move_cost: int = 1
 ## 绑定的状态 id（kind = STATUS 时生效；陷阱纯伤害地格留空——第九轮拍板）
 @export var status_id: StringName = &""
+## 踏入/途经附加状态 id（功能一试玩批 Q3：status/stats 域——踏入或途经
+## 即施加、**不随离格移除**（区别于 status_id 站位口径）；仅 kind = STATUS
+## 时生效；空 = 无附加（既有地格零感知）
+@export var enter_status_id: StringName = &""
 ## 触发方式（STANDING = 站位期间常驻；ENEMY_ENTER_ONCE = 敌方踏入一次性触发）
 @export var trigger: Trigger = Trigger.STANDING
 

@@ -16,6 +16,13 @@ enum Style {
 	BLOCK,   ## 障碍岩块（底色 + 深色内块 + 强调色描边）
 }
 
+## 踏入效果类型（功能一试玩批 2——DEMO 唯一语义 = 踏入/途经即触发，
+## 不建独立触发方式枚举；NONE = 无效果）
+enum EffectKind {
+	NONE,
+	POISON,
+}
+
 ## 地格 id（如 &"etile_floor"）
 @export var id: StringName = &""
 ## 中文名（如「矿洞地面」）
@@ -28,6 +35,15 @@ enum Style {
 @export var accent_color: Color = Color(0, 0, 0, 0)
 ## 视觉样式（PLAIN/RAISED/BLOCK）
 @export var style: Style = Style.PLAIN
+## 踏入效果类型（功能一批 2：NONE = 无——既有地格零感知；POISON = 踏入/
+## 途经即触发扣血+染毒标记+战斗带入）
+@export var effect_kind: EffectKind = EffectKind.NONE
+## 踏入效果附加状态 id（POISON 生效——status/stats 域，战斗带入经 CHECKIN
+## 施加通道；allowed_sources 须含 CHECKIN，V-P1-etile-effect 拦截）
+@export var effect_status_id: StringName = &""
+## 踏入效果单格损耗值（POISON 生效——探索层直扣 apply_party_damage 口径：
+## 排除已倒地、下限 1 止；≥1，V-P1-etile-effect 拦截）【占位·试玩校准】
+@export var effect_damage: int = 0
 
 ## 设计备注（【占位·试玩校准】等标注与数据来源说明，Inspector 可编辑）
 @export var comment: String = ""
