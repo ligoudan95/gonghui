@@ -298,39 +298,95 @@ func _run_enemy_turn(unit: BattleUnit) -> void:
 # --------------------------------------------------------------------------
 
 func _move_unit(unit: BattleUnit, dest: Vector2i) -> void:
-	## 单位移动：格子占位索引同步 + 标记 + 站位地格状态换格 + 信号
+	## 单位移动：途经陷阱判定（S2-R1-01 拍板「途经触发」——途经=踏入，
+	## 案 17 §3.4 实施注/tile_trap 描述口径）→ 格子占位索引同步 + 标记 +
+	## 站位地格状态换格 + 信号
 	## 参数 unit：单位；dest：目的地
 	## 返回：无
 	var from_pos: Vector2i = unit.grid_pos
+	# 途经扫描（带下标追踪）：实际路径（find_path 与 find_reachable 同通行
+	# 规则——占位互为障碍/同 move_cost）逐格判定，首个敌对陷阱格记
+	# trap_index（含终点检查行为保留）→ 截断剩余移动（单位停在触发格、
+	# 不连触）；路径取不到（终点占位漂移等边界）退化为仅停格判定
+	var settle_dest: Vector2i = dest
+	var trap_cell: Vector2i = dest
+	var trap_found: bool = false
+	var path: Array[Vector2i] = _context.grid.find_path(unit, from_pos, dest,
+			unit.move_final())
+	var trap_index: int = path.size() - 1
+	for index: int in path.size():
+		if _IsHostileTrapAt(unit, path[index]):
+			trap_index = index
+			trap_cell = path[index]
+			trap_found = true
+			break
+	if trap_found:
+		settle_dest = trap_cell
+	# 踏过格集（功能一试玩批 Q3 踏入染毒）：实际踏过=path[0..trap_index]
+	#（截断含触发格）或全路径（无陷阱；起点 index0 已被 find_path 排除——
+	# 站毒沼起跳不重复施加）；退化情形（路径空）= 仅停格
+	var stepped_cells: Array[Vector2i] = []
+	if path.is_empty():
+		stepped_cells.append(dest)
+	else:
+		for index: int in range(0, trap_index + 1):
+			stepped_cells.append(path[index])
 	_context.grid.remove_unit(from_pos)
-	unit.grid_pos = dest
-	_context.grid.place_unit(dest, unit)
+	unit.grid_pos = settle_dest
+	_context.grid.place_unit(settle_dest, unit)
 	unit.has_moved = true
 	# 站位地格状态换格（M1 批 2 缺口补线 2026-09-24 八轮）：离格移除旧站位
 	# 状态 → 新格状态施加（草丛闪避/高地面板/毒沼 DOT——敌我同权）；
 	# 蛊惑随机移动走本口天然覆盖
 	_context.status_manager.on_unit_moved(unit)
-	var dest_tile: TileTypeDef = _context.grid.tile_at(dest)
+	var dest_tile: TileTypeDef = _context.grid.tile_at(settle_dest)
 	if _context.status_manager.apply_tile_standing(unit, dest_tile, _context.round_no):
 		status_changed.emit(unit, dest_tile.status_id)
-	# 陷阱触发（盲审批 1-3：ENEMY_ENTER_ONCE 动态地格踏入链——预结算伤害
-	# 直扣免判定免减免 D7；仅敌对踏入触发（我方陷阱敌方踩、敌方陷阱我方踩），
-	# 我方踩自家陷阱消耗与否不触发只留格（对位语义）；开局摆位不经本口不触发）
-	var trap_data: Dictionary = _context.grid.dynamic_tile_at(dest)
-	if not trap_data.is_empty() and dest_tile != null \
-			and dest_tile.trigger == TileTypeDef.Trigger.ENEMY_ENTER_ONCE:
-		var trap_source: BattleUnit = _context.find_unit(trap_data.get(&"source_id", &""))
-		if trap_source != null and trap_source.side != unit.side:
-			_context.grid.consume_dynamic_tile(dest)
-			var trap_damage: int = int(trap_data.get(&"damage", 0))
-			unit.take_damage(trap_damage)
-			trap_triggered.emit(unit, trap_damage)
-			if not unit.alive:
-				# W1-2：陷阱击杀统一走 on_downed 回调（与技能击杀路径对齐）
-				unit.on_downed()
-				_mark_downed(unit.unit_id)
-			_check_battle_end()
-	unit_moved.emit(unit, from_pos, dest)
+	# 踏入染毒（Q3：途经=踏入——按踏过格集逐格附加，不随离格移除；敌我
+	# 对称；true 时发信号供日志/信息卡接线；三路移动共用本口自动成立）
+	for cell: Vector2i in stepped_cells:
+		var pass_tile: TileTypeDef = _context.grid.tile_at(cell)
+		if _context.status_manager.apply_tile_pass(unit, pass_tile, _context.round_no):
+			status_changed.emit(unit, pass_tile.enter_status_id)
+	# 陷阱结算（盲审批 1-3 语义 + S2-R1-01 途经扩口）：ENEMY_ENTER_ONCE 动态
+	# 地格踏入链——预结算伤害直扣免判定免减免 D7；落位触发格后再结算
+	# （trap_triggered 消费方读 unit.grid_pos 定位飘字）；途经扫描未命中时
+	# 停格补判（路径退化情形）；开局摆位不经本口不触发
+	if trap_found:
+		_FireTrapAt(unit, trap_cell)
+	elif _IsHostileTrapAt(unit, settle_dest):
+		_FireTrapAt(unit, settle_dest)
+	unit_moved.emit(unit, from_pos, settle_dest)
+
+func _IsHostileTrapAt(unit: BattleUnit, cell: Vector2i) -> bool:
+	## 陷阱敌对判定（S2-R1-01 抽取单源——途经扫描/停格补判共用）：
+	## ENEMY_ENTER_ONCE 动态地格且施放者与踏入者敌对（我方陷阱敌方踩、
+	## 敌方陷阱我方踩；我方踩自家陷阱不触发不消耗只留格——对位语义）
+	## 参数 unit：移动单位；cell：判定格
+	## 返回：true = 该格有对本单位敌对的陷阱
+	var trap_data: Dictionary = _context.grid.dynamic_tile_at(cell)
+	if trap_data.is_empty():
+		return false
+	var tile_def: TileTypeDef = _context.grid.tile_at(cell)
+	if tile_def == null or tile_def.trigger != TileTypeDef.Trigger.ENEMY_ENTER_ONCE:
+		return false
+	var trap_source: BattleUnit = _context.find_unit(trap_data.get(&"source_id", &""))
+	return trap_source != null and trap_source.side != unit.side
+
+func _FireTrapAt(unit: BattleUnit, cell: Vector2i) -> void:
+	## 陷阱结算（S2-R1-01 抽取单源）：消耗动态层 + 预结算伤害直扣 + 信号 +
+	## 倒地回调（W1-2：与技能击杀路径对齐）+ 全灭判定；调用方须已将单位
+	## 落位触发格（grid_pos == cell）
+	## 参数 unit：踏入单位；cell：触发格
+	## 返回：无
+	var trap_data: Dictionary = _context.grid.consume_dynamic_tile(cell)
+	var trap_damage: int = int(trap_data.get(&"damage", 0))
+	unit.take_damage(trap_damage)
+	trap_triggered.emit(unit, trap_damage)
+	if not unit.alive:
+		unit.on_downed()
+		_mark_downed(unit.unit_id)
+	_check_battle_end()
 
 func _execute_skill(unit: BattleUnit, skill_id: StringName, target_cell: Vector2i) -> SkillExecutor.ExecutionResult:
 	## 技能执行：组装 ctx（批 1 SkillExecutor）→ 执行 → 发信号（施加/倒地）→

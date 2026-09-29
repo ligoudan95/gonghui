@@ -24,6 +24,8 @@ func before_test() -> void:
 	scene_manager.previous_id = -1
 	var no_params: Dictionary = {}
 	scene_manager.pending_params = no_params
+	# S5-R2-02：复位切换重入锁（用例中断残留 _switch_pending=true 会连锁假失败）
+	scene_manager._switch_pending = false
 	get_tree().root.get_node("SaveManager").set_expedition_lock(false)
 	# M-10：套件卫生统一（探索屏用例触真实 autoload）——统一复位
 	_ResetAutoloadState()

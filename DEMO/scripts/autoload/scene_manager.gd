@@ -26,7 +26,10 @@ enum SceneId {
 }
 
 ## 切换完成信号（from_id=切换前场景、to_id=目标场景；发起切换即发，
-## 实际场景树替换在帧末完成）
+## 实际场景树替换在帧末完成）。
+## 消费口径约定（S5-06）：回调内**不得访问 get_tree().current_scene**——
+## 发射时点先于帧末替换落地，current_scene 仍指向旧场景；须以落地帧之后
+## （await 两帧或下一 process 帧）为准。发射时点不改（现有测试消费依赖）
 signal scene_changed(from_id: int, to_id: int)
 
 ## 场景注册表（C-4 单表合并：场景名 -> {id, path}——原 SCENE_TABLE 与

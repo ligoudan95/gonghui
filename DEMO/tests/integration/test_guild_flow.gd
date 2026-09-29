@@ -31,6 +31,8 @@ func before_test() -> void:
 	scene_manager.previous_id = -1
 	var no_params: Dictionary = {}
 	scene_manager.pending_params = no_params
+	# S5-R2-02：复位切换重入锁（用例中断残留 _switch_pending=true 会连锁假失败）
+	scene_manager._switch_pending = false
 	root.get_node("SaveManager").set_expedition_lock(false)
 	root.get_node("GuildState").core = GuildCore.new()
 
@@ -256,11 +258,14 @@ func test_expire_abandon_reassign_flow() -> void:
 	assert_str(String(quest_a.party_ids[0])).is_equal(String(core.roster[2].unit_id))
 	assert_int(core.board.occupied_member_ids().size()).is_equal(2)
 	# 等待推进至到期线（上板日 1 + 时限 5 = 第 6 天结算到期）：HUD 轻提示可见
+	##（S5-02：日结算弹窗打开期间等待钮守卫——逐日关闭弹窗后再推下一天）
 	var shell_runner: GdUnitSceneRunner = scene_runner(GUILD_SCENE)
 	await _WaitFrames(2)
 	var shell: Control = shell_runner.scene() as Control
 	for _day_index: int in 5:
 		(shell.get_node("%WaitButton") as Button).pressed.emit()
+		await _WaitFrames(1)
+		shell._OnDaySummaryClosed()
 		await _WaitFrames(1)
 	assert_int(core.day).is_equal(6)
 	assert_int(core.board.accepted.size()).is_equal(0)
@@ -614,12 +619,15 @@ func test_light_quest_full_chain() -> void:
 	assert_int(core.board.occupied_member_ids().size()).is_equal(1)
 	assert_str((screen.get_node("%HintLabel") as Label).text).contains("工期 2 天")
 	# --- 等待推进：day+1 工期 1；day+2 归零结算（板凳 3 人各 9 经验后缀）---
+	##（S5-02：日结算弹窗打开期间等待钮守卫——逐日关闭弹窗后再推下一天）
 	var shell: GdUnitSceneRunner = scene_runner(GUILD_SCENE)
 	(shell.scene() as Control).RefreshAll()
 	await _WaitFrames(1)
 	(shell.find_child("WaitButton", true, false) as Button).pressed.emit()
 	await _WaitFrames(2)
 	assert_int(inst.work_days_left).is_equal(1)
+	(shell.scene() as Control)._OnDaySummaryClosed()
+	await _WaitFrames(1)
 	(shell.find_child("WaitButton", true, false) as Button).pressed.emit()
 	await _WaitFrames(2)
 	assert_int(core.board.accepted.size()).is_equal(0)

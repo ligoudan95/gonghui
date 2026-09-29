@@ -377,7 +377,9 @@ func _ExecuteEffects(caster: Object, skill: SkillDef, target: Object, target_cel
 	for effect: SkillEffect in skill.effects:
 		match effect.effect_kind:
 			SkillEffect.EffectKind.STATUS_APPLY:
-				if not attack_ok or target == null:
+				# S2-02：击杀链门——目标已被本次攻击打死时不再向尸体施加状态
+				# （仅 STATUS 类收紧；HEAL 由 heal() 自身倒地拒收、尸体无攻击回路）
+				if not attack_ok or target == null or not target.alive:
 					continue
 				var status: StatusDef = status_lookup.call(effect.status_id) as StatusDef
 				if status == null:

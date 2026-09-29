@@ -3,10 +3,10 @@
 ## 公会快照 provider（payload[&"guild"]）、#26 五时点 autosave 业务口与信号桥。
 ## 全部规则逻辑在 GuildCore 纯逻辑类（铁律⑥），本类不承载规则。
 ## 依赖：GameData（读表）/SaveManager（provider+autosave+出征锁）——铁律④链
-## GameConfig→GameData→SaveManager→GuildState→SceneManager 的第四环。
-## 注册位注记（席4 L2 对齐）：Godot 重写 project.godot 后实际注册于 SceneManager
-## 之后（链上第五位）——本单例依赖仅 GameData/SaveManager（先于本单例入树），
-## 晚注册不影响 _ready 装配，注释与实况对齐、注册不动。
+## GameConfig→GameData→SaveManager→GuildState→SceneManager 五成员中本单例
+## 实际注册于 SceneManager 之后（链上第五位——project.godot autoload 实况，
+## 席4 L2 对齐）：依赖仅 GameData/SaveManager（先于本单例入树），晚注册不
+## 影响 _ready 装配，注册不动。
 ## new_game 入口批 2 接 title 屏。
 extends Node
 
@@ -31,6 +31,11 @@ var _rng: RandomNumberGenerator
 ## FAILED 的 UI 感知——与 M-3 的 summary.save_failed 口径对称；guild_shell
 ## RefreshAll 消费呈现；每次业务操作入口复位）
 var last_autosave_failed: bool = false
+## 是否持有公会快照数据（S3-01：new_game 建档或读档恢复非空快照时 true；
+## 读档成功但公会快照为空（旧档 guild:{} / 无 guild 键）时 false——title
+## 「继续」经 has_guild_data 消费走开新档提示；core 依赖装配与快照就绪是
+## 两个独立维度，stale 装配不冒充有效快照）
+var _has_guild_snapshot: bool = false
 
 func _ready() -> void:
 	## 引擎回调：建核心并按铁律④链装配依赖（SaveManager 已先于本单例入树）
@@ -49,6 +54,25 @@ func bind(save_manager: Node, game_data: Node) -> void:
 	_game_data = game_data
 	if _save_manager != null:
 		_save_manager.register_snapshot_provider(&"guild", _SaveSnapshot, _RestoreSnapshot)
+		# S3-01 补口：payload 无 guild 键的旧档读档（provider 不被调用的路径）
+		# ——同进程残留旧局状态在此一并清空（save_loaded 在快照恢复后发射）
+		_save_manager.save_loaded.connect(_OnSaveLoaded)
+
+func _OnSaveLoaded(save_data: SaveData) -> void:
+	## 读档完成信号（S3-01：payload 无 guild 键 = 无公会数据的旧档——快照
+	## 恢复口不会被调用，同进程残留旧局在此清空；S3-R2-01 扩口：guild 键
+	## 值类型不符（[]/标量/null——SaveManager 侧已跳过 restore 调用）同样
+	## 走清空链；值为 Dictionary（含空表）时由 _RestoreSnapshot 全权处理）
+	## 参数 save_data：已载入的存档
+	## 返回：无
+	if save_data == null:
+		return
+	var guild_payload: Variant = save_data.payload.get(&"guild", null)
+	if guild_payload is Dictionary:
+		return
+	_has_guild_snapshot = false
+	if core != null:
+		core.restore_snapshot({})
 
 func new_game() -> void:
 	## 新档入口（批 2 接 title「开始新游戏」；本批先落方法）：SaveManager 建档
@@ -61,6 +85,7 @@ func new_game() -> void:
 		return
 	_save_manager.new_game()
 	core.setup(_ResolveCfg(), _game_data, _rng)
+	_has_guild_snapshot = true
 	_SyncDay()
 	last_autosave_failed = _save_manager.autosave(SaveData.SavePoint.NEW_GAME) != OK
 
@@ -89,12 +114,15 @@ func settle_expedition(run: ExpeditionRun,
 	## 参数 run：出征会话；outcome：出口（四出口之一）
 	## 返回：ExpeditionSummary
 	# S3-M5-1-a：壳层幂等早退——run 已结算时 core 返回空摘要，但壳层不得
-	# 再 _SyncDay/autosave/emit（空摘要信号会误导 UI 重复刷新与落盘）
+	# 再 _SyncDay/autosave/emit（空摘要信号会误导 UI 重复刷新与落盘）；
+	# S5-05：首次结算摘要缓存于 run——幂等早退原样返回缓存（不再返回
+	# 无 reason 空摘要，重复消费方拿到的与首次结算完全一致）
 	if run.settled:
-		return core.settle_expedition(run, outcome)
+		return run.cached_settle_summary as GuildCore.ExpeditionSummary
 	if _save_manager != null:
 		_save_manager.set_expedition_lock(false)
 	var summary := core.settle_expedition(run, outcome)
+	run.cached_settle_summary = summary
 	_SyncDay()
 	if _save_manager != null and _save_manager.current != null:
 		_save_manager.current.scene_id = SaveData.SCENE_GUILD_SHELL
@@ -132,6 +160,12 @@ func build_expedition_run(inst: QuestInstance) -> ExpeditionRun:
 	if quest_tpl.map_id != &"":
 		map_def = core.game_data.get_record(quest_tpl.map_id) as ExploreMapDef
 	if map_def == null:
+		# S5-03：回退首图分支补告警（对齐同函数其余失败分支口径——静默回退
+		# 会让「委托绑图与实际出战图不一致」在排障时不可见）
+		if quest_tpl.map_id != &"":
+			push_warning("GuildState: 出征地图 '%s' 查无——回退 map/maps 首图" % quest_tpl.map_id)
+		else:
+			push_warning("GuildState: 出征委托未指定地图——回退 map/maps 首图")
 		var maps: Array = core.game_data.get_domain(&"map/maps")
 		if maps.is_empty():
 			push_warning("GuildState: map/maps 域为空——出征中止")
@@ -182,17 +216,22 @@ func upgrade_facility(facility_id: StringName) -> bool:
 
 func has_guild_data() -> bool:
 	## 公会快照数据就绪判定（D-7：title「继续」消费——读档成功但公会快照为空
-	## 的旧档/测试档不进公会占位屏，提示开新档）
+	## 的旧档/测试档不进公会占位屏，提示开新档）；S3-01：核心装配（cfg/
+	## game_data 就绪）之外加快照就绪维度——空快照读档会清空 core 运行态槽
+	## 且置 false，stale 装配不冒充有效数据
 	## 参数：无
 	## 返回：true = 核心已装配（cfg/game_data 就绪——restore 或 new_game 完成）
-	return core != null and core.cfg != null and core.game_data != null
+	## 且持有非空公会快照
+	return core != null and core.cfg != null and core.game_data != null \
+			and _has_guild_snapshot
 
 func _SaveSnapshot() -> Dictionary:
 	## 快照收集 provider 口（SaveManager autosave 回调）：核心未装配（M0 直连
-	## SaveManager 的旧流程先于 GuildState.new_game 写盘）时返回空表——不落垃圾快照
+	## SaveManager 的旧流程先于 GuildState.new_game 写盘）或无有效快照
+	##（S3-01：空快照读档后——清空态不落盘，防静默覆盖旧档）时返回空表
 	## 参数：无
 	## 返回：公会快照 Dictionary
-	if core == null or core.cfg == null:
+	if core == null or core.cfg == null or not _has_guild_snapshot:
 		return {}
 	return core.to_snapshot()
 
@@ -208,10 +247,20 @@ func _RestoreSnapshot(data: Dictionary) -> void:
 		push_warning("GuildState: GameData 未装配，公会快照恢复跳过")
 		return
 	if data.is_empty():
+		# S3-01：空快照（读档成功但无公会数据——guild:{} 旧档）——按「容器
+		# 类型不符保守清空对应槽」拍板口径清空 core 运行态槽：堵同进程残留
+		# 旧局状态污染（清空前的 stale 态会被下次 autosave 静默覆盖旧档）+
+		# title 侧 has_guild_data() 返回 false 走开新档提示
+		_has_guild_snapshot = false
+		if core != null:
+			core.restore_snapshot({})
 		return
 	if core.cfg == null or core.game_data == null:
 		core.attach(_ResolveCfg(), _game_data, _rng)
 	core.restore_snapshot(data)
+	_has_guild_snapshot = true
+	# S3-02：成功路径复位跨局警示残留（上一局的 autosave 失败标记不带入本局）
+	last_autosave_failed = false
 
 func _ResolveCfg() -> CoreConfig:
 	## 总控配置读取（C-5 口径：GameData.get_record 直读 CoreConfig）

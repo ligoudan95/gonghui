@@ -78,10 +78,14 @@ class ExpeditionSummary:
 	var levels_gained: Dictionary = {}
 	## 板凳经验明细（String(unit_id) -> int）
 	var bench_exp: Dictionary = {}
-	## 战败重伤休养天数（应用值=injury_rest_days()；非战败为 0）
+	## 重伤休养天数（应用值=injury_rest_days()；功能二批 3 起语义=任何出口
+	## 有 ≥1 倒地转换者即出行，无转换者为 0）
 	var injury_rest_days: int = 0
+	## 转重伤成员数（功能二批 3：run.downed 逐位转换计数——结算正文单源）
+	var injury_member_count: int = 0
 	## 补结算后剩余休养天数（M-1 口径统一：面板消费值——与名册一致；长途出征
-	## 补结算期恢复时为 0；非战败为 0）
+	## 补结算期恢复时为 0；批 3 起语义=任何出口有 ≥1 转换者取首个倒地成员，
+	## 无转换者为 0）
 	var injury_rest_days_remaining: int = 0
 	## 回城转挂单的新授予模板 id
 	var quests_granted: Array[StringName] = []
@@ -557,8 +561,8 @@ func find_member(member_id: StringName) -> AdventurerData:
 
 func settle_expedition(run: ExpeditionRun, outcome: ExpeditionOutcome) -> ExpeditionSummary:
 	## 回城结算五步（批 1 纯逻辑；批 2 接 explore_screen 回城口）：
-	## ①委托出口结算（成功=奖励×超额入账+声望；战败=全队重伤休养——P4：重伤
-	## 前置到 _ApplyDefeatInjury，自由探索同口径；撤退/判据失败=无奖励无重伤；
+	## ①委托出口结算（成功=奖励×超额入账+声望；批 3 起重伤前置到
+	## _ApplyDownedInjury 单漏斗——四出口按 run.downed 逐位转换；失败/撤退=无奖励；
 	## 实例移除+人力释放）②经验结算（出战者各得全额含超额；板凳健康成员=基础
 	## 经验×训练场分享率——拍板④；事件累计奖励入账——P3：仅 SUCCESS 入账，
 	## 失败/撤退出口零入账）
@@ -573,18 +577,22 @@ func settle_expedition(run: ExpeditionRun, outcome: ExpeditionOutcome) -> Expedi
 	if run.settled:
 		return summary
 	run.settled = true
-	# P4：战败重伤移出委托早退路径——自由探索（无委托会话）战败同战败重伤口径
-	if outcome == ExpeditionOutcome.DEFEAT:
-		_ApplyDefeatInjury(run, summary)
+	# 功能二批 3（Q-A 拍板）：倒地者回城转重伤**单漏斗**——四出口统一按
+	# run.downed 逐位转换（DEFEAT 等价性=战败全员必倒地；SUCCESS 带倒地者
+	# 照常入账奖励/经验，仅倒地者转 RESTING）
+	_ApplyDownedInjury(run, summary)
 	_SettleQuestOutlet(run, outcome, summary)
 	_SettleRunRewards(run, outcome, summary)
 	for _settle_index: int in run.total_days():
 		summary.day_summaries.append(settle_one_day())
 	summary.days_settled = run.total_days()
-	# M-1 口径统一：面板休养天数=补结算后剩余（与名册一致——全队同值；
-	# 长途出征补结算期可能已恢复归 0）
-	if outcome == ExpeditionOutcome.DEFEAT and not run.party.is_empty():
-		summary.injury_rest_days_remaining = run.party[0].rest_days
+	# M-1 口径统一：面板休养天数=补结算后剩余（与名册一致；长途出征补结算
+	# 期恢复归 0 不出行）——批 3 扩为任何出口有 ≥1 转换者取首个倒地成员
+	if summary.injury_member_count > 0:
+		for adv: AdventurerData in run.party:
+			if run.downed.get(adv, false):
+				summary.injury_rest_days_remaining = adv.rest_days
+				break
 	_ConvertGrantedQuests(run, summary)
 	return summary
 
@@ -593,8 +601,8 @@ func _SettleQuestOutlet(run: ExpeditionRun, outcome: ExpeditionOutcome,
 	## 步骤①：委托出口结算——实例先行移除（补结算不再误判，案 2 §2.5）；
 	## 结算目标匹配=run.quest_serial 精确匹配优先 → 同模板 IN_PROGRESS 优先
 	## → 同模板首匹配（G-2 根修：同模板板上+挂单并存时按模板首匹配会删错
-	## 实例——IN_PROGRESS 残留封锁出征）；战败重伤在 _ApplyDefeatInjury
-	##（P4：移出本口——自由探索早退路径同样吃重伤）
+	## 实例——IN_PROGRESS 残留封锁出征）；重伤在 _ApplyDownedInjury（批 3 单漏斗——
+	## 移出本口，四出口统一）
 	## 参数 run/outcome/summary：会话 / 出口 / 摘要
 	## 返回：无
 	if run.quest_template_id == &"":
@@ -629,21 +637,28 @@ func _SettleQuestOutlet(run: ExpeditionRun, outcome: ExpeditionOutcome,
 	if inst != null:
 		board.remove(inst)
 
-func _ApplyDefeatInjury(run: ExpeditionRun, summary: ExpeditionSummary) -> void:
-	## 步骤①前置：战败重伤结算（P4 拍板——DEFEAT 分支移出委托早退路径，
-	## 自由探索战败同战败重伤口径）：全队重伤休养=injury_rest_days()（宿舍
-	## 当前级缩减后值）；板凳成员不受牵连
+func _ApplyDownedInjury(run: ExpeditionRun, summary: ExpeditionSummary) -> void:
+	## 步骤①前置：倒地者回城转重伤（功能二批 3 Q-A 拍板——原 _ApplyDefeatInjury
+	## 战败全队口径重构）：**单漏斗转换**——run.downed 逐位判定（true 者 →
+	## RESTING + injury_rest_days() 宿舍缩减后值），存活者不动、板凳成员不受
+	## 牵连；四出口统一（DEFEAT 等价性=战败全员必倒地逐位转换；SUCCESS 带
+	## 倒地者照常入账经验）；计数>0 时摘要带天数与人数（结算正文单源）
 	## 参数 run/summary：会话 / 摘要
 	## 返回：无
 	if run.party.is_empty():
-		# S2-M2-3-f：空 party 的 DEFEAT 不置重伤天数（防御口径——无人可伤，
-		# 面板也不该出休养行）
+		# S2-M2-3-f：空 party 不置重伤（防御口径——无人可伤，面板不出休养行）
 		return
 	var rest_days: int = injury_rest_days()
-	summary.injury_rest_days = rest_days
+	var downed_count: int = 0
 	for adv: AdventurerData in run.party:
+		if not run.downed.get(adv, false):
+			continue
 		adv.status = AdventurerData.Status.RESTING
 		adv.rest_days = rest_days
+		downed_count += 1
+	if downed_count > 0:
+		summary.injury_rest_days = rest_days
+		summary.injury_member_count = downed_count
 
 func _SettleRunRewards(run: ExpeditionRun, outcome: ExpeditionOutcome,
 		summary: ExpeditionSummary) -> void:
@@ -910,12 +925,15 @@ func restore_snapshot(data: Dictionary) -> void:
 	## 公会快照恢复（load_game provider 回放——全字段重建；结构问题由
 	## schema_version 前置拦截，本口只做容错：缺键回退默认；**容器类型
 	## 不符保守清空对应槽**（S3-M2 拍板——roster 等被破坏成 Dictionary/标量
-	## 时不再 SCRIPT ERROR 中断恢复链，清空重建、读档可继续）
+	## 时不再 SCRIPT ERROR 中断恢复链，清空重建、读档可继续）；**标量值类型
+	## 不符回退默认**（S3-R4-02——day:[] 类容器脏档裸 int()/String()/bool()
+	## 转换中止函数，stale core 存活且旗标冒充读档成功，一律前置门卫）
 	## 参数 data：to_snapshot 产出的 Dictionary（JSON 桥数字为 float——统一 int 化）
 	## 返回：无
-	day = int(data.get("day", 1))
-	gold = int(data.get("gold", 0))
-	reputation = int(data.get("reputation", 0))
+	day = int(data.get("day", 1)) if SaveData.IsIntLike(data.get("day", 1)) else 1
+	gold = int(data.get("gold", 0)) if SaveData.IsIntLike(data.get("gold", 0)) else 0
+	reputation = int(data.get("reputation", 0)) \
+			if SaveData.IsIntLike(data.get("reputation", 0)) else 0
 	board.restore_snapshot(data.get("board", {}) if data.get("board", {}) is Dictionary else {})
 	recruit_pool.restore_snapshot(
 			data.get("recruit_pool", {}) if data.get("recruit_pool", {}) is Dictionary else {})
@@ -923,19 +941,35 @@ func restore_snapshot(data: Dictionary) -> void:
 	var facility_data: Variant = data.get("facility_levels", {})
 	if facility_data is Dictionary:
 		for fac_key: String in facility_data:
-			facility_levels[StringName(fac_key)] = int(facility_data[fac_key])
+			# S3-R4-02：非整数值回退初始级 1（与 Array 分支同默认——脏值不中断）
+			facility_levels[StringName(fac_key)] = int(facility_data[fac_key]) \
+					if SaveData.IsIntLike(facility_data[fac_key]) else 1
 	elif facility_data is Array:
 		for fac_id: Variant in facility_data:
 			facility_levels[StringName(String(fac_id))] = 1
 	roster.clear()
+	# S3-R5-03：unit_id 查重 + 拒空串（脏档双同 id → find_member 首匹配定位
+	# 歧义；空串 id 无业务语义——均按「实例损坏跳过」口径 continue）
+	var seen_unit_ids: Dictionary = {}
 	var roster_data: Variant = data.get("roster", [])
 	if roster_data is Array:
 		for member_data: Variant in roster_data:
 			if not (member_data is Dictionary):
 				continue
 			var adv: AdventurerData = AdventurerData.from_dict(member_data)
-			if adv != null:
-				roster.append(adv)
+			if adv == null or String(adv.unit_id).is_empty() or seen_unit_ids.has(adv.unit_id):
+				continue
+			seen_unit_ids[adv.unit_id] = true
+			roster.append(adv)
+	# S3-R5-02：招募 serial 以名册 adv_recruit_ 前缀既有最大 N 兜底——脏
+	# serial 回退 1 后 _Generate 发 adv_recruit_1 撞名册同 id（幽灵成员）
+	var max_recruit_no: int = 0
+	for member: AdventurerData in roster:
+		var member_key: String = String(member.unit_id)
+		if member_key.begins_with(RecruitPool.RECRUIT_ID_PREFIX):
+			max_recruit_no = maxi(max_recruit_no, int(member_key.trim_prefix(
+					RecruitPool.RECRUIT_ID_PREFIX).to_int()))
+	recruit_pool.serial = maxi(recruit_pool.serial, max_recruit_no + 1)
 	last_party_by_tpl.clear()
 	var party_memory_data: Variant = data.get("last_party_by_tpl", {})
 	if party_memory_data is Dictionary:
@@ -944,12 +978,18 @@ func restore_snapshot(data: Dictionary) -> void:
 			var raw_ids: Variant = party_memory_data[tpl_key]
 			if raw_ids is Array or raw_ids is PackedStringArray:
 				for member_key: Variant in raw_ids:
-					member_ids.append(StringName(String(member_key)))
+					# S3-R4-02：元素级 is String 过滤（容器元素裸 String() 中止同链）
+					if member_key is String:
+						member_ids.append(StringName(member_key))
 			last_party_by_tpl[tpl_key] = member_ids
 	pending_tendency_levels.clear()
 	var pending_data: Variant = data.get("pending_tendency_levels", {})
 	if pending_data is Dictionary:
 		for unit_key: String in pending_data:
-			pending_tendency_levels[unit_key] = int(pending_data[unit_key])
-	# M4-1：未查看挂单标记（v2 内加可选字段——旧档缺省 false，不升 schema）
-	has_unseen_grants = bool(data.get("has_unseen_grants", false))
+			# S3-R4-02：非整数值回退 0（悬置档数脏值不中断）
+			pending_tendency_levels[unit_key] = int(pending_data[unit_key]) \
+					if SaveData.IsIntLike(pending_data[unit_key]) else 0
+	# M4-1：未查看挂单标记（v2 内加可选字段——旧档缺省 false，不升 schema；
+	# S3-R4-02：非 bool 值回退 false——bool(容器) 同为裸转换中止向量）
+	var grants_raw: Variant = data.get("has_unseen_grants", false)
+	has_unseen_grants = grants_raw if grants_raw is bool else false

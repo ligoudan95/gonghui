@@ -540,3 +540,34 @@ func test_w12_dot_death_calls_on_downed_and_freezes_decrement() -> void:
 	assert_int(report.size()).is_equal(1)
 	# W1-3：倒地单位跳过递减遍历——状态随死亡冻结（不递减不移除）
 	assert_int(_manager.get_statuses(unit).size()).is_equal(1) 			.override_failure_message("W1-3：死者状态应冻结（跳过递减遍历不移除）")
+
+func test_s2r402_mutex_erase_rollback_on_stack_reject() -> void:
+	## S2-R4-02：互斥擦除与叠层拒收原子性——③段拒收时恢复②段已擦的互斥
+	## 实例（施加失败不得白丢既有状态；构型：双同轨占满 + 异轨互斥组员被
+	## 新同轨技擦除后触发叠层拒收）
+	var mutex_stat := _MakeStatMod(&"DEBUFF_mutex_stat", {&"hit": -0.05}, 2)
+	mutex_stat.mutex_group_id = &"mgrp_s2r402"
+	_Register(mutex_stat)
+	var mutex_control := _MakeControl(&"DEBUFF_mutex_control", StatusDef.ControlKind.ROOT,
+			1, &"mgrp_s2r402")
+	_Register(mutex_control)
+	var unit := FakeUnit.new()
+	# 占满同轨（STAT_MOD×DEBUFF 叠层上限 2）+ 同互斥组的控制类在场
+	assert_bool(_manager.apply(unit, _LookupStatus(&"DEBUFF_slow"),
+			StatusInstance.SourceKind.SKILL, &"t", 2, 1, false)).is_true()
+	assert_bool(_manager.apply(unit, _LookupStatus(&"DEBUFF_exposed"),
+			StatusInstance.SourceKind.SKILL, &"t", 1, 1, false)).is_true()
+	assert_bool(_manager.apply(unit, mutex_control,
+			StatusInstance.SourceKind.SKILL, &"t", 1, 1, false)).is_true()
+	# 新同轨技擦除互斥控制类后被叠层拒收——控制类必须原样存活
+	var applied: bool = _manager.apply(unit, mutex_stat,
+			StatusInstance.SourceKind.SKILL, &"t", 2, 1, false)
+	assert_bool(applied).is_false()
+	var ids: Array[StringName] = []
+	for instance: StatusInstance in _manager.get_statuses(unit):
+		ids.append(instance.status_id)
+	assert_bool(ids.has(&"DEBUFF_mutex_control")) \
+			.override_failure_message("拒收后互斥组被擦实例应原样恢复").is_true()
+	assert_bool(ids.has(&"DEBUFF_mutex_stat")).is_false()
+	assert_bool(ids.has(&"DEBUFF_slow")).is_true()
+	assert_bool(ids.has(&"DEBUFF_exposed")).is_true()

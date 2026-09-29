@@ -357,7 +357,8 @@ func test_tile_standing_status_lifecycle() -> void:
 	_FreeCellFor(context, Vector2i(3, 5))
 	controller._move_unit(warrior, Vector2i(3, 5))
 	assert_float(context.status_manager.get_stat_mod(warrior, &"dodge")).is_equal_approx(0.0, 0.001)
-	# ③移到毒沼 (4,5) → DEBUFF_tile_poison 在身；回合 1 末 TILE DOT 跳 6 伤
+	# ③移到毒沼 (4,5) → DEBUFF_tile_poison 在身 + 踏入染毒 DEBUFF_poison（功能一
+	# 批 1 停格双状态）；回合 1 末 TILE DOT 跳 6 伤 + 染毒首跳 2 伤（共 8）
 	# 且站位状态常驻（即时类豁免——毒沼开局锚点 first_tick=0 回合 1 末即跳）
 	_FreeCellFor(context, Vector2i(4, 5))
 	controller._move_unit(warrior, Vector2i(4, 5))
@@ -368,7 +369,7 @@ func test_tile_standing_status_lifecycle() -> void:
 	assert_bool(has_poison).is_true()
 	var hp_before: int = warrior.current_hp
 	context.status_manager.end_of_round_tick(1, context.units, context.rng)
-	assert_int(warrior.current_hp).is_equal(hp_before - 6)
+	assert_int(warrior.current_hp).is_equal(hp_before - 8)
 	var still_poisoned: bool = false
 	for instance: StatusInstance in context.status_manager.get_statuses(warrior):
 		if instance.status_id == &"DEBUFF_tile_poison":
@@ -673,3 +674,76 @@ func test_w21_ally_trap_death_auto_ends_turn() -> void:
 			"指令窗仍悬置在死者行动轮").is_true()
 	assert_bool(controller.current_unit.alive).is_true()
 	controller.abort_battle()
+
+# --------------------------------------------------------------------------
+# S2-R1-01（拍板：途经触发）——途经陷阱判定锚定
+# --------------------------------------------------------------------------
+
+func test_trap_triggers_on_pass_through_and_truncates_move() -> void:
+	## ①途经触发：起终点都不在陷阱上，路径中间格陷阱（敌方施放——对战士
+	## 敌对）→ 触发 + 单位停在触发格（截断剩余移动）+ 动态层消耗 + 信号；
+	## 战士 (2,7) → 目标 (4,6) 路径 (2,6)→(3,6)→(4,6)，陷阱在 (3,6)
+	var context := _MakeContext(&"enc_m1_random_pack", 77)
+	var controller := BattleController.new()
+	controller.delay_seconds = 0.0
+	controller.prepare(context)
+	auto_free(controller)
+	var warrior: BattleUnit = context.find_unit(&"warrior")
+	var enemy: BattleUnit = context.enemies[0]
+	context.grid.spawn_dynamic_tile(Vector2i(3, 6), &"tile_trap", 12, enemy.unit_id)
+	var events: Array = []
+	controller.trap_triggered.connect(func(unit: BattleUnit, damage: int) -> void:
+		events.append([unit.unit_id, damage]))
+	controller._move_unit(warrior, Vector2i(4, 6))
+	assert_int(events.size()).is_equal(1)
+	assert_int(int(events[0][1])).is_equal(12)
+	# 截断：停在触发格 (3,6)，目标 (4,6) 未达
+	assert_bool(warrior.grid_pos == Vector2i(3, 6)).is_true()
+	assert_bool(context.grid.get_unit_at(Vector2i(3, 6)) == warrior).is_true()
+	assert_bool(warrior.has_moved).is_true()
+	assert_int(warrior.current_hp).is_equal(warrior.max_hp - 12)
+	assert_bool(context.grid.dynamic_tile_at(Vector2i(3, 6)).is_empty()).is_true()
+
+func test_trap_pass_through_first_only_no_chain() -> void:
+	## ②多陷阱不连触：路径含两个陷阱（(2,6) 与 (3,6)）→ 首个触发后停止，
+	## 第二个保留未消耗；伤害只结算首个
+	var context := _MakeContext(&"enc_m1_random_pack", 77)
+	var controller := BattleController.new()
+	controller.delay_seconds = 0.0
+	controller.prepare(context)
+	auto_free(controller)
+	var warrior: BattleUnit = context.find_unit(&"warrior")
+	var enemy: BattleUnit = context.enemies[0]
+	context.grid.spawn_dynamic_tile(Vector2i(2, 6), &"tile_trap", 10, enemy.unit_id)
+	context.grid.spawn_dynamic_tile(Vector2i(3, 6), &"tile_trap", 14, enemy.unit_id)
+	var events: Array = []
+	controller.trap_triggered.connect(func(unit: BattleUnit, damage: int) -> void:
+		events.append(damage))
+	controller._move_unit(warrior, Vector2i(4, 6))
+	assert_int(events.size()).is_equal(1)
+	assert_int(warrior.current_hp).is_equal(warrior.max_hp - int(events[0]))
+	# 停在首个触发格；另一陷阱原样保留
+	var first_cell: Vector2i = warrior.grid_pos
+	assert_bool(first_cell == Vector2i(2, 6) or first_cell == Vector2i(3, 6)).is_true()
+	assert_bool(context.grid.dynamic_tile_at(first_cell).is_empty()).is_true()
+	var other_cell: Vector2i = Vector2i(3, 6) if first_cell == Vector2i(2, 6) else Vector2i(2, 6)
+	assert_bool(context.grid.dynamic_tile_at(other_cell).is_empty()).is_false()
+
+func test_trap_pass_through_own_trap_not_triggered() -> void:
+	## ③自家陷阱途经不触发（对位语义：我方陷阱敌方踩、敌方陷阱我方踩——
+	## 同源陷阱对单位非敌对）：全程移动到目标格、不消耗、无信号、无伤害
+	var context := _MakeContext(&"enc_m1_random_pack", 77)
+	var controller := BattleController.new()
+	controller.delay_seconds = 0.0
+	controller.prepare(context)
+	auto_free(controller)
+	var warrior: BattleUnit = context.find_unit(&"warrior")
+	context.grid.spawn_dynamic_tile(Vector2i(3, 6), &"tile_trap", 12, warrior.unit_id)
+	var events: Array = []
+	controller.trap_triggered.connect(func(_unit: BattleUnit, _damage: int) -> void:
+		events.append(1))
+	controller._move_unit(warrior, Vector2i(4, 6))
+	assert_int(events.size()).is_equal(0)
+	assert_bool(warrior.grid_pos == Vector2i(4, 6)).is_true()
+	assert_int(warrior.current_hp).is_equal(warrior.max_hp)
+	assert_bool(context.grid.dynamic_tile_at(Vector2i(3, 6)).is_empty()).is_false()

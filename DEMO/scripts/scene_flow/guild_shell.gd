@@ -36,9 +36,15 @@ const UI_TEXTS: Dictionary = {
 	&"summary_recovered_format": "恢复 %d 人",
 	&"summary_week_refresh": "委托板周刷新",
 	&"summary_board_removed_format": "板上到期 %d 单",
+	# S4-02：板刷三表现/挂单到期/新候选/轻度完成分组键集——与 DaySummaryPanel
+	# UI_TEXTS 同值语义（BuildDetailLines 单源消费契约）
+	&"summary_board_refreshed_format": "刷新补位 %d 单",
+	&"summary_board_replaced_format": "替换加急 %d 单",
 	&"summary_accepted_failed_format": "挂单到期失败 %d 单",
 	&"summary_candidates_format": "新候选：%s",
 	&"autosave_failed_hint": "⚠ 最近一次自动存档写入失败——进度可能未落盘，请重试操作。",
+	## S5-R5-03：四入口 go 失败可见提示（%d = SceneManager 错误码）
+	&"go_fail_hint_format": "页面跳转失败（错误码 %d）——请重试。",
 	&"summary_light_done_format": "轻度委托完成：%s +%d 金 +%d 经验 +%d 声望",
 	&"summary_light_done_bench_suffix": "（板凳 %d 人各得 %d 经验）",
 }
@@ -147,10 +153,11 @@ func RefreshAll() -> void:
 	var core: GuildCore = _guild_state().core
 	var weekday: String = CalendarCore.weekday_label(core.day, _cfg.calendar_week_days) \
 			if _cfg.calendar_week_display else ""
-	%DayLabel.text = "第 %d 天·%s" % [core.day, weekday] if not weekday.is_empty() \
-			else "第 %d 天" % core.day
-	%GoldLabel.text = "%d 金" % core.gold
-	%ReputationLabel.text = "声望 %d" % core.reputation
+	# S4-R5-01①：HUD 四格式串改 UI_TEXTS 键消费（原字面量与四键双源漂移）
+	%DayLabel.text = String(UI_TEXTS[&"day_week_format"]) % [core.day, weekday] \
+			if not weekday.is_empty() else String(UI_TEXTS[&"day_format"]) % core.day
+	%GoldLabel.text = String(UI_TEXTS[&"gold_format"]) % core.gold
+	%ReputationLabel.text = String(UI_TEXTS[&"reputation_format"]) % core.reputation
 	_roster_overview.refresh(core.roster, core.board, core.day, _game_data,
 			core.pending_tendency_levels)
 	var locked: bool = _save_manager().is_expedition_locked()
@@ -160,9 +167,16 @@ func RefreshAll() -> void:
 	# Z2-3：悬置倾向直入入口（pending>0 时显示）
 	%PendingButton.visible = not core.pending_tendency_levels.is_empty()
 	%PendingButton.text = String(UI_TEXTS[&"pending_button_format"]) % core.pending_tendency_levels.size()
-	# S3-M5-1-b：最近一次自动存档失败感知（四时点 FAILED 与 M-3 口径对称）
+	# S3-M5-1-b：最近一次自动存档失败感知（四时点 FAILED 与 M-3 口径对称）；
+	# S4-R2-05：警示不覆写当日摘要（「弹窗关闭后轻提示行可查」契约）——
+	# 拼接呈现且幂等（已含不重复追加）；恢复正常后剥离警示行
 	if _guild_state().last_autosave_failed:
-		%SettleInfoLabel.text = UI_TEXTS[&"autosave_failed_hint"]
+		var warn_text: String = String(UI_TEXTS[&"autosave_failed_hint"])
+		if not %SettleInfoLabel.text.contains(warn_text):
+			%SettleInfoLabel.text += "\n" + warn_text
+	elif %SettleInfoLabel.text.contains(String(UI_TEXTS[&"autosave_failed_hint"])):
+		%SettleInfoLabel.text = %SettleInfoLabel.text.replace(
+				"\n" + String(UI_TEXTS[&"autosave_failed_hint"]), "")
 	_ApplyAssociationBadge()
 
 func _OnDaySettled(_summary: Variant) -> void:
@@ -174,9 +188,12 @@ func _OnDaySettled(_summary: Variant) -> void:
 func _on_wait_pressed() -> void:
 	## 「等待一天」（案 2 §2.2 兜底行为；出征中 disabled——日历冻结）：
 	## GuildState.wait_one_day → 轻提示行（维持现状）+ 完整汇总弹窗（M5 批 2——
-	## 弹窗关闭后轻提示行仍有当日单行摘要可查，双保险）
+	## 弹窗关闭后轻提示行仍有当日单行摘要可查，双保险）；S5-02：弹窗打开期间
+	## 不可再推一天（不再写存档/覆盖前日明细——关闭即解锁）
 	## 参数：无
 	## 返回：无
+	if %DaySummaryHost.visible:
+		return
 	if not _HasSession():
 		return
 	var summary: GuildCore.DaySummary = _guild_state().wait_one_day()
@@ -204,34 +221,15 @@ func _on_pending_pressed() -> void:
 	%LevelupHost.visible = true
 
 func _SummarizeDay(summary: GuildCore.DaySummary) -> String:
-	## 日结算轻提示行拼装（恢复/到期明细/新候选——DaySummary 读值）
+	## 日结算轻提示行拼装（S4-02：分组明细行单源——DaySummaryPanel.
+	## BuildDetailLines 共用拼装，轻提示行与汇总弹窗/外出期间汇总恒一致；
+	## 板刷三表现含此前缺失的「刷新补位/替换加急」两组）
 	## 参数 summary：GuildCore.DaySummary
 	## 返回：提示文本
-	var parts: PackedStringArray = []
-	if not summary.recovered_ids.is_empty():
-		parts.append(String(UI_TEXTS[&"summary_recovered_format"]) % summary.recovered_ids.size())
-	if summary.week_refreshed:
-		parts.append(UI_TEXTS[&"summary_week_refresh"])
-	if not summary.board_removed.is_empty():
-		parts.append(String(UI_TEXTS[&"summary_board_removed_format"]) % summary.board_removed.size())
-	if not summary.accepted_failed.is_empty():
-		parts.append(String(UI_TEXTS[&"summary_accepted_failed_format"]) % summary.accepted_failed.size())
-	if not summary.new_candidate_names.is_empty():
-		parts.append(String(UI_TEXTS[&"summary_candidates_format"]) % "、".join(summary.new_candidate_names))
-	# M4 增补批：轻度委托完成条目（多条顿号拼接；板凳分享后缀——拍板①）
-	if not summary.light_completed.is_empty():
-		var light_parts: PackedStringArray = []
-		for result: GuildCore.LightQuestResult in summary.light_completed:
-			var entry_text: String = String(UI_TEXTS[&"summary_light_done_format"]) % [
-					result.display_name, result.gold, result.exp, result.reputation]
-			if result.bench_member_count > 0:
-				entry_text += String(UI_TEXTS[&"summary_light_done_bench_suffix"]) % [
-						result.bench_member_count, result.bench_exp_per_member]
-			light_parts.append(entry_text)
-		parts.append("、".join(light_parts))
-	if parts.is_empty():
+	var detail: PackedStringArray = DaySummaryPanel.BuildDetailLines(summary, UI_TEXTS)
+	if detail.is_empty():
 		return String(UI_TEXTS[&"day_summary_plain"]) % summary.day
-	return String(UI_TEXTS[&"day_summary_format"]) % [summary.day, "；".join(parts)]
+	return String(UI_TEXTS[&"day_summary_format"]) % [summary.day, "；".join(detail)]
 
 func _OnMemberSelected(unit_id: StringName) -> void:
 	## 成员行点击 → 成员详情弹层（属性/装备/技能/解锁/倾向入口——批 3 接线）
@@ -276,14 +274,15 @@ func _OnMemberChanged(_unit_id: StringName) -> void:
 func _ApplyAssociationBadge() -> void:
 	## 协会入口角标文案（读核心层 GuildCore.has_unseen_grants——M4-1：结算时
 	## 公会壳可能已销毁、跨场景信号无监听，状态改常驻核心层随公会快照持久；
-	## 进协会屏 _ready 清除）
+	## 进协会屏 _ready 清除）；S4-R2-04：文案经 UI_TEXTS 键消费（原硬编码
+	## 字面量与 association_label/association_badge 键双源漂移）
 	## 参数：无
 	## 返回：无
 	if not _HasSession():
-		%AssociationButton.text = "冒险者协会（委托·招募）"
+		%AssociationButton.text = UI_TEXTS[&"association_label"]
 		return
-	%AssociationButton.text = "冒险者协会（委托·招募）★新挂单" \
-			if _guild_state().core.has_unseen_grants else "冒险者协会（委托·招募）"
+	%AssociationButton.text = UI_TEXTS[&"association_badge"] \
+			if _guild_state().core.has_unseen_grants else UI_TEXTS[&"association_label"]
 
 func _on_back_pressed() -> void:
 	## 「返回标题」：纯导航（不触存档——存档走五时点自动存档）
@@ -292,6 +291,7 @@ func _on_back_pressed() -> void:
 	var err: Error = _scene_manager().go(SceneManagerScript.SceneId.TITLE)
 	if err != OK:
 		push_warning("guild_shell: 返回标题失败（错误码 %d）" % err)
+		%SettleInfoLabel.text = String(UI_TEXTS[&"go_fail_hint_format"]) % err
 
 func _on_dormitory_pressed() -> void:
 	## 宿舍入口（拍板⑥独立场景；scene_id=批 1 fac_ 表已落值）
@@ -300,6 +300,7 @@ func _on_dormitory_pressed() -> void:
 	var err: Error = _scene_manager().go(SceneManagerScript.SceneId.GUILD_DORMITORY)
 	if err != OK:
 		push_warning("guild_shell: 进入宿舍失败（错误码 %d）" % err)
+		%SettleInfoLabel.text = String(UI_TEXTS[&"go_fail_hint_format"]) % err
 
 func _on_training_pressed() -> void:
 	## 训练场入口
@@ -308,6 +309,7 @@ func _on_training_pressed() -> void:
 	var err: Error = _scene_manager().go(SceneManagerScript.SceneId.GUILD_TRAINING_GROUND)
 	if err != OK:
 		push_warning("guild_shell: 进入训练场失败（错误码 %d）" % err)
+		%SettleInfoLabel.text = String(UI_TEXTS[&"go_fail_hint_format"]) % err
 
 func _on_association_pressed() -> void:
 	## 协会入口（委托板/挂单管理/招募池——M4 出征入口移驻；未查看挂单标志由
@@ -317,3 +319,4 @@ func _on_association_pressed() -> void:
 	var err: Error = _scene_manager().go(SceneManagerScript.SceneId.ASSOCIATION_SCREEN)
 	if err != OK:
 		push_warning("guild_shell: 进入协会失败（错误码 %d）" % err)
+		%SettleInfoLabel.text = String(UI_TEXTS[&"go_fail_hint_format"]) % err

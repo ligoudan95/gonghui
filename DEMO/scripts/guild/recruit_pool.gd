@@ -148,7 +148,8 @@ func restore_snapshot(data: Dictionary) -> void:
 	## 参数 data：to_snapshot 产出的 Dictionary
 	## 返回：无
 	candidates.clear()
-	serial = int(data.get("serial", 1))
+	# S3-R4-02：serial 裸 int() 前置门卫（容器脏值中止 restore 链——回退默认 1）
+	serial = int(data.get("serial", 1)) if SaveData.IsIntLike(data.get("serial", 1)) else 1
 	var candidate_data: Variant = data.get("candidates", [])
 	if candidate_data is Array:
 		for entry: Variant in candidate_data:

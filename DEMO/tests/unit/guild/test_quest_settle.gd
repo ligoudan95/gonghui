@@ -63,12 +63,17 @@ func _SpawnAndStart(template_id: StringName, party_count: int) -> QuestInstance:
 	assert_bool(_core.start_expedition(inst.serial)).is_true()
 	return inst
 
-func _MakeRun(template_id: StringName, party_count: int, total_days: int = 1) -> ExpeditionRun:
-	## 构建出征会话（队员=名册前 N 人引用；判据上下文按模板对齐）
+func _MakeRun(template_id: StringName, party_count: int,
+		total_days: int = 1, mark_downed: bool = false) -> ExpeditionRun:
+	## 构建出征会话（队员=名册前 N 人引用；判据上下文按模板对齐；批 3 起
+	## mark_downed=全队 run.downed 标记——DEFEAT 等价性=战败全员必倒地）
 	var run := ExpeditionRun.new()
 	run.base_days = total_days
 	for index: int in party_count:
 		run.party.append(_core.roster[index])
+	if mark_downed:
+		for adv: AdventurerData in run.party:
+			run.downed[adv] = true
 	run.quest_template_id = template_id
 	var tpl: QuestTemplateDef = _game_data.get_record(template_id) as QuestTemplateDef
 	if tpl != null:
@@ -127,7 +132,7 @@ func test_defeat_injures_party() -> void:
 	## 战败出口：全队重伤休养 3 天（宿舍 Lv1 基础值）；无奖励；委托移除
 	_SpawnAndStart(&"q_lair_purge", 3)
 	var gold_before: int = _core.gold
-	var summary = _core.settle_expedition(_MakeRun(&"q_lair_purge", 3),
+	var summary = _core.settle_expedition(_MakeRun(&"q_lair_purge", 3, 1, true),
 			GuildCore.ExpeditionOutcome.DEFEAT)
 	assert_int(_core.gold).is_equal(gold_before)
 	assert_int(_core.reputation).is_equal(0)
@@ -150,7 +155,7 @@ func test_defeat_rest_shortened_by_dorm_lv2() -> void:
 	_core.gold = 1000
 	assert_bool(_core.upgrade_facility(&"fac_dormitory")).is_true()
 	_SpawnAndStart(&"q_lair_purge", 3)
-	var summary = _core.settle_expedition(_MakeRun(&"q_lair_purge", 3),
+	var summary = _core.settle_expedition(_MakeRun(&"q_lair_purge", 3, 1, true),
 			GuildCore.ExpeditionOutcome.DEFEAT)
 	assert_int(summary.injury_rest_days).is_equal(2)
 	# 2 天 − 补结算 1 天 → 余 1
@@ -329,7 +334,7 @@ func test_p3_failure_outcomes_cash_zero_event_rewards() -> void:
 	assert_bool(summary.exp_gained.is_empty()).is_true()
 	# DEFEAT 出口同口径（另一会话——零入账+重伤不受途中所得影响）
 	_SpawnAndStart(&"q_lair_purge", 3)
-	var defeat_run := _MakeRun(&"q_lair_purge", 3)
+	var defeat_run := _MakeRun(&"q_lair_purge", 3, 1, true)
 	defeat_run.add_reward(15, 20, 1)
 	var defeat_summary = _core.settle_expedition(defeat_run,
 			GuildCore.ExpeditionOutcome.DEFEAT)
@@ -341,7 +346,7 @@ func test_p3_failure_outcomes_cash_zero_event_rewards() -> void:
 func test_p4_free_explore_defeat_injures_party() -> void:
 	## P4 拍板回归：自由探索（无委托会话）战败——同战败重伤口径（DEFEAT 分支
 	## 移出委托早退路径；修复前无委托会话战败不重伤）
-	var run := _MakeRun(&"", 3)
+	var run := _MakeRun(&"", 3, 1, true)
 	var gold_before: int = _core.gold
 	var summary = _core.settle_expedition(run, GuildCore.ExpeditionOutcome.DEFEAT)
 	assert_int(summary.injury_rest_days).is_equal(3)
@@ -355,7 +360,7 @@ func test_m1_injury_remaining_matches_roster_short_trip() -> void:
 	## M-1 拍板口径：面板休养天数=补结算后剩余（与名册一致）——短途 1 天：
 	## 应用 3 − 补结算 1 = 剩 2（修复前面板显示应用值 3 与名册 2 不一致）
 	_SpawnAndStart(&"q_lair_purge", 3)
-	var summary = _core.settle_expedition(_MakeRun(&"q_lair_purge", 3, 1),
+	var summary = _core.settle_expedition(_MakeRun(&"q_lair_purge", 3, 1, true),
 			GuildCore.ExpeditionOutcome.DEFEAT)
 	assert_int(summary.injury_rest_days).is_equal(3)
 	assert_int(summary.injury_rest_days_remaining).is_equal(2)
@@ -367,7 +372,7 @@ func test_m1_injury_remaining_matches_roster_long_trip() -> void:
 	## M-1 拍板口径：长途 3 天——补结算期休养耗尽，剩余 0、全员已恢复
 	##（面板不再出休养行——与名册一致）
 	_SpawnAndStart(&"q_lair_purge", 3)
-	var summary = _core.settle_expedition(_MakeRun(&"q_lair_purge", 3, 3),
+	var summary = _core.settle_expedition(_MakeRun(&"q_lair_purge", 3, 3, true),
 			GuildCore.ExpeditionOutcome.DEFEAT)
 	assert_int(summary.injury_rest_days).is_equal(3)
 	assert_int(summary.injury_rest_days_remaining).is_equal(0)

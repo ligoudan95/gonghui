@@ -18,12 +18,17 @@ const SceneManagerScript: GDScript = preload("res://scripts/autoload/scene_manag
 const UI_TEXTS: Dictionary = {
 	&"start_fail_no_data": "出征装配失败——队伍或地图数据缺失。",
 	&"go_fail_rollback_format": "进入探索屏失败——出征已取消（%s），请重试。",
+	## S5-10：go 失败回退提示的括号参数固定走错误码（core.last_error 在回退
+	## 链后为空串会产出「出征已取消（）」）
+	&"go_fail_err_format": "错误码 %d",
 	&"recruit_ok_format": "%s 入会（当前 %d/%d 人）",
 	&"light_start_ok_format": "已派出开工——工期 %d 天",
 	&"light_abandon_confirm_text": "放弃进行中的轻度委托？工期作废、无奖励，成员立即释放。",
 	&"light_abandon_confirm_ok": "确认放弃",
 	&"light_abandon_confirm_cancel": "再想想",
 	&"autosave_failed_hint": "⚠ 最近一次自动存档写入失败——进度可能未落盘，请重试操作。",
+	## S5-R5-03：返回 go 失败提示（%d = SceneManager 错误码）
+	&"go_fail_hint_format": "页面跳转失败（错误码 %d）——请重试。",
 }
 
 ## GameData 单例引用
@@ -229,10 +234,13 @@ func _OnStartRequested(serial: int) -> void:
 	var err: Error = get_node("/root/SceneManager").go(
 			SceneManagerScript.SceneId.EXPLORE_SCREEN, {&"expedition_run": run})
 	if err != OK:
-		# M4：go 失败完整回退（释锁→委托回挂单→出征日标记恢复）——不出征
+		# M4：go 失败完整回退（释锁→委托回挂单→出征日标记恢复）——不出征；
+		# S5-10：括号参数改用 err 错误码（回退链后 core.last_error 为空串会
+		## 产出「出征已取消（）」空括号）
 		get_node("/root/SaveManager").set_expedition_lock(false)
 		core.abort_expedition(serial, previous_days)
-		_SetHint(String(UI_TEXTS[&"go_fail_rollback_format"]) % core.last_error)
+		_SetHint(String(UI_TEXTS[&"go_fail_rollback_format"])
+				% String(UI_TEXTS[&"go_fail_err_format"]) % err)
 		push_error("association_screen: 进入探索屏失败（错误码 %d）——已回退出征登记" % err)
 		RefreshAll()
 
@@ -255,14 +263,16 @@ func _OnAbandonRequested(serial: int) -> void:
 	RefreshAll()
 
 func _OnLightAbandonConfirmed() -> void:
-	## 轻度放弃确认（工期作废、成员立即释放——Q5 拍板口径）
+	## 轻度放弃确认（工期作废、成员立即释放——Q5 拍板口径）；S4-04：成败两路
+	## 均复位待确认序号（失败分支残留会在下次确认窗口错杀新实例）
 	## 参数：无
 	## 返回：无
 	var core: GuildCore = _core()
-	if not core.abandon_quest(_pending_light_abandon_serial):
+	var confirmed_serial: int = _pending_light_abandon_serial
+	_pending_light_abandon_serial = 0
+	if not core.abandon_quest(confirmed_serial):
 		_SetHint(core.last_error)
 		return
-	_pending_light_abandon_serial = 0
 	_SetHint("")
 	RefreshAll()
 
@@ -285,3 +295,5 @@ func _on_back_pressed() -> void:
 	var err: Error = get_node("/root/SceneManager").go(SceneManagerScript.SceneId.GUILD_SHELL)
 	if err != OK:
 		push_warning("association_screen: 返回公会失败（错误码 %d）" % err)
+		# S5-R5-03：go 失败可见提示（hint 通道——不再仅静默 push_warning）
+		_SetHint(String(UI_TEXTS[&"go_fail_hint_format"]) % err)

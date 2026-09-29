@@ -87,6 +87,9 @@ static func from_dict(data: Dictionary) -> QuestInstance:
 		return null
 	if not (data["urgent"] is bool):
 		return null
+	# S3-R3-01：template_id 类型校验（六必填键中唯一漏网——脏档拒载）
+	if not (data["template_id"] is String):
+		return null
 	var state_value: int = int(data["state"])
 	if state_value < 0 or state_value >= State.size():
 		return null
@@ -95,9 +98,12 @@ static func from_dict(data: Dictionary) -> QuestInstance:
 	inst.template_id = StringName(String(data["template_id"]))
 	inst.state = state_value as State
 	inst.expire_day = int(data["expire_day"])
+	# S3-05：元素级容错——无类型迭代 + is String 过滤跳过坏元素（手改档
+	# party_ids 混入非串不再中断整条 restore 链；与实例损坏条目跳过口径对齐）
 	var typed_party: Array[StringName] = []
-	for member_key: String in data["party_ids"]:
-		typed_party.append(StringName(member_key))
+	for member_key: Variant in data["party_ids"]:
+		if member_key is String:
+			typed_party.append(StringName(member_key))
 	inst.party_ids = typed_party
 	inst.urgent = bool(data["urgent"])
 	inst.work_days_left = int(data["work_days_left"])

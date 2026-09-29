@@ -434,3 +434,266 @@ func test_reload_matrix_recruit_done_point() -> void:
 	assert_int(state.core.recruit_pool.candidates.size()).is_equal(2)
 	state.free()
 	save_manager.free()
+
+func test_s301_empty_guild_snapshot_clears_slots_and_gate() -> void:
+	## S3-01：读档成功但公会快照为空（guild:{} 旧档）——core 运行态槽保守清空
+	##（同进程残留旧局不再污染新读档/静默覆盖）+ has_guild_data() 返回 false
+	##（title 走开新档提示）；有效快照读档后恢复 true
+	var local: Array = _MakeLocalState()
+	var save_manager: Node = local[0]
+	var state: Node = local[1]
+	# 同进程残留旧局：建档推进一天（stale 态 day=2、名册 4、金 500）
+	state.new_game()
+	state.wait_one_day()
+	assert_int(state.core.day).is_equal(2)
+	assert_bool(state.has_guild_data()).is_true()
+	# 覆盖为空公会快照旧档（payload guild={} —— M0 直连旧流程形态，raw 写盘）
+	var raw_save: String = "{\"schema_version\": 3, \"save_point\": 0, \"game_day\": 1, \"mode\": \"demo\", \"scene_id\": \"guild_shell\", \"saved_unix_time\": 0, \"payload\": {\"guild\": {}}}"
+	DirAccess.make_dir_recursive_absolute("user://saves")
+	var file: FileAccess = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	file.store_string(raw_save)
+	file.close()
+	# 读回空快照旧档：槽清空 + 旗标 false（title 不再误判有效公会数据）
+	save_manager.current = null
+	var loaded: SaveData = save_manager.load_game()
+	assert_object(loaded).is_not_null()
+	assert_bool(state.has_guild_data()).is_false()
+	assert_int(state.core.day).is_equal(1)
+	assert_int(state.core.roster.size()).is_equal(0)
+	assert_int(state.core.gold).is_equal(0)
+	# 重新建档：旗标恢复 true（title「开始」链路不受空档读档影响）
+	state.new_game()
+	assert_bool(state.has_guild_data()).is_true()
+	assert_int(state.core.roster.size()).is_equal(4)
+	state.free()
+	save_manager.free()
+
+func test_s301_no_guild_key_save_clears_stale_session() -> void:
+	## S3-01 补口：payload 无 guild 键的旧档（provider 不被调用的路径）——
+	## save_loaded 钩子清同进程残留旧局（此前 stale 装配冒充有效快照）
+	var local: Array = _MakeLocalState()
+	var save_manager: Node = local[0]
+	var state: Node = local[1]
+	state.new_game()
+	state.wait_one_day()
+	assert_int(state.core.day).is_equal(2)
+	# raw 写 v3 档（payload 无 guild 键——M0 直连旧档形态）
+	var raw_save: String = "{\"schema_version\": 3, \"save_point\": 0, \"game_day\": 1, \"mode\": \"demo\", \"scene_id\": \"guild_shell\", \"saved_unix_time\": 0, \"payload\": {}}"
+	DirAccess.make_dir_recursive_absolute("user://saves")
+	var file: FileAccess = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	file.store_string(raw_save)
+	file.close()
+	save_manager.current = null
+	var loaded: SaveData = save_manager.load_game()
+	assert_object(loaded).is_not_null()
+	assert_bool(state.has_guild_data()).is_false()
+	assert_int(state.core.day).is_equal(1)
+	state.free()
+	save_manager.free()
+
+func test_s302_restore_resets_autosave_failed_flag() -> void:
+	## S3-02：读档成功路径复位 last_autosave_failed（上一局的 autosave 失败
+	## 警示不跨局残留）
+	var local: Array = _MakeLocalState()
+	var save_manager: Node = local[0]
+	var state: Node = local[1]
+	state.new_game()
+	state.last_autosave_failed = true
+	assert_bool(state.last_autosave_failed).is_true()
+	save_manager.current = null
+	var loaded: SaveData = save_manager.load_game()
+	assert_object(loaded).is_not_null()
+	assert_bool(state.has_guild_data()).is_true()
+	assert_bool(state.last_autosave_failed).is_false()
+	state.free()
+	save_manager.free()
+
+func test_s3r201_malformed_guild_payload_type_skips_and_clears() -> void:
+	## S3-R2-01：payload 值类型不符（guild:[]）——SaveManager 跳过 restore 调用
+	##（不再触发 provider 侧类型校验错误中止 restore 链），GuildState 经
+	## save_loaded 钩子走既有清空链：旗标 false + 槽清空（残留旧局不冒充）
+	var local: Array = _MakeLocalState()
+	var save_manager: Node = local[0]
+	var state: Node = local[1]
+	state.new_game()
+	state.wait_one_day()
+	assert_int(state.core.day).is_equal(2)
+	# 覆盖为坏类型公会快照档（payload guild=[] ——手改档形态，raw 写盘）
+	var raw_save: String = "{\"schema_version\": 3, \"save_point\": 0, \"game_day\": 1, \"mode\": \"demo\", \"scene_id\": \"guild_shell\", \"saved_unix_time\": 0, \"payload\": {\"guild\": []}}"
+	DirAccess.make_dir_recursive_absolute("user://saves")
+	var file: FileAccess = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	file.store_string(raw_save)
+	file.close()
+	save_manager.current = null
+	var loaded: SaveData = save_manager.load_game()
+	assert_object(loaded).is_not_null()
+	assert_bool(state.has_guild_data()).is_false()
+	assert_int(state.core.day).is_equal(1)
+	assert_int(state.core.roster.size()).is_equal(0)
+	state.free()
+	save_manager.free()
+
+func test_s505_settle_idempotent_returns_cached_summary() -> void:
+	## S5-05：settle_expedition 幂等早退返回首次结算摘要缓存——重复调用拿到
+	## 同一实例（含 reason 等完整字段，不再是无 reason 空摘要）
+	var local: Array = _MakeLocalState()
+	var save_manager: Node = local[0]
+	var state: Node = local[1]
+	state.new_game()
+	var run := ExpeditionRun.new()
+	run.base_days = 1
+	var first: Variant = state.settle_expedition(run,
+			GuildCore.ExpeditionOutcome.RETREAT)
+	assert_object(first).is_not_null()
+	assert_bool(run.settled).is_true()
+	var second: Variant = state.settle_expedition(run,
+			GuildCore.ExpeditionOutcome.DEFEAT)
+	assert_object(second).is_same(first)
+	state.free()
+	save_manager.free()
+
+func test_s305_from_dict_bad_elements_skipped() -> void:
+	## S3-05：手改档混入非串元素（party_ids [1,2] / attrs 坏键 / 技能·怪癖
+	## 清单坏元素）——元素级跳过不中断整条 restore 链
+	var quest_data: Dictionary = {
+		"serial": 3, "template_id": "q_lair_purge", "state": 0, "expire_day": 9,
+		"party_ids": ["adv_iron_peak", 3, "adv_erin"], "urgent": false,
+		"work_days_left": 0,
+	}
+	var inst: QuestInstance = QuestInstance.from_dict(quest_data)
+	assert_object(inst).is_not_null()
+	assert_int(inst.party_ids.size()).is_equal(2)
+	assert_bool(inst.party_ids.has(&"adv_iron_peak")).is_true()
+	assert_bool(inst.party_ids.has(&"adv_erin")).is_true()
+	var adv_data: Dictionary = {
+		"unit_id": "adv_test", "class_id": "cls_warrior", "display_name": "测试",
+		"level": 1, "exp": 0,
+		"attrs": {"strength": 16, 5: 10},
+		"skill_ids": ["skl_warrior_power_strike", 7],
+		"skill_points": 0, "tendency_id": "", "status": 0, "rest_days": 0,
+		"last_expedition_day": 0, "pre_unlocked": true, "equip_slots": {},
+		"stress": 0,
+		"quirks": [1, "q_odd"],
+	}
+	var adv: AdventurerData = AdventurerData.from_dict(adv_data)
+	assert_object(adv).is_not_null()
+	assert_int(adv.attrs.size()).is_equal(1)
+	assert_bool(adv.attrs.has(&"strength")).is_true()
+	assert_int(adv.skill_ids.size()).is_equal(1)
+	assert_bool(adv.skill_ids.has(&"skl_warrior_power_strike")).is_true()
+	assert_int(adv.quirks.size()).is_equal(1)
+	assert_bool(adv.quirks.has(&"q_odd")).is_true()
+
+func test_s3r3_dirty_field_type_rejected() -> void:
+	## S3-R3-01/02：from_dict 字段类型校验补漏——quest_instance.template_id
+	## 非串 / adventurer_data.display_name 非串 → null 拒载（脏档不进 restore 链）
+	var quest_data: Dictionary = {
+		"serial": 3, "template_id": 5, "state": 0, "expire_day": 9,
+		"party_ids": [], "urgent": false, "work_days_left": 0,
+	}
+	assert_object(QuestInstance.from_dict(quest_data)).is_null()
+	var adv_data: Dictionary = {
+		"unit_id": "adv_test", "class_id": "cls_warrior", "display_name": 99,
+		"level": 1, "exp": 0, "attrs": {}, "skill_ids": [],
+		"skill_points": 0, "tendency_id": "", "status": 0, "rest_days": 0,
+		"last_expedition_day": 0, "pre_unlocked": true, "equip_slots": {},
+		"stress": 0, "quirks": [],
+	}
+	assert_object(AdventurerData.from_dict(adv_data)).is_null()
+	# S3-R4-04：脏档 level:0 拒载（等级 1 起——0 免费满级）
+	var zero_level: Dictionary = adv_data.duplicate()
+	zero_level["display_name"] = "测试"
+	zero_level["level"] = 0
+	assert_object(AdventurerData.from_dict(zero_level)).is_null()
+
+func test_s3r402_dirty_container_values_restore_chain_intact() -> void:
+	## S3-R4-02：容器型脏值矩阵——day/gold/board·pool serial/facility 值/
+	## party_memory 元素/attrs 值/pending 值/has_unseen_grants 全为容器时
+	## restore 链不中断（此前裸 int()/String()/bool() SCRIPT ERROR 中止——
+	## stale core 存活 + 旗标冒充读档成功）；门卫后各槽回退默认、core 自洽
+	var local: Array = _MakeLocalState()
+	var save_manager: Node = local[0]
+	var state: Node = local[1]
+	# 同进程残留旧局（day=2——若 restore 中止则 stale 值存活）
+	state.new_game()
+	state.wait_one_day()
+	assert_int(state.core.day).is_equal(2)
+	var raw_save: String = "{\"schema_version\": 3, \"save_point\": 0, \"game_day\": 1, \"mode\": \"demo\", \"scene_id\": \"guild_shell\", \"saved_unix_time\": 0, \"payload\": {\"guild\": {\"day\": [], \"gold\": [], \"reputation\": [], \"board\": {\"serial\": []}, \"recruit_pool\": {\"serial\": []}, \"facility_levels\": {\"fac_dormitory\": []}, \"roster\": [{\"unit_id\": \"adv_t\", \"class_id\": \"cls_warrior\", \"display_name\": \"测试\", \"level\": 1, \"exp\": 0, \"attrs\": {\"strength\": []}, \"skill_ids\": [], \"skill_points\": 0, \"tendency_id\": \"\", \"status\": 0, \"rest_days\": 0, \"last_expedition_day\": 0, \"pre_unlocked\": true, \"equip_slots\": {}, \"stress\": 0, \"quirks\": []}], \"last_party_by_tpl\": {\"q_lair_purge\": [\"adv_a\", 5]}, \"pending_tendency_levels\": {\"adv_t\": []}, \"has_unseen_grants\": []}}}"
+	DirAccess.make_dir_recursive_absolute("user://saves")
+	var file: FileAccess = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	file.store_string(raw_save)
+	file.close()
+	save_manager.current = null
+	var loaded: SaveData = save_manager.load_game()
+	assert_object(loaded).is_not_null()
+	# 链完整走完：各脏槽回退默认（非 stale 残留）+ 旗标如实（恢复完成）
+	assert_int(state.core.day).is_equal(1)
+	assert_int(state.core.gold).is_equal(0)
+	assert_int(state.core.board.serial).is_equal(1)
+	assert_int(state.core.recruit_pool.serial).is_equal(1)
+	assert_int(int(state.core.facility_levels.get(&"fac_dormitory", 0))).is_equal(1)
+	assert_int(state.core.roster.size()).is_equal(1)
+	assert_int(int(state.core.roster[0].attrs.get(&"strength", 0))) \
+			.is_equal(AttrKeys.DEFAULT_ATTR_VALUE)
+	assert_int(state.core.last_party_by_tpl["q_lair_purge"].size()).is_equal(1)
+	assert_int(int(state.core.pending_tendency_levels.get("adv_t", -1))).is_equal(0)
+	assert_bool(state.core.has_unseen_grants).is_false()
+	assert_bool(state.has_guild_data()).is_true()
+	state.free()
+	save_manager.free()
+
+func test_s3r5_serial_safety_and_roster_dedup_matrix() -> void:
+	## S3-R5-01/02/03：serial 追平与名册查重矩阵——①board serial 脏回退 1 而
+	## 实例 serial=5 存活 → 追平 6，后续上板不撞号（find_on_board 定位唯一）；
+	## ②recruit serial 脏回退 1 而名册 adv_recruit_2 存活 → 兜底 3（新招募
+	## 不发 adv_recruit_1 撞名册同 id）；③roster 双同 id + 空 unit_id 跳过
+	var local: Array = _MakeLocalState()
+	var save_manager: Node = local[0]
+	var state: Node = local[1]
+	var adv_json: String = "{\"unit_id\": \"adv_recruit_2\", \"class_id\": \"cls_warrior\", \"display_name\": \"招募员\", \"level\": 1, \"exp\": 0, \"attrs\": {}, \"skill_ids\": [], \"skill_points\": 0, \"tendency_id\": \"\", \"status\": 0, \"rest_days\": 0, \"last_expedition_day\": 0, \"pre_unlocked\": false, \"equip_slots\": {}, \"stress\": 0, \"quirks\": []}"
+	var adv_empty_json: String = "{\"unit_id\": \"\", \"class_id\": \"cls_warrior\", \"display_name\": \"空 id\", \"level\": 1, \"exp\": 0, \"attrs\": {}, \"skill_ids\": [], \"skill_points\": 0, \"tendency_id\": \"\", \"status\": 0, \"rest_days\": 0, \"last_expedition_day\": 0, \"pre_unlocked\": false, \"equip_slots\": {}, \"stress\": 0, \"quirks\": []}"
+	var inst_json: String = "{\"serial\": 5, \"template_id\": \"q_lair_purge\", \"state\": 1, \"expire_day\": 9, \"party_ids\": [], \"urgent\": false, \"work_days_left\": 0}"
+	var raw_save: String = "{\"schema_version\": 3, \"save_point\": 0, \"game_day\": 1, \"mode\": \"demo\", \"scene_id\": \"guild_shell\", \"saved_unix_time\": 0, \"payload\": {\"guild\": {\"board\": {\"serial\": [], \"accepted\": [" + inst_json + "]}, \"recruit_pool\": {\"serial\": []}, \"roster\": [" + adv_json + ", " + adv_json + ", " + adv_empty_json + "]}}}"
+	DirAccess.make_dir_recursive_absolute("user://saves")
+	var file: FileAccess = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	file.store_string(raw_save)
+	file.close()
+	save_manager.current = null
+	var loaded: SaveData = save_manager.load_game()
+	assert_object(loaded).is_not_null()
+	# ①board serial 追平：实例 serial=5 存活 → 发号 6 起（新上板不撞旧实例）
+	assert_int(state.core.board.accepted.size()).is_equal(1)
+	assert_int(state.core.board.serial).is_equal(6)
+	var fresh_inst: QuestInstance = state.core.board.spawn_on_board(&"q_chore_supply_run",
+			state.core.day)
+	assert_int(fresh_inst.serial).is_equal(6)
+	assert_object(state.core.board.find_on_board(6)).is_same(fresh_inst)
+	# ②recruit serial 名册兜底：adv_recruit_2 存活 → ≥3（不发 1 撞名册）
+	assert_int(state.core.recruit_pool.serial).is_greater_equal(3)
+	# ③roster 查重 + 拒空：3 条脏 roster 只留 1 条有效
+	assert_int(state.core.roster.size()).is_equal(1)
+	assert_str(String(state.core.roster[0].unit_id)).is_equal("adv_recruit_2")
+	state.free()
+	save_manager.free()
+
+func test_b3_resting_member_roundtrip() -> void:
+	## 功能二批 3 增补：RESTING+rest_days 落档恢复（倒地转重伤经既有
+	## status/rest_days 通道持久——schema 零变更）
+	var local: Array = _MakeLocalState()
+	var save_manager: Node = local[0]
+	var state: Node = local[1]
+	state.new_game()
+	var member: AdventurerData = state.core.roster[1]
+	member.status = AdventurerData.Status.RESTING
+	member.rest_days = 3
+	assert_int(save_manager.autosave(SaveData.SavePoint.DAY_END)).is_equal(OK)
+	save_manager.current = null
+	state.core = GuildCore.new()
+	var loaded: SaveData = save_manager.load_game()
+	assert_object(loaded).is_not_null()
+	var restored: AdventurerData = state.core.find_member(member.unit_id)
+	assert_object(restored).is_not_null()
+	assert_int(restored.status).is_equal(AdventurerData.Status.RESTING)
+	assert_int(restored.rest_days).is_equal(3)
+	state.free()
+	save_manager.free()

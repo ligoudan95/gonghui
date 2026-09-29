@@ -170,3 +170,31 @@ func test_w303_panel_area_is_skip_hotzone_during_roll() -> void:
 	await get_tree().create_timer(0.1).timeout
 	assert_bool(panel._busy).is_false()
 	assert_int(panel.mouse_filter).is_equal(Control.MOUSE_FILTER_IGNORE)
+
+func test_s4r301_view_transition_cuts_option_input() -> void:
+	## S4-R3-01：纯选择首击同步走完结算呈现后选项区即隐藏断输入——
+	## queue_free 延迟帧末，残留按钮在隐藏容器内不再接收输入（同帧双击
+	## 双结算防线；_BeginCast 同款先例）；重建选项视图恢复可见
+	var cfg: CoreConfig = _MakeCfg(0.05)
+	var panel := EventPanel.new()
+	panel.setup(cfg)
+	add_child(panel)
+	auto_free(panel)
+	var view := EventRunner.EventView.new()
+	view.narrative = "叙述文本。"
+	view.options.append({&"id": &"opt_pure", &"text": "纯选择项", &"cost_days": 0})
+	panel.show_view(view)
+	assert_bool(panel._options_box.visible).is_true()
+	# 模拟宿主同步链：首击 → option_chosen → choose_option → show_settled
+	##（同帧内完成视图切换——真实双击的窗口即在此帧）
+	var settle_on_choose: Callable = func(_option_id: StringName, _actor: AdventurerData) -> void:
+		panel.show_settled(CheckResult.Grade.SUCCESS, "结算文本。", "")
+	panel.option_chosen.connect(settle_on_choose)
+	(panel._options_box.get_child(0) as Button).pressed.emit()
+	# 视图已切换：选项区隐藏（残留按钮不可点）、结算视图呈现
+	assert_bool(panel._options_box.visible).is_false()
+	assert_str(panel._result_label.text).contains("结算文本。")
+	# 重建选项视图（取消回退路径）：恢复可见
+	view.options.append({&"id": &"opt_pure2", &"text": "纯选择项二", &"cost_days": 0})
+	panel.show_view(view)
+	assert_bool(panel._options_box.visible).is_true()

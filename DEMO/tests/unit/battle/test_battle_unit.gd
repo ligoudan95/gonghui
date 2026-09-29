@@ -237,6 +237,17 @@ func test_heal_caps_and_dead_reject() -> void:
 	warrior.heal(10)
 	assert_int(warrior.current_hp).is_equal(0)
 
+func test_heal_rejects_non_positive_amount() -> void:
+	## S2-04：治疗非正值拒收（与 take_damage 拒收对称——负值会凭空回血/
+	## 0 值无意义放行，防「活尸」链路）；治疗后 HP 不变
+	var warrior := UnitBuilder.build_ally(_MakeAdv(&"w", &"cls_warrior", _WarriorAttrs()),
+			load(CLS_DIR + "cls_warrior.tres") as ClassDef, null)
+	warrior.current_hp = 50
+	warrior.heal(0)
+	assert_int(warrior.current_hp).is_equal(50)
+	warrior.heal(-30)
+	assert_int(warrior.current_hp).is_equal(50)
+
 func test_adventurer_data_create_debug() -> void:
 	## M1 调试口径工厂：技能清单 = 该职业全部档 1 技能（战士 = 痛击+盾墙）
 	var game_data: Node = auto_free(load(GAME_DATA_SCRIPT).new())

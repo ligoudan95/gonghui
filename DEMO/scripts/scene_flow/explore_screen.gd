@@ -53,10 +53,12 @@ const UI_TEXTS: Dictionary = {
 	&"target_done": "目标已达成——回村口出口交付。",
 	&"move_blocked": "那边过不去。",
 	&"path_blocked": "（此路当前不通。）",
-	&"status_line": "委托『%s』｜%s｜耗时 %d 天｜HP：%s",
+	&"status_line": "委托『%s』｜%s｜耗时 %d 天｜%s",
 	&"hp_downed": "倒地",
+	## 功能一批 2：染毒标记与毒瘴踏入提示
+	&"hp_poison_tag": "·中毒",
+	&"poison_step_hint": "踏入毒瘴——队伍受到毒伤并染毒。",
 	&"hp_group_prefix": "HP：",
-	&"status_join": "｜",
 	&"quest_granted": "新委托『%s』已加入挂单列表。",
 	&"quest_grant_dup": "这桩委托已经在挂单里了。",
 	&"treasure_opened": "撬开矿箱——+%d 金。",
@@ -69,13 +71,22 @@ const UI_TEXTS: Dictionary = {
 	&"battle_retreat_free": "从战斗中撤退——探索中止，队伍平安回城（无重伤）。",
 	&"retreat_failed": "撤退回城——委托未达成、无重伤，出征进度不保留。",
 	&"retreat_free_failed": "撤退回城——探索中止、无重伤，出征进度不保留。",
+	# ---- 功能二批 3（Q-A 拍板：恒弹+增强）：倒地变体键（有倒地成员时
+	## _OutcomeTextPair 按名单注入转重伤警示；无倒地维持原文案）----
+	&"battle_retreat_downed": "从战斗中撤退——委托失败；倒地队员（%s）回城将转重伤休养。",
+	&"battle_retreat_free_downed": "从战斗中撤退——探索中止；倒地队员（%s）回城将转重伤休养。",
+	&"retreat_failed_downed": "撤退回城——委托未达成；倒地队员（%s）回城将转重伤休养。",
+	&"retreat_free_failed_downed": "撤退回城——探索中止；倒地队员（%s）回城将转重伤休养。",
+	## 撤退确认弹窗增强文案（%d=人数 / %s=名单 / %d=休养天数）
+	&"retreat_confirm_downed": "队内 %d 名队员倒地（%s）——撤退回城后他们将转重伤休养 %d 天；撤退 = 委托失败，途中所得将不作数。确定撤退吗？",
 	&"settle_success": "委托达成",
 	&"settle_free_explore": "自由探索结束",
 	&"settle_failed": "委托失败",
 	&"settle_free_failed": "探索中止",
 	&"settle_body": "收获申报：%d 经验 · %d 金 · %d 声望（途中所得一并计入）｜出征耗时 %d 天",
 	&"settle_bench": "留守训练：%d 名板凳成员各分享 %d 经验。",
-	&"settle_injury": "全队负伤，需休养 %d 天——休养期间不可出征。",
+	## 重伤正文行（批 3：带人数变体——人数取 summary.injury_member_count 单源）
+	&"settle_injury_n": "%d 名队员负伤，需休养 %d 天——休养期间不可出征。",
 	&"settle_granted": "新委托入单：%s（到协会挂单区查看）。",
 	&"settle_days": "你们在外期间公会照常运转——日历已推进 %d 天。",
 	&"settle_rewards_voided": "队伍未能全功而归——途中所得未入账，收获全部作废。",
@@ -93,6 +104,13 @@ const UI_TEXTS: Dictionary = {
 	&"summary_light_done_format": "轻度委托完成：%s +%d 金 +%d 经验 +%d 声望",
 	&"summary_light_done_bench_suffix": "（板凳 %d 人各得 %d 经验）",
 	&"route_failed": "进入战斗失败——请重试。",
+	## S3-06：结算回城 go 失败提示（%d = SceneManager 错误码）
+	&"settle_return_failed": "回城失败（错误码 %d）——请重试。",
+	## S4-R5-01④：数值反馈行四段格式串（原 _RewardTextOf 内联收编单源）
+	&"reward_exp_format": "+%d 经验",
+	&"reward_gold_format": "+%d 金",
+	&"reward_reputation_format": "+%d 声望",
+	&"reward_hp_format": "%d HP",
 	&"map_missing": "探索图数据缺失——无法开始探索。（占位提示——M4 出征层接管）",
 	&"check_roll_detail": "掷出 %d ＋ %d ＝ %d（%s %d）",
 }
@@ -176,6 +194,7 @@ func _ready() -> void:
 	%RetreatButton.text = UI_TEXTS[&"retreat_button"]
 	# UI 弹层 z 单源落位（tscn 同值双保险——层级契约测试消费）
 	%PanelHost.z_index = UI_POPUP_Z_INDEX
+	%SettlementHost.z_index = UI_POPUP_Z_INDEX
 	%SettlementPanel.z_index = UI_POPUP_Z_INDEX
 	%SettlementButton.text = UI_TEXTS[&"settle_return"]
 	%GoalBanner.text = UI_TEXTS[&"goal_banner"]
@@ -188,6 +207,26 @@ func _ready() -> void:
 	if save_manager != null:
 		save_manager.set_expedition_lock(true)
 	_ApplyFontTiers()
+	# 战后续跑分叉（payload 键区分）：B 出口战 vs 遭遇战——**先于图缺失降级**
+	## 判断（S5-07：极端档下战斗结果不再被图缺失静默作废——续跑按战斗结果
+	## 终结：DEFEAT 走重伤结算/RETREAT 走无重伤，语义不被 map_missing 的
+	## RETREAT 覆写；分派为 call_deferred，实际处理在 _ready 全部早退路径之后）
+	var battle_result: BattleResult = incoming.get(&"battle_result", null) as BattleResult
+	if battle_result != null:
+		_resuming = true
+		_SyncRetreatButton()
+		# S2-R4-05：分派延迟两帧（原 L9 一帧窗）——对齐 SceneManager._FinishSwitch
+		## 的重入锁释放窗口；续跑内含路由 go（战后站上 ENTER 点补查），一帧
+		## 分派会落在锁未释窗口被确定性拒载（route_failed 死路）
+		_DelayedResumeBattle(battle_result,
+				incoming.get(&"battle_node_id", &"") as StringName,
+				incoming.get(&"encounter_pack_id", &"") as StringName)
+		if _map_def == null:
+			# 图缺失 + 战续跑：留痕降级——失败类战斗结果经 _ResumeAfterBattle 按
+			# 实际出口终结；胜利类留在无板面屏（撤退出口仍可用）
+			push_warning("explore_screen: 战后续跑期间图数据缺失（map_id='%s'）——续跑按战斗结果处理"
+					% String(_run.map_id))
+			return
 	# 图数据缺失降级（L8）：提示 + 回城出口——不废屏（数据错误不惩罚玩家——RETREAT 口径）
 	if _map_def == null:
 		_FinishSession(GuildCore.ExpeditionOutcome.RETREAT, UI_TEXTS[&"map_missing"])
@@ -215,13 +254,6 @@ func _ready() -> void:
 	_ApplySecretRevealIfNeeded()
 	_RefreshBoard()
 	_RefreshStatus()
-	# 战后续跑分叉（payload 键区分）：B 出口战 vs 遭遇战
-	var battle_result: BattleResult = incoming.get(&"battle_result", null) as BattleResult
-	if battle_result != null:
-		_resuming = true
-		var battle_node_id: StringName = incoming.get(&"battle_node_id", &"") as StringName
-		var encounter_pack_id: StringName = incoming.get(&"encounter_pack_id", &"") as StringName
-		_ResumeAfterBattle.call_deferred(battle_result, battle_node_id, encounter_pack_id)
 
 func _exit_tree() -> void:
 	## 引擎回调：离树恢复出征锁（会话结束；路由战斗期间锁由 battle_screen
@@ -378,6 +410,7 @@ func _RefreshStatus() -> void:
 	## 顶部状态行（委托/判据/耗时/队伍 HP）
 	## 参数：无
 	## 返回：无
+	_SyncRetreatButton()
 	var quest_name: String = UI_TEXTS[&"no_quest"]
 	if _run.quest_template_id != &"":
 		var quest: QuestTemplateDef = _game_data.get_record(
@@ -390,18 +423,33 @@ func _RefreshStatus() -> void:
 			push_warning("explore_screen: 委托模板 '%s' 查无" % _run.quest_template_id)
 	var hp_parts: PackedStringArray = []
 	for adv: AdventurerData in _run.party:
-		var tag: String = String(UI_TEXTS[&"hp_downed"]) if _run.downed.get(adv, false) \
-				else str(int(_run.hp.get(adv, 0)))
+		var tag: String = str(int(_run.hp.get(adv, 0)))
+		if _run.downed.get(adv, false):
+			tag = String(UI_TEXTS[&"hp_downed"])
+		elif _run.poisoned.has(adv):
+			# 功能一批 2：染毒成员 HP 追加标记（未倒地才显——倒地语义优先）
+			tag += String(UI_TEXTS[&"hp_poison_tag"])
 		hp_parts.append("%s:%s" % [adv.display_name, tag])
 	# 状态行分组（2026-09-25 层级修复顺手项）：组间全角｜分隔、HP 组加前缀标签；
 	# W3-06：自由探索会话（goal_kind == -1）状态段显专属文案（不再借用
 	# 「判据已达成」——无判据会话谈达成语义错位）；
-	# S4-M4-4：格式串与分隔字面量入 UI_TEXTS 单源（本文件最后一个漏网内联串）
+	# S4-M4-4：格式串与分隔字面量入 UI_TEXTS 单源（本文件最后一个漏网内联串）；
+	# S4-R5-01②：hp_group_prefix 键消费（渲染不变——原格式串内联「HP：」收编；
+	## 死键 status_join 删除：键值「｜」与实际空格 join 不符，按现状渲染收口）
 	var status_segment: String = UI_TEXTS[&"free_status"] if _run.goal_kind == -1 \
 			else (UI_TEXTS[&"goal_done"] if _ExitActive() else UI_TEXTS[&"goal_pending"])
 	%StatusLabel.text = String(UI_TEXTS[&"status_line"]) % [quest_name,
-			status_segment, _run.total_days(), " ".join(hp_parts)]
+			status_segment, _run.total_days(),
+			String(UI_TEXTS[&"hp_group_prefix"]) + " ".join(hp_parts)]
 	%GoalBanner.visible = _goal.is_done()
+
+func _SyncRetreatButton() -> void:
+	## 撤退钮可用态镜像（S4-R4-01：会话终结/移动演出/事件面板/续跑待处理
+	## 期视觉禁用——此前视觉可点但 _OnRetreatPressed 静默拦截零反馈；
+	## _RefreshStatus 与各标记翻转点统一走此口）
+	## 参数：无
+	## 返回：无
+	%RetreatButton.disabled = _finished or _moving or _event_open or _resuming
 
 # --------------------------------------------------------------------------
 # 点按交互（移动 / TAP 点位）
@@ -526,11 +574,17 @@ func _MoveTo(target: Vector2i) -> void:
 		_SetHint(UI_TEXTS[&"move_blocked"])
 		return
 	_moving = true
+	_SyncRetreatButton()
 	for index: int in range(1, path.size()):
 		var cell: Vector2i = path[index]
 		var is_new_cell: bool = not _run.visited_cells.has(cell)
 		_run.visited_cells[cell] = true
 		_run.party_pos = cell
+		# step0 踏入效果（功能一批 2：毒瘴等——apply_tile_effect 扣血+染毒标记，
+		# 不中断移动链；true 才提示+刷新状态行）
+		if _run.apply_tile_effect(_state.tile_at(cell)):
+			_SetHint(String(UI_TEXTS[&"poison_step_hint"]))
+			_RefreshStatus()
 		# a. 迷雾揭示 + 板刷新（移动演出先行——图标落格后再等步进时长）
 		_run.fog.on_moved(cell)
 		_RefreshBoard()
@@ -539,6 +593,7 @@ func _MoveTo(target: Vector2i) -> void:
 		var door_point: InteractPointDef = _SecretDoorPointAt(cell)
 		if door_point != null:
 			_moving = false
+			_SyncRetreatButton()
 			_StartEvent(door_point.ref_id)
 			return
 		# c. 随机遭遇掷（新格才掷；触发 → 中断路由战斗——权重一次查表收口 L7）
@@ -546,12 +601,14 @@ func _MoveTo(target: Vector2i) -> void:
 		if weight != null and EncounterJudge.should_trigger(is_new_cell, weight,
 				_run.random_encounters_fired, _rng):
 			_moving = false
-			_RunRandomEncounter(weight)
+			_SyncRetreatButton()
+			_RunRandomEncounter(weight, cell, is_new_cell)
 			return
 		# d. ENTER 交互点（同格自动触发；已消耗不触发）
 		var enter_point: InteractPointDef = _PointAt(cell, InteractPointDef.Trigger.ENTER)
 		if enter_point != null and not _IsPointConsumed(enter_point):
 			_moving = false
+			_SyncRetreatButton()
 			_OnEnterPoint(enter_point)
 			return
 	_moving = false
@@ -614,14 +671,28 @@ func _OnEnterPoint(point: InteractPointDef) -> void:
 		_:
 			pass
 
-func _RunRandomEncounter(weight: EncounterWeightDef) -> void:
-	## 随机遭遇触发：路由成功后计数自增（战败不回退——账随 run 实例存续）
-	## 参数 weight：命中区域的遭遇权重
+func _RunRandomEncounter(weight: EncounterWeightDef, cell: Vector2i,
+		was_new_cell: bool) -> void:
+	## 随机遭遇触发：路由成功后计数自增（战败不回退——账随 run 实例存续）；
+	## S2-R2-01：路由失败回滚 visited 标记——掷遭遇时该格已登记 visited，go
+	## 失败（回滚零副作用）后若不回滚，重踏该格 is_new_cell=false 永不再掷
+	##（死遭遇）；回滚保留新格资格与计数落账同步
+	## 参数 weight：命中区域的遭遇权重；cell：触发格；was_new_cell：触发格
+	## 掷时是否新格
 	## 返回：无
 	if weight == null:
 		return
 	if _RouteEncounter(weight.random_pack_id, &""):
 		_run.random_encounters_fired += 1
+	elif was_new_cell:
+		_run.visited_cells.erase(cell)
+		# S2-R5-01 同根因收口：路由失败回滚后玩家停在触发格——同格再点按
+		# path.size()==1 不触发 ENTER（find_path 无移动段），就地复查未消耗
+		# ENTER 点（正常打开事件/必然遭遇，不再依赖「走开再走回」恢复）
+		var fail_point: InteractPointDef = _PointAt(_run.party_pos,
+				InteractPointDef.Trigger.ENTER)
+		if fail_point != null and not _IsPointConsumed(fail_point):
+			_OnEnterPoint(fail_point)
 
 # --------------------------------------------------------------------------
 # 事件引擎接线（EventPanel 内嵌驱动）
@@ -716,14 +787,15 @@ func _RewardTextOf(view: EventRunner.EventView) -> String:
 	var exp: int = int(view.reward_gained.get(&"exp", 0))
 	var gold: int = int(view.reward_gained.get(&"gold", 0))
 	var reputation: int = int(view.reward_gained.get(&"reputation", 0))
+	# S4-R5-01④：四段格式串经 UI_TEXTS 单源（原内联字面量收编）
 	if exp != 0:
-		parts.append("+%d 经验" % exp)
+		parts.append(String(UI_TEXTS[&"reward_exp_format"]) % exp)
 	if gold != 0:
-		parts.append("+%d 金" % gold)
+		parts.append(String(UI_TEXTS[&"reward_gold_format"]) % gold)
 	if reputation != 0:
-		parts.append("+%d 声望" % reputation)
+		parts.append(String(UI_TEXTS[&"reward_reputation_format"]) % reputation)
 	if view.hp_delta != 0:
-		parts.append("%d HP" % view.hp_delta)
+		parts.append(String(UI_TEXTS[&"reward_hp_format"]) % view.hp_delta)
 	return " ".join(parts)
 
 func _OnContinue() -> void:
@@ -744,6 +816,7 @@ func _ShowEventPanel() -> void:
 	## 参数：无
 	## 返回：无
 	%PanelHost.visible = true
+	_SyncRetreatButton()
 
 func _HideEventPanel() -> void:
 	## 事件弹层隐藏（清空点统一入口——结算继续/路由战斗离屏/会话终结；
@@ -751,6 +824,7 @@ func _HideEventPanel() -> void:
 	## 参数：无
 	## 返回：无
 	%PanelHost.visible = false
+	_SyncRetreatButton()
 
 func _ApplySecretRevealIfNeeded() -> void:
 	## 暗门揭示应用（H2：unlock_flag 已入 run 即重放——_ready 会话恢复与
@@ -853,6 +927,8 @@ func _GoBattle(params: BattleParams, extra_payload: Dictionary) -> bool:
 		return false
 	params.party = alive_party
 	params.hp_overrides = _run.build_hp_overrides()
+	# 功能一批 2 Q5：染毒成员战斗带入（三路由共用单点——CHECKIN 施加通道）
+	params.initial_statuses = _run.build_poison_initial_statuses()
 	_routing_battle = true
 	# R4-15：关键入口消费 go 返回值（失败可感知 + 回滚）
 	var err: Error = get_node("/root/SceneManager").go(SceneManagerScript.SceneId.BATTLE_SCREEN, {
@@ -873,6 +949,19 @@ func _GoBattle(params: BattleParams, extra_payload: Dictionary) -> bool:
 	_HideEventPanel()
 	return true
 
+func _DelayedResumeBattle(result: BattleResult, battle_node_id: StringName,
+		encounter_pack_id: StringName) -> void:
+	## 战后续跑延迟分派（S2-R4-05：两帧——晚于 SceneManager._FinishSwitch
+	## 的重入锁释放，续跑内路由 go 不被拒；期间 _resuming 保持 true 禁交互，
+	## L9 一帧窗语义不变仅扩窗）
+	## 参数：同 _ResumeAfterBattle
+	## 返回：无（协程——fire-and-forget）
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if not is_inside_tree():
+		return
+	_ResumeAfterBattle(result, battle_node_id, encounter_pack_id)
+
 func _ResumeAfterBattle(result: BattleResult, battle_node_id: StringName,
 		encounter_pack_id: StringName) -> void:
 	## 战后续跑分叉（payload 键区分）：encounter_pack_id 非空 = 遭遇战
@@ -883,6 +972,8 @@ func _ResumeAfterBattle(result: BattleResult, battle_node_id: StringName,
 	## encounter_pack_id：遭遇队伍 id
 	## 返回：无
 	_resuming = false
+	# 功能一批 2：战后续跑头部清染毒（三通道统一——回城无残留）
+	_run.clear_poison()
 	if battle_node_id != &"" and encounter_pack_id != &"":
 		push_warning("explore_screen: 回传 battle_node_id 与 encounter_pack_id " \
 				+ "双键并存——按遭遇通道处理")
@@ -897,7 +988,7 @@ func _ResumeAfterBattle(result: BattleResult, battle_node_id: StringName,
 	# 文案分流（free 专属位）
 	if result.kind == BattleResult.ResultKind.RETREAT:
 		_FinishSession(GuildCore.ExpeditionOutcome.RETREAT,
-				_OutcomeText(&"battle_retreat", &"battle_retreat_free"))
+				_OutcomeTextPair(&"battle_retreat", &"battle_retreat_free"))
 		return
 	if result.kind != BattleResult.ResultKind.VICTORY:
 		_FinishSession(GuildCore.ExpeditionOutcome.DEFEAT,
@@ -910,6 +1001,17 @@ func _ResumeAfterBattle(result: BattleResult, battle_node_id: StringName,
 		# 遭遇战胜利：原位继续（party_pos 不动）+ CLEAR 判据通道
 		if _goal.on_battle_victory(encounter_pack_id):
 			_run.goal_done = true
+		# S2-R4-05：战后原位继续补查当前格未消耗 ENTER 点——移动链的
+		# ENTER 检查在遭遇掷之后，遭遇中断后该检查未跑（战后小队已站格
+		# 但「站上无反应」；补查后正常触发事件/必然遭遇）；S2-R5-01：补查
+		# 命中分支先刷一次状态（_resuming 已置 false——路由失败时撤退钮
+		# 不滞留禁用态、判据横幅同步）
+		var resume_point: InteractPointDef = _PointAt(_run.party_pos,
+				InteractPointDef.Trigger.ENTER)
+		if resume_point != null and not _IsPointConsumed(resume_point):
+			_RefreshStatus()
+			_OnEnterPoint(resume_point)
+			return
 		_SetHint(UI_TEXTS[&"encounter_won"])
 		_RefreshBoard()
 		_RefreshStatus()
@@ -967,6 +1069,7 @@ func _FinishSession(outcome: int, reason: String = "") -> void:
 		return
 	_finished = true
 	_event_open = false
+	_SyncRetreatButton()
 	if _panel != null:
 		_panel.clear()
 		_HideEventPanel()
@@ -998,6 +1101,9 @@ func _FinishSession(outcome: int, reason: String = "") -> void:
 		%SettlementBody.text = _BuildFailureBody(summary, reason)
 	else:
 		%SettlementBody.text = _BuildSuccessBody(summary)
+	# S4-01：面板高度随内容（全屏居中宿主承载——正文多行不再溢出固定底边；
+	# %SettlementPanel 自身 visible 旗标维持既有测试契约，宿主旗标同步翻起）
+	%SettlementHost.visible = true
 	%SettlementPanel.visible = true
 
 func _SettleWithGuild(outcome: int) -> GuildCore.ExpeditionSummary:
@@ -1027,6 +1133,38 @@ func _OutcomeText(quest_key: StringName, free_key: StringName) -> String:
 	## 参数 quest_key/free_key：委托会话/自由探索会话的文案键
 	## 返回：文案
 	return String(UI_TEXTS[free_key]) if _run.goal_kind == -1 else String(UI_TEXTS[quest_key])
+
+func _OutcomeTextPair(base_key: StringName, free_key: StringName) -> String:
+	## 会话形态×倒地分流文案取值（功能二批 3：撤退/战败回城 reason 四键
+	## 各增 _downed 变体——有倒地成员时注入名单与转重伤警示；无倒地
+	## 维持原文案；战败/结算标题等无变体键的场合仍走 _OutcomeText）
+	## 参数 base_key/free_key：委托会话/自由探索会话的文案基键
+	## 返回：文案（downed 变体已格式化名单）
+	var key: StringName = free_key if _run.goal_kind == -1 else base_key
+	var downed_names: Array[String] = _DownedDisplayNames()
+	if downed_names.is_empty():
+		return String(UI_TEXTS[key])
+	return String(UI_TEXTS[StringName(String(key) + "_downed")]) % "、".join(downed_names)
+
+func _DownedDisplayNames() -> Array[String]:
+	## 倒地成员显示名清单（功能二批 3：弹窗/文案分流共用单源）
+	## 参数：无
+	## 返回：倒地成员显示名列表
+	var names: Array[String] = []
+	for adv: AdventurerData in _run.party:
+		if _run.downed.get(adv, false):
+			names.append(adv.display_name)
+	return names
+
+func _InjuryRestDaysForHint() -> int:
+	## 重伤休养天数读取（功能二批 3：弹窗/文案警示消费——公会会话就绪走
+	## injury_rest_days() 宿舍缩减后值；无公会会话回退 cfg 基础值）
+	## 参数：无
+	## 返回：天数
+	var guild_state: Node = get_node_or_null("/root/GuildState")
+	if guild_state != null and guild_state.core != null and guild_state.core.cfg != null:
+		return guild_state.core.injury_rest_days()
+	return maxi(1, _cfg.injury_rest_days)
 
 func _BuildSuccessBody(summary: GuildCore.ExpeditionSummary) -> String:
 	## 成功结算正文（ExpeditionSummary 读值拼装——数值单源结算层，UI 只呈现）；
@@ -1064,7 +1202,9 @@ func _BuildFailureBody(summary: GuildCore.ExpeditionSummary, reason: String) -> 
 	# M-1 口径统一：休养天数消费补结算后剩余值（与名册一致——长途出征补结算
 	# 期已恢复则不出本行）
 	if summary.injury_rest_days_remaining > 0:
-		lines.append(UI_TEXTS[&"settle_injury"] % summary.injury_rest_days_remaining)
+		# 批 3：带人数变体（人数取 summary.injury_member_count 单源）
+		lines.append(String(UI_TEXTS[&"settle_injury_n"]) % [
+				summary.injury_member_count, summary.injury_rest_days_remaining])
 	if not summary.quests_granted.is_empty():
 		lines.append(UI_TEXTS[&"settle_granted"] % _GrantedNames(summary))
 	lines.append(UI_TEXTS[&"settle_days"] % summary.days_settled)
@@ -1102,19 +1242,28 @@ func _GrantedNames(summary: GuildCore.ExpeditionSummary) -> String:
 
 func _OnSettleReturnPressed() -> void:
 	## 结算面板「回城」：只做回公会壳（结算与 RETURN_SETTLED 存档已在
-	## _FinishSession 完成；run 由场景切换丢弃——实例销毁 = 进度不保留）
+	## _FinishSession 完成；run 由场景切换丢弃——实例销毁 = 进度不保留）；
+	## S3-06：go 失败不再静默死路——hint 通道可见提示（重试入口仍在）
 	## 参数：无
 	## 返回：无
 	var err: Error = get_node("/root/SceneManager").go(SceneManagerScript.SceneId.GUILD_SHELL)
 	if err != OK:
 		push_warning("explore_screen: 结算回城失败（错误码 %d）" % err)
+		_SetHint(String(UI_TEXTS[&"settle_return_failed"]) % err)
 
 func _OnRetreatPressed() -> void:
-	## 撤退按钮：确认弹窗（撤退 = 委托失败——达成后撤退仍走失败通道）
+	## 撤退按钮：确认弹窗（撤退 = 委托失败——达成后撤退仍走失败通道）；
+	## 功能二批 3（Q-A 拍板：恒弹+增强）——有倒地成员时弹窗动态注入
+	## 倒地名单+转重伤警告（天数经 injury_rest_days 缩减链）；无倒地时
+	## 弹窗文案完全不变（tscn 静态文案维持）
 	## 参数：无
 	## 返回：无
 	if _finished or _moving or _event_open or _resuming:
 		return
+	var downed_names: Array[String] = _DownedDisplayNames()
+	if not downed_names.is_empty():
+		%RetreatConfirm.dialog_text = String(UI_TEXTS[&"retreat_confirm_downed"]) % [
+				downed_names.size(), "、".join(downed_names), _InjuryRestDaysForHint()]
 	%RetreatConfirm.popup_centered()
 
 func _OnRetreatConfirmConfirmed() -> void:
@@ -1123,7 +1272,7 @@ func _OnRetreatConfirmConfirmed() -> void:
 	## 参数：无
 	## 返回：无
 	_FinishSession(GuildCore.ExpeditionOutcome.RETREAT,
-			_OutcomeText(&"retreat_failed", &"retreat_free_failed"))
+			_OutcomeTextPair(&"retreat_failed", &"retreat_free_failed"))
 
 func _OnGuiInput(event: InputEvent) -> void:
 	## 点按跳过 D20 演出

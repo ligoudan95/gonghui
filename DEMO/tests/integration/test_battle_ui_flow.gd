@@ -23,6 +23,8 @@ func before_test() -> void:
 	scene_manager.previous_id = -1
 	var no_params: Dictionary = {}
 	scene_manager.pending_params = no_params
+	# S5-R2-02：复位切换重入锁（用例中断残留 _switch_pending=true 会连锁假失败）
+	scene_manager._switch_pending = false
 	# M-10：本套件 M-2 用例写真实存档（NEW_GAME/RETURN_SETTLED）——统一复位
 	_ResetAutoloadState()
 

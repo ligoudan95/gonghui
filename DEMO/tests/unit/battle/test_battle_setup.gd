@@ -176,6 +176,31 @@ func test_initial_statuses_battle_load_anchor() -> void:
 	assert_int(statuses[0].first_tick_round).is_equal(1)
 	assert_int(statuses[0].source_kind).is_equal(StatusInstance.SourceKind.CHECKIN)
 
+func test_initial_statuses_control_locks_current_round() -> void:
+	## S2-03：开局载入视为回合 1 前施加 = 未行动语义（案 11 §2.3 锚点 1）——
+	## 控制类状态经 CHECKIN 载入应锁**本回合**（from_next_turn_only=false）；
+	## DEBUFF_root 无 CHECKIN 来源（V-M2-ref-battle 禁控制类配置侧拦截），
+	## 此处临时补 token 注入后立即恢复（资源全局缓存——测试隔离口径）
+	var root: StatusDef = _game_data.get_record(&"DEBUFF_root") as StatusDef
+	assert_object(root).is_not_null()
+	var checkin_token: StringName = StatusDef.source_kind_token(
+			StatusInstance.SourceKind.CHECKIN)
+	var sources_size: int = root.allowed_sources.size()
+	root.allowed_sources.append(checkin_token)
+	var params := _MakeParams(&"enc_m1_random_pack", 2)
+	params.initial_statuses = [
+		{&"status_id": &"DEBUFF_root", &"target": &"rogue", &"duration": 1},
+	]
+	var context := BattleSetup.build(params, _game_data)
+	# 立即恢复（gdUnit 断言失败不中断函数，恢复代码必达）
+	root.allowed_sources.resize(sources_size)
+	var rogue: BattleUnit = context.find_unit(&"rogue")
+	var statuses: Array[StatusInstance] = context.status_manager.get_statuses(rogue)
+	assert_int(statuses.size()).is_equal(1)
+	assert_int(statuses[0].control_locks).is_equal(1)
+	assert_bool(statuses[0].from_next_turn_only) \
+			.override_failure_message("开局载入=未行动语义，控制类应锁本回合而非下回合").is_false()
+
 func test_enemy_spawn_override() -> void:
 	## 出生位覆盖：override 序列直用（跳过默认分配）
 	var params := _MakeParams(&"enc_m1_random_pack", 5)

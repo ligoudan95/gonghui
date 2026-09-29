@@ -17,8 +17,8 @@ func before() -> void:
 	_game_data.initialize_data()
 
 func test_status_count() -> void:
-	## 状态池计数 11（17 案 §3.11 #6 的 10-15 带内）
-	assert_int(_game_data.get_domain(&"status/stats").size()).is_equal(11)
+	## 状态池计数 12（17 案 §3.11 #6 的 10-15 带内 + 功能一批 1 染毒 1）
+	assert_int(_game_data.get_domain(&"status/stats").size()).is_equal(12)
 
 func test_mutex_group_bidirectional() -> void:
 	## 互斥组双向一致：mgrp_control 成员 = [定身, 蛊惑]，两状态指回该组（17 案 §3.9）

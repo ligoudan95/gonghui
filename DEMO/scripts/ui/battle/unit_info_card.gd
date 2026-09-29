@@ -8,6 +8,18 @@ extends PanelContainer
 ## 状态图标尺寸
 const STATUS_ICON_SIZE: float = 22.0
 
+## 修正键中文映射（S4-R4-02：状态 tooltip 修正量英文键直出「dodge+0.15」
+## ——UI 层有限枚举字典，ATTR_NAMES（event_panel）豁免先例同口径；
+## 未登记键回退原文——新增修正键漏登记不阻断展示）
+const MOD_NAMES: Dictionary = {
+	ModKeys.HIT: "命中", ModKeys.DODGE: "闪避",
+	ModKeys.STATUS_RESIST: "异常抗性", ModKeys.PHYS_RESIST: "物理抗性",
+	ModKeys.MAG_RESIST: "法术抗性", ModKeys.PHYS_PIERCE: "物理穿甲",
+	ModKeys.MAG_PIERCE: "法术穿甲", ModKeys.MOVE_RANGE: "移动力",
+	ModKeys.SPEED: "速度", ModKeys.ARMOR_PHYSICAL: "物理护甲",
+	ModKeys.ARMOR_MAGICAL: "法术护甲", ModKeys.DAMAGE_PANEL_MULT: "面板伤害",
+}
+
 ## 总控配置（B-1：配色/字号表驱动注入——setup 传入，空 = 纯兜底模式）
 var _cfg: CoreConfig = null
 
@@ -139,13 +151,15 @@ func _MakeStatusIcon(instance: StatusInstance) -> Control:
 		var mod_text: String = ""
 		for key: StringName in status.modifiers:
 			# 修正量显示（2026-09-24 九轮后 BUG 修复：%g 非 GDScript % 运算符
-			# 支持的格式字符——改 %d/%f 系；整数域不带小数点、小数域两位小数）
+			# 支持的格式字符——改 %d/%f 系；整数域不带小数点、小数域两位小数）；
+			# S4-R4-02：修正键经 MOD_NAMES 中文化（未登记键回退原文）
 			var mod_value: float = status.modifiers[key]
 			var sign: String = "+" if mod_value >= 0.0 else ""
+			var key_label: String = String(MOD_NAMES.get(key, key))
 			if is_equal_approx(mod_value, roundf(mod_value)):
-				mod_text += "%s%s%d " % [String(key), sign, int(mod_value)]
+				mod_text += "%s%s%d " % [key_label, sign, int(mod_value)]
 			else:
-				mod_text += "%s%s%.2f " % [String(key), sign, mod_value]
+				mod_text += "%s%s%.2f " % [key_label, sign, mod_value]
 		detail = "%s（%s）｜剩余 %d 回合%s%s" % [
 			display_name, polarity, instance.remaining,
 			("｜修正 " + mod_text) if not mod_text.is_empty() else "",

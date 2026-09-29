@@ -56,6 +56,9 @@ var origin: Vector2 = Vector2.ZERO
 
 ## 地格色块池（Vector2i -> Control）
 var _cells: Dictionary = {}
+## 在飞飘字 tween 池（S4-R2-03：resize 全量重建前 kill——防 tween 对已
+## queue_free 的 label 继续插值报错刷屏；正常播完自行出池）
+var _float_tweens: Array[Tween] = []
 ## 覆盖层池（三层；每格一个容器 Control——填充 + 可选边框）
 var _move_overlays: Array[Control] = []
 var _skill_overlays: Array[Control] = []
@@ -133,7 +136,9 @@ func setup(board_context: BattleSetup.BattleContext, game_data: Node) -> void:
 func _OnResized() -> void:
 	## 尺寸变化重算（W3-04）：未装配（降级路径/装配前首帧零尺寸）跳过；
 	## 几何实际变化才全量重建（格子尺寸/原点/地格/徽章/覆盖层/动态标记——
-	## 覆盖层与 tips 随重建清空，选择态由宿主后续交互重建，属可接受瞬时态）
+	## 覆盖层与 tips 随重建清空，选择态由宿主后续交互重建，属可接受瞬时态）；
+	## S4-R2-03：重建前 kill 在飞飘字 tween（label 随下方全量重建统一释放，
+	## kill 阻断 tween_callback 的二次 queue_free 与对已释放对象的插值报错）
 	## 参数：无
 	## 返回：无
 	if context == null or context.grid == null:
@@ -143,6 +148,7 @@ func _OnResized() -> void:
 	_BuildLayout()
 	if is_equal_approx(old_cell, cell_size) and old_origin == origin:
 		return
+	_KillFloatingTweens()
 	for child: Node in get_children():
 		child.queue_free()
 	_cells.clear()
@@ -406,6 +412,19 @@ func show_damage_number(cell: Vector2i, amount: int, is_crit: bool) -> void:
 			DAMAGE_FLOAT_DURATION)
 	tween.parallel().tween_property(label, "modulate:a", 0.0, DAMAGE_FLOAT_DURATION)
 	tween.tween_callback(label.queue_free)
+	# S4-R2-03：入池登记（resize 重建前 kill）；正常播完自行出池
+	_float_tweens.append(tween)
+	tween.finished.connect(_float_tweens.erase.bind(tween))
+
+func _KillFloatingTweens() -> void:
+	## 在飞飘字 tween 终止（S4-R2-03：_OnResized 全量重建前调用——kill 后
+	## tween_callback 不再触发，label 由重建的子节点清空统一释放）
+	## 参数：无
+	## 返回：无
+	for tween: Tween in _float_tweens.duplicate():
+		if tween.is_valid():
+			tween.kill()
+	_float_tweens.clear()
 
 func _KeepTipsOnTop() -> void:
 	## 目标确认 tips 置顶（S4-11：飘字/陷阱标记等后建子节点会把 tips 挤下——

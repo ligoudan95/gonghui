@@ -43,7 +43,8 @@ func _ExpectError(code: String, record_id: String) -> void:
 func test_domain_counts() -> void:
 	## 域计数：探索层六域 + 隐藏标记落内容（29 条新增）
 	assert_int(_game_data.get_domain(&"map/maps").size()).is_equal(1)
-	assert_int(_game_data.get_domain(&"map/tiles").size()).is_equal(4)
+	## 探索地格（功能一批 2 +1 毒瘴）
+	assert_int(_game_data.get_domain(&"map/tiles").size()).is_equal(5)
 	assert_int(_game_data.get_domain(&"map/interact_points").size()).is_equal(11)
 	assert_int(_game_data.get_domain(&"map/target_points").size()).is_equal(6)
 	assert_int(_game_data.get_domain(&"map/encounter_weights").size()).is_equal(2)
@@ -53,7 +54,7 @@ func test_domain_counts() -> void:
 func test_full_library_clean() -> void:
 	## 全库正样本：134 资源零错误零警告（含挂起规则激活后的链触发点/委托判据闭环；M4 后 134）
 	var report: ValidationReport = DataValidator.run_all(_game_data)
-	assert_int(report.checked_count).is_equal(137)
+	assert_int(report.checked_count).is_equal(139)
 	assert_int(report.errors.size()).is_equal(0)
 	assert_int(report.warnings.size()).is_equal(0)
 

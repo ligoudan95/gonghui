@@ -69,6 +69,23 @@ func apply_tile_standing(target: Object, tile: TileTypeDef, current_round: int) 
 	return apply(target, status, StatusInstance.SourceKind.TILE, tile.id, 0,
 			current_round, false)
 
+func apply_tile_pass(target: Object, tile: TileTypeDef, current_round: int) -> bool:
+	## 踏入/途经地格附加状态施加（功能一试玩批 Q3——镜像 apply_tile_standing
+	## 的踏入口径）：kind==STATUS 且 enter_status_id 非空才施加；duration 传 0
+	## 回退 StatusDef.default_duration；**不随离格移除**（无 on_leave 绑定——
+	## 区别于站位状态）；apply() ①同名分支现成——重复途经不叠加取大重锚定
+	## 参数 target：踏入单位；tile：踏入格地格定义；current_round：当前回合号
+	## 返回：true = 已施加（非状态格/无附加/解析失败/叠层拒收返回 false）
+	if tile == null or tile.kind != TileTypeDef.Kind.STATUS:
+		return false
+	if String(tile.enter_status_id).is_empty():
+		return false
+	var status: StatusDef = _LookupStatus(tile.enter_status_id)
+	if status == null:
+		return false
+	return apply(target, status, StatusInstance.SourceKind.TILE, tile.id, 0,
+			current_round, false)
+
 func apply(target: Object, status: StatusDef, source_kind: int, source_id: StringName,
 		duration: int, current_round: int, target_acted_this_round: bool,
 		dot_source_snapshot: float = 0.0) -> bool:
@@ -118,12 +135,16 @@ func apply(target: Object, status: StatusDef, source_kind: int, source_id: Strin
 			instance.dot_source_snapshot = dot_source_snapshot
 		_last_reject_reason = &""
 		return true
-	# ②互斥组覆盖：同组前者移除（17 案 §3.9 同组后施加覆盖前者）
+	# ②互斥组覆盖：同组前者移除（17 案 §3.9 同组后施加覆盖前者）；
+	# S2-R4-02：擦除清单留底——③叠层拒收时恢复被擦实例（②③非原子：
+	# 拒收路径不回滚会让施加失败白丢既有互斥状态）
+	var mutex_erased: Array = []
 	if not String(status.mutex_group_id).is_empty():
 		for instance: StatusInstance in target_statuses.duplicate():
 			var existing: StatusDef = _LookupStatus(instance.status_id)
 			if existing != null and existing.mutex_group_id == status.mutex_group_id:
 				target_statuses.erase(instance)
+				mutex_erased.append(instance)
 	# ③异名同类同极性叠层上限（S2-2 拍板 A：同 category 同 polarity 才互挤；
 	## 现存数 ≥ 上限 → 拒收）；R1-8 拍板 A：即时类（本次 effective ≤ 0 与
 	## 在场 duration_zero 实例）双向豁免——不占常规持续位、入场也不受挤
@@ -141,6 +162,10 @@ func apply(target: Object, status: StatusDef, source_kind: int, source_id: Strin
 				same_track += 1
 		if same_track >= _StackLimit():
 			_last_reject_reason = &"stack_limit"
+			# S2-R4-02：拒收回滚——被②擦除的互斥组实例原样恢复（施加失败
+			# 不改变既有状态面）
+			for erased: StatusInstance in mutex_erased:
+				target_statuses.append(erased)
 			return false
 	# 新实例入场
 	var instance := StatusInstance.new()

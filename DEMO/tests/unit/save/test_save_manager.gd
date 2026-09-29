@@ -158,6 +158,20 @@ func test_unsupported_schema_version_rejected() -> void:
 	assert_int(corrupt_reasons.size()).is_equal(1)
 	assert_str(corrupt_reasons[0]).contains("schema_version")
 
+func test_empty_save_file_specific_reason() -> void:
+	## S3-03：正本可打开但内容为空串（半写产物）→拒载原因=「存档文件为空」
+	## 专项文案（不再复用残留错误码 0 的「无法打开」误导排障）
+	_WriteRawSave("")
+	var corrupt_reasons: Array[String] = []
+	var callback: Callable = func(reason: String) -> void: corrupt_reasons.append(reason)
+	_save_manager.save_corrupt.connect(callback)
+	var loaded: SaveData = _save_manager.load_game()
+	_save_manager.save_corrupt.disconnect(callback)
+	assert_object(loaded).is_null()
+	assert_int(corrupt_reasons.size()).is_equal(1)
+	assert_str(corrupt_reasons[0]).contains("存档文件为空")
+	assert_str(corrupt_reasons[0]).contains("未写完")
+
 func test_has_save_flips() -> void:
 	## has_save 状态翻转：无→写入后有→删除后无
 	assert_bool(_save_manager.has_save()).is_false()

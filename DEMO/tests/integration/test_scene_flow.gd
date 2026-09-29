@@ -59,11 +59,17 @@ func before_test() -> void:
 	_save_manager.set_expedition_lock(false)
 	_scene_manager.current_id = -1
 	_scene_manager.previous_id = -1
+	# S5-04：复位切换重入锁（用例中断残留 _switch_pending=true 会连锁假失败）
+	_scene_manager._switch_pending = false
 	var no_params: Dictionary = {}
 	_scene_manager.pending_params = no_params
 	var guild_state: Node = root.get_node_or_null("GuildState")
 	if guild_state != null:
 		guild_state.core = GuildCore.new()
+		# S5-R5-02：快照旗标与跨局警示复位（级联防护不靠巧合自愈——
+		## 与 _switch_pending 复位同款口径）
+		guild_state.last_autosave_failed = false
+		guild_state._has_guild_snapshot = false
 
 func after_test() -> void:
 	## 用例级后置：清理存档目录（autoload 单例不释放）
@@ -185,6 +191,91 @@ func test_continue_with_save_roundtrip() -> void:
 	assert_int(guild_state.core.roster.size()).is_equal(4)
 	assert_int(guild_state.core.board.board.size()).is_equal(3)
 	assert_int(guild_state.core.day).is_equal(3)
+
+func test_continue_non_town_scene_falls_back_to_guild_shell() -> void:
+	## S5-01：读档直进白名单化——存档 scene_id 非城内四屏（battle_screen 等
+	## 不可裸开屏名）一律回退 GUILD_SHELL（对齐畸形存档保守处理拍板先例）
+	var guild_state: Node = get_tree().root.get_node("GuildState")
+	guild_state.new_game()
+	_save_manager.current.scene_id = &"battle_screen"
+	assert_int(_save_manager.autosave(SaveData.SavePoint.DAY_END)).is_equal(OK)
+	_save_manager.current = null
+	guild_state.core = GuildCore.new()
+	var runner: GdUnitSceneRunner = scene_runner(TITLE_SCENE)
+	_PressButton(runner, "ContinueButton")
+	await _AwaitSceneSwap()
+	assert_int(_scene_manager.current_id).is_equal(SCENE_GUILD_SHELL)
+	assert_object(get_tree().root.find_child("GuildShell", true, false)).is_not_null()
+
+func test_continue_malformed_scene_name_falls_back_to_guild_shell() -> void:
+	## S5-R2-04：畸形 scene_id（未登记名——id_from_scene_name 返回 -1 支）
+	## 直进同样回退 GUILD_SHELL（与白名单支共同锁定读档路由保守语义）
+	var guild_state: Node = get_tree().root.get_node("GuildState")
+	guild_state.new_game()
+	_save_manager.current.scene_id = &"nonexistent_scene"
+	assert_int(_save_manager.autosave(SaveData.SavePoint.DAY_END)).is_equal(OK)
+	_save_manager.current = null
+	guild_state.core = GuildCore.new()
+	var runner: GdUnitSceneRunner = scene_runner(TITLE_SCENE)
+	_PressButton(runner, "ContinueButton")
+	await _AwaitSceneSwap()
+	assert_int(_scene_manager.current_id).is_equal(SCENE_GUILD_SHELL)
+	assert_object(get_tree().root.find_child("GuildShell", true, false)).is_not_null()
+
+func test_bak_only_save_continue_loadable() -> void:
+	## S3/S5-R4-01：bak-only 崩溃窗口——「继续」可用且经 .bak 兜底读档成功
+	##（此前 has_save 只查正本 → 按钮被禁用，load_game 的兜底走不到）
+	var guild_state: Node = get_tree().root.get_node("GuildState")
+	guild_state.new_game()
+	guild_state.wait_one_day()
+	assert_int(_save_manager.autosave(SaveData.SavePoint.DAY_END)).is_equal(OK)
+	# 造 bak-only 现场：正本挪 .bak（三段式替换中途被杀的崩溃窗口形态）
+	var dir: DirAccess = DirAccess.open("user://saves")
+	assert_object(dir).is_not_null()
+	assert_int(dir.rename("main_save.json", "main_save.json.bak")).is_equal(OK)
+	assert_bool(_save_manager.has_save()).is_false()
+	assert_bool(_save_manager.has_loadable_save()).is_true()
+	_save_manager.current = null
+	guild_state.core = GuildCore.new()
+	var runner: GdUnitSceneRunner = scene_runner(TITLE_SCENE)
+	var continue_button: Button = runner.find_child("ContinueButton", true, false) as Button
+	assert_bool(continue_button.disabled).is_false()
+	_PressButton(runner, "ContinueButton")
+	await _AwaitSceneSwap()
+	assert_int(_scene_manager.current_id).is_equal(SCENE_GUILD_SHELL)
+	assert_int(_save_manager.current.game_day).is_equal(2)
+
+func test_bak_only_save_start_shows_confirm() -> void:
+	## S3/S5-R4-01：bak-only 下「开始」仍弹 P2 覆盖确认（此前不弹直接
+	## new_game——_WriteAtomic 跳过备份并 remove(.bak)，唯一幸存档被静默删除）
+	var guild_state: Node = get_tree().root.get_node("GuildState")
+	guild_state.new_game()
+	assert_int(_save_manager.autosave(SaveData.SavePoint.NEW_GAME)).is_equal(OK)
+	var dir: DirAccess = DirAccess.open("user://saves")
+	assert_int(dir.rename("main_save.json", "main_save.json.bak")).is_equal(OK)
+	_save_manager.current = null
+	guild_state.core = GuildCore.new()
+	var runner: GdUnitSceneRunner = scene_runner(TITLE_SCENE)
+	_PressButton(runner, "StartButton")
+	await get_tree().process_frame
+	var confirm: ConfirmationDialog = runner.find_child("StartConfirm", true, false) as ConfirmationDialog
+	assert_object(confirm).is_not_null()
+	assert_bool(confirm.visible).is_true()
+	assert_object(_save_manager.current).is_null()
+	# .bak 幸存档未被触碰
+	assert_bool(FileAccess.file_exists("user://saves/main_save.json.bak")).is_true()
+
+func test_facility_screen_autosave_failure_hint() -> void:
+	## S5-R4-02：设施屏存档失败即时警示——Refresh 尾部读
+	## last_autosave_failed 呈现 hint（不再延迟到回壳才见）
+	var guild_state: Node = get_tree().root.get_node("GuildState")
+	guild_state.new_game()
+	guild_state.last_autosave_failed = true
+	var runner: GdUnitSceneRunner = scene_runner(DORM_SCENE)
+	var screen: Control = runner.scene() as Control
+	var hint: Label = screen.find_child("HintLabel", true, false) as Label
+	assert_object(hint).is_not_null()
+	assert_str(hint.text).contains("自动存档写入失败")
 
 func test_start_with_save_shows_confirm_before_overwrite() -> void:
 	## P2 拍板回归：已有存档时「开始」先弹覆盖确认——未确认不建新档不切场景；
@@ -377,6 +468,18 @@ func test_settings_button_and_panel_contract() -> void:
 	AppSettings.apply_window_size(AppSettings.SIZE_DEFAULT)
 	DirAccess.remove_absolute("user://settings.cfg")
 
+func test_settings_host_centered_contract() -> void:
+	## S4-03：title 设置弹层宿主 = 全屏 CenterContainer（与全项目弹层宿主先例
+	## 一致——设置弹层居中呈现；guild_shell 弹层宿主契约同类断言）
+	var runner: GdUnitSceneRunner = scene_runner(TITLE_SCENE)
+	var host: Control = runner.find_child("SettingsHost", true, false) as Control
+	assert_object(host).is_not_null()
+	assert_bool(host is CenterContainer) \
+			.override_failure_message("SettingsHost 应为 CenterContainer（弹层居中）").is_true()
+	assert_float(host.anchor_right).is_equal(1.0)
+	assert_float(host.anchor_bottom).is_equal(1.0)
+	assert_bool(host.visible).is_false()
+
 # --------------------------------------------------------------------------
 # M5 批 3：导航契约矩阵收口 + 读档直进 + 协会屏存档失败提示 + 版本号
 # --------------------------------------------------------------------------
@@ -401,6 +504,16 @@ func test_scene_registry_completeness() -> void:
 				.override_failure_message("名→id 反查违约：%s" % scene_name)
 	# 未登记名 → -1（title「继续」回退公会壳的判定前提）
 	assert_int(_scene_manager.id_from_scene_name(&"nonexistent_scene")).is_equal(-1)
+	# S5-R2-03：读档直进白名单四成员须全部登记于 SCENE_REGISTRY（title
+	## TOWN_SCENE_WHITELIST 硬编码的防漂移锚——registry 改名/删键先在此红灯）；
+	## S5-R3-03：补成员数下限（删任一成员不得全绿——城内四屏缺一即锁死读档
+	## 直进矩阵的一屏）
+	var title_script: GDScript = preload("res://scripts/scene_flow/title_screen.gd")
+	assert_int(title_script.TOWN_SCENE_WHITELIST.size()).is_equal(4) \
+			.override_failure_message("城内白名单应为四屏（guild_shell/协会/宿舍/训练场）")
+	for town_name: StringName in title_script.TOWN_SCENE_WHITELIST:
+		assert_bool(registry.has(town_name)).is_true() \
+				.override_failure_message("白名单成员未登记于 SCENE_REGISTRY：%s" % town_name)
 
 func test_guild_shell_navigation_buttons_targets() -> void:
 	## 导航契约②公会壳四钮→go 目标：Back→TITLE / 宿舍→GUILD_DORMITORY /

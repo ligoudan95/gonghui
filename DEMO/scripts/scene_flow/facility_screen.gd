@@ -12,6 +12,13 @@ const SceneManagerScript: GDScript = preload("res://scripts/autoload/scene_manag
 ## 按钮统一尺寸（S5-M5-1-h：原两处 Vector2 字面量提常量）
 const BUTTON_SIZE: Vector2 = Vector2(280, 56)
 
+## UI 文案单源（S5-R4-02：自动存档失败警示——guild_shell/association 同款
+## 口径，改措辞只动此处；S5-R5-03：返回 go 失败提示）
+const UI_TEXTS: Dictionary = {
+	&"autosave_failed_hint": "⚠ 最近一次自动存档写入失败——进度可能未落盘，请重试操作。",
+	&"go_fail_hint_format": "页面跳转失败（错误码 %d）——请重试。",
+}
+
 ## 本屏设施 id（tscn 注入：fac_dormitory / fac_training_ground）
 @export var facility_id: StringName = &""
 
@@ -101,11 +108,14 @@ func Refresh() -> void:
 		_upgrade_button.text = "升级"
 		return
 	var core: GuildCore = get_node("/root/GuildState").core
+	var guild_state: Node = get_node("/root/GuildState")
 	# D-2/Z2-12：等级读值 clamp [1, max_level]——防脏档越界
 	var level: int = clampi(int(core.facility_levels.get(_fac.id, 1)), 1, _fac.max_level)
 	_title_label.text = "%s（Lv%d）" % [_fac.display_name, level]
 	_effect_label.text = "当前效果：%s" % _EffectText(_fac.levels[level - 1])
-	_hint_label.text = ""
+	# S5-R4-02：FACILITY_UPGRADED 写盘失败即时警示（此前延迟到回壳才见）
+	_hint_label.text = String(UI_TEXTS[&"autosave_failed_hint"]) \
+			if guild_state.last_autosave_failed else ""
 	if level >= _fac.max_level:
 		_upgrade_button.disabled = true
 		_upgrade_button.text = "已满级"
@@ -150,3 +160,5 @@ func _OnBackPressed() -> void:
 	var err: Error = get_node("/root/SceneManager").go(SceneManagerScript.SceneId.GUILD_SHELL)
 	if err != OK:
 		push_warning("facility_screen: 返回公会失败（错误码 %d）" % err)
+		# S5-R5-03：go 失败可见提示（hint 通道——不再仅静默 push_warning）
+		_hint_label.text = String(UI_TEXTS[&"go_fail_hint_format"]) % err

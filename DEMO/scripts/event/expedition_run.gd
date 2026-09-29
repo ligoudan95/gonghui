@@ -54,6 +54,9 @@ var quest_serial: int = 0
 ## 已结算标记（G-2 幂等：GuildCore.settle_expedition 置位——重复结算调用
 ## 返回空摘要，不重复入账/推日历/转挂单）
 var settled: bool = false
+## 首次结算摘要缓存（S5-05：GuildState.settle_expedition 幂等早退原样返回——
+## 重复消费方拿到与首次一致含 reason 的摘要；运行态字段不入存档）
+var cached_settle_summary: GuildCore.ExpeditionSummary = null
 ## 判据类型（QuestTemplateDef.GoalType 快照；-1 = 无判据）
 var goal_kind: int = -1
 ## 判据参数（tp_ / enc_——按 goal_kind 取义）
@@ -62,6 +65,10 @@ var goal_param: StringName = &""
 var goal_done: bool = false
 ## 本会话已踏入格集合（Vector2i -> true——随机遭遇「新格」判定单源）
 var visited_cells: Dictionary = {}
+## 染毒成员表（功能一批 2：AdventurerData -> 附加状态 id StringName；
+## **不落档**（探索会话态——战后续跑即清）；值为染毒时踏入地格的
+## effect_status_id，build_poison_initial_statuses 透传战斗侧）
+var poisoned: Dictionary = {}
 
 func total_days() -> int:
 	## 总耗时申报（M4 出征结算预埋口）：基准 + 事件累计
@@ -89,6 +96,43 @@ func apply_party_damage(delta: int) -> void:
 			continue
 		var current: int = int(hp.get(adv, 1))
 		hp[adv] = maxi(1, current + delta)
+
+func apply_tile_effect(tile: ExploreTileDef) -> bool:
+	## 踏入/途经地格效果（功能一批 2：毒瘴——探索层扣血+染毒标记，幂等）：
+	## effect_kind==POISON 才生效——apply_party_damage 既有口径（排除已倒地、
+	## 下限 1 止）+ 未倒地成员染毒标记（值 = 地格 effect_status_id，重复
+	## 途经幂等覆写同值）
+	## 参数 tile：踏入的探索地格定义
+	## 返回：true = 生效（调用方提示/刷新；非效果地格/空返回 false）
+	if tile == null or tile.effect_kind != ExploreTileDef.EffectKind.POISON:
+		return false
+	apply_party_damage(-tile.effect_damage)
+	for adv: AdventurerData in party:
+		if not downed.get(adv, false):
+			poisoned[adv] = tile.effect_status_id
+	return true
+
+func build_poison_initial_statuses() -> Array[Dictionary]:
+	## 染毒成员 → 战斗带入开局状态清单（功能一批 2 Q5：遭遇战路由时注入
+	## BattleParams.initial_statuses——形状对齐 initial_status_id 先例
+	## {status_id/target/duration}；duration 传 0 战斗侧回退 default_duration）
+	## 参数：无
+	## 返回：开局状态条目列表
+	var entries: Array[Dictionary] = []
+	for adv: AdventurerData in party:
+		if poisoned.has(adv) and not downed.get(adv, false):
+			entries.append({
+				&"status_id": poisoned[adv],
+				&"target": adv.unit_id,
+				&"duration": 0,
+			})
+	return entries
+
+func clear_poison() -> void:
+	## 染毒标记清空（功能一批 2：战后续跑头部——三通道统一，回城无残留）
+	## 参数：无
+	## 返回：无
+	poisoned.clear()
 
 func apply_battle_result(end_stats: Array) -> void:
 	## 战斗结果回写（B 出口战后）：按 end_stats 的 end_hp/downed 回写 HP 与

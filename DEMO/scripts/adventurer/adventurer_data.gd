@@ -124,9 +124,16 @@ static func from_dict(data: Dictionary) -> AdventurerData:
 			"last_expedition_day", "stress"]:
 		if not SaveData.IsIntLike(data[int_key]):
 			return null
+	# S3-R4-04：等级下界拒绝（脏档 level:0 免费满级——等级 1 起，与
+	# work_days_left < 0 拒载同式）
+	if int(data["level"]) < 1:
+		return null
 	if not (data["pre_unlocked"] is bool):
 		return null
 	if not (data["unit_id"] is String) or not (data["class_id"] is String):
+		return null
+	# S3-R3-02：display_name 类型校验（与 id 键校验并列——脏档拒载）
+	if not (data["display_name"] is String):
 		return null
 	if not (data["tendency_id"] is String):
 		return null
@@ -142,13 +149,21 @@ static func from_dict(data: Dictionary) -> AdventurerData:
 	adv.display_name = String(data["display_name"])
 	adv.level = int(data["level"])
 	adv.exp = int(data["exp"])
+	# S3-05：元素级容错——无类型迭代 + is String 过滤跳过坏键/坏元素（手改档
+	# 混入非串不再中断整条 restore 链；与实例损坏条目跳过口径对齐）；
+	# S3-R4-02：属性值容器脏档（{"strength": []}）裸 int() 中止同链——非整数
+	# 值回退中性值（AttrKeys.DEFAULT_ATTR_VALUE）
 	var typed_attrs: Dictionary = {}
-	for attr_key: String in data["attrs"]:
-		typed_attrs[StringName(attr_key)] = int(data["attrs"][attr_key])
+	for attr_key: Variant in data["attrs"]:
+		if attr_key is String:
+			var attr_raw: Variant = data["attrs"][attr_key]
+			typed_attrs[StringName(attr_key)] = int(attr_raw) \
+					if SaveData.IsIntLike(attr_raw) else AttrKeys.DEFAULT_ATTR_VALUE
 	adv.attrs = typed_attrs
 	var typed_skills: Array[StringName] = []
-	for skill_key: String in data["skill_ids"]:
-		typed_skills.append(StringName(skill_key))
+	for skill_key: Variant in data["skill_ids"]:
+		if skill_key is String:
+			typed_skills.append(StringName(skill_key))
 	adv.skill_ids = typed_skills
 	adv.skill_points = int(data["skill_points"])
 	adv.tendency_id = StringName(String(data["tendency_id"]))
@@ -162,7 +177,8 @@ static func from_dict(data: Dictionary) -> AdventurerData:
 	adv.equip_slots = data["equip_slots"]
 	adv.stress = int(data["stress"])
 	var typed_quirks: Array[StringName] = []
-	for quirk_key: String in data["quirks"]:
-		typed_quirks.append(StringName(quirk_key))
+	for quirk_key: Variant in data["quirks"]:
+		if quirk_key is String:
+			typed_quirks.append(StringName(quirk_key))
 	adv.quirks = typed_quirks
 	return adv

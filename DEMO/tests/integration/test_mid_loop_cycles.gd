@@ -15,6 +15,8 @@ func before_test() -> void:
 		scene_manager.previous_id = -1
 		var no_params: Dictionary = {}
 		scene_manager.pending_params = no_params
+		# S5-04：复位切换重入锁（用例中断残留 _switch_pending=true 会连锁假失败）
+		scene_manager._switch_pending = false
 	var save_manager: Node = root.get_node_or_null("SaveManager")
 	if save_manager != null:
 		save_manager.current = null
@@ -118,6 +120,9 @@ func test_cycle_defeat_recovery_and_occupation_conservation() -> void:
 	var inst_a: QuestInstance = core.board.spawn_on_board(&"q_vein_survey", core.day)
 	assert_bool(core.accept_quest(inst_a.serial, _Ids([0, 1]))).is_true()
 	var run_a: ExpeditionRun = _GuildState().begin_expedition(inst_a)
+	# 批 3：DEFEAT 等价性——战败全员必倒地
+	for adv: AdventurerData in run_a.party:
+		run_a.downed[adv] = true
 	var gold_at_defeat: int = core.gold
 	var summary_a: Variant = _GuildState().settle_expedition(run_a,
 			GuildCore.ExpeditionOutcome.DEFEAT)

@@ -11,11 +11,23 @@ extends Control
 ## 经 preloaded 脚本访问 SceneId 是环境无关且类型安全的方式）
 const SceneManagerScript: GDScript = preload("res://scripts/autoload/scene_manager.gd")
 
-## UI 文案单源（M4 增补批 3：设置入口与设置面板提示——改措辞只动此处）
+## 读档直进路由白名单（S5-01：城内四屏——title「继续」只直进城内时点；存档
+## scene_id 非白名单（title/战斗/探索屏名或畸形值）一律回退 GUILD_SHELL，
+## 对齐畸形存档保守处理拍板先例——战斗/探索屏不可裸开）
+const TOWN_SCENE_WHITELIST: Array[StringName] = [
+	&"guild_shell",
+	&"association_screen",
+	&"guild_dormitory",
+	&"guild_training_ground",
+]
+
+## UI 文案单源（M4 增补批 3：设置入口与设置面板提示——改措辞只动此处；
+## S3-R2-03：开始/继续 go 失败提示）
 const UI_TEXTS: Dictionary = {
 	&"settings_button": "设置",
 	&"settings_applied_hint": "已切换。",
 	&"settings_save_failed_hint": "写入设置失败——请重试。",
+	&"go_fail_hint_format": "进入游戏失败（错误码 %d）——请重试。",
 }
 
 ## 设置面板（M4 增补批 3——代码构建弹层）
@@ -35,7 +47,9 @@ func _ready() -> void:
 	## 返回：无
 	_ApplyFontTiers()
 	%VersionLabel.text = _BuildVersionText()
-	%ContinueButton.disabled = not _save_manager().has_save()
+	# S3/S5-R4-01：可读档判定走正本或 .bak 任一（bak-only 崩溃窗口下
+	## 「继续」可用、「开始」仍弹 P2 覆盖确认——防唯一幸存档被静默删除）
+	%ContinueButton.disabled = not _save_manager().has_loadable_save()
 	%HintLabel.text = ""
 	_save_corrupt_reason = ""
 	_save_manager().save_corrupt.connect(_OnSaveCorrupt)
@@ -129,7 +143,7 @@ func _on_start_pressed() -> void:
 	## 确认（StartConfirm），确认后才 new_game 覆盖；无档直接开始
 	## 参数：无
 	## 返回：无
-	if _save_manager().has_save():
+	if _save_manager().has_loadable_save():
 		%StartConfirm.popup_centered()
 		return
 	_StartNewGame()
@@ -149,6 +163,7 @@ func _StartNewGame() -> void:
 	var err: Error = _scene_manager().go(SceneManagerScript.SceneId.GUILD_SHELL)
 	if err != OK:
 		push_warning("title_screen: 进入公会壳失败（错误码 %d）" % err)
+		%HintLabel.text = String(UI_TEXTS[&"go_fail_hint_format"]) % err
 
 func _on_continue_pressed() -> void:
 	## 「继续」按钮：读档（公会快照经 GuildState provider 恢复——回最近城内
@@ -172,10 +187,12 @@ func _on_continue_pressed() -> void:
 	if guild_state != null and not guild_state.has_guild_data():
 		%HintLabel.text = "存档无经营数据（旧版存档）——请开新档"
 		return
+	# S5-01：读档直进白名单化——目标 scene_id 非城内四屏（含未登记名/畸形值/
+	# 战斗·探索屏名）一律回退 GUILD_SHELL（对齐畸形存档保守处理拍板先例）
 	var target_id: int = _scene_manager().id_from_scene_name(loaded.scene_id)
-	if target_id < 0:
-		# 存档场景名未登记：回退公会壳（M0 唯一业务场景）
+	if target_id < 0 or not TOWN_SCENE_WHITELIST.has(loaded.scene_id):
 		target_id = SceneManagerScript.SceneId.GUILD_SHELL
 	var err: Error = _scene_manager().go(target_id)
 	if err != OK:
 		push_warning("title_screen: 进入存档场景失败（错误码 %d）" % err)
+		%HintLabel.text = String(UI_TEXTS[&"go_fail_hint_format"]) % err

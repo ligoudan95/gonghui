@@ -504,84 +504,84 @@ rule_note = "spr_<单位系>：战场 sprite 资源 id（assets 域 AssetRegistr
 script = ExtResource("1_xxsy3")
 resource_id = &"tend_warrior_a"
 domain = &"class/classes"
-display_name = "战士 倾向 A"
+display_name = "狂战"
 rule_note = "tend_<职业>_<ab>：职业倾向内嵌子资源 id（随宿主 class/classes 域登记；盲审批 2 A-2 纳入全库登记口径）"
 
 [sub_resource type="Resource" id="Resource_B2T10"]
 script = ExtResource("1_xxsy3")
 resource_id = &"tend_warrior_b"
 domain = &"class/classes"
-display_name = "战士 倾向 B"
+display_name = "守卫"
 rule_note = "tend_<职业>_<ab>：职业倾向内嵌子资源 id（随宿主 class/classes 域登记；盲审批 2 A-2 纳入全库登记口径）"
 
 [sub_resource type="Resource" id="Resource_B2T11"]
 script = ExtResource("1_xxsy3")
 resource_id = &"tend_rogue_a"
 domain = &"class/classes"
-display_name = "盗贼 倾向 A"
+display_name = "刺杀"
 rule_note = "tend_<职业>_<ab>：职业倾向内嵌子资源 id（随宿主 class/classes 域登记；盲审批 2 A-2 纳入全库登记口径）"
 
 [sub_resource type="Resource" id="Resource_B2T12"]
 script = ExtResource("1_xxsy3")
 resource_id = &"tend_rogue_b"
 domain = &"class/classes"
-display_name = "盗贼 倾向 B"
+display_name = "陷阱"
 rule_note = "tend_<职业>_<ab>：职业倾向内嵌子资源 id（随宿主 class/classes 域登记；盲审批 2 A-2 纳入全库登记口径）"
 
 [sub_resource type="Resource" id="Resource_B2T13"]
 script = ExtResource("1_xxsy3")
 resource_id = &"tend_mage_a"
 domain = &"class/classes"
-display_name = "法师 倾向 A"
+display_name = "轰炸"
 rule_note = "tend_<职业>_<ab>：职业倾向内嵌子资源 id（随宿主 class/classes 域登记；盲审批 2 A-2 纳入全库登记口径）"
 
 [sub_resource type="Resource" id="Resource_B2T14"]
 script = ExtResource("1_xxsy3")
 resource_id = &"tend_mage_b"
 domain = &"class/classes"
-display_name = "法师 倾向 B"
+display_name = "控制"
 rule_note = "tend_<职业>_<ab>：职业倾向内嵌子资源 id（随宿主 class/classes 域登记；盲审批 2 A-2 纳入全库登记口径）"
 
 [sub_resource type="Resource" id="Resource_B2T15"]
 script = ExtResource("1_xxsy3")
 resource_id = &"tend_priest_a"
 domain = &"class/classes"
-display_name = "牧师 倾向 A"
+display_name = "治疗"
 rule_note = "tend_<职业>_<ab>：职业倾向内嵌子资源 id（随宿主 class/classes 域登记；盲审批 2 A-2 纳入全库登记口径）"
 
 [sub_resource type="Resource" id="Resource_B2T16"]
 script = ExtResource("1_xxsy3")
 resource_id = &"tend_priest_b"
 domain = &"class/classes"
-display_name = "牧师 倾向 B"
+display_name = "惩戒"
 rule_note = "tend_<职业>_<ab>：职业倾向内嵌子资源 id（随宿主 class/classes 域登记；盲审批 2 A-2 纳入全库登记口径）"
 
 [sub_resource type="Resource" id="Resource_B2T17"]
 script = ExtResource("1_xxsy3")
 resource_id = &"tend_ranger_a"
 domain = &"class/classes"
-display_name = "游侠 倾向 A"
+display_name = "狙杀"
 rule_note = "tend_<职业>_<ab>：职业倾向内嵌子资源 id（随宿主 class/classes 域登记；盲审批 2 A-2 纳入全库登记口径）"
 
 [sub_resource type="Resource" id="Resource_B2T18"]
 script = ExtResource("1_xxsy3")
 resource_id = &"tend_ranger_b"
 domain = &"class/classes"
-display_name = "游侠 倾向 B"
+display_name = "游猎"
 rule_note = "tend_<职业>_<ab>：职业倾向内嵌子资源 id（随宿主 class/classes 域登记；盲审批 2 A-2 纳入全库登记口径）"
 
 [sub_resource type="Resource" id="Resource_B2T19"]
 script = ExtResource("1_xxsy3")
 resource_id = &"tend_arcanist_a"
 domain = &"class/classes"
-display_name = "奇术师 倾向 A"
+display_name = "诅咒"
 rule_note = "tend_<职业>_<ab>：职业倾向内嵌子资源 id（随宿主 class/classes 域登记；盲审批 2 A-2 纳入全库登记口径）"
 
 [sub_resource type="Resource" id="Resource_B2T20"]
 script = ExtResource("1_xxsy3")
 resource_id = &"tend_arcanist_b"
 domain = &"class/classes"
-display_name = "奇术师 倾向 B"
+display_name = "蛊惑"
 rule_note = "tend_<职业>_<ab>：职业倾向内嵌子资源 id（随宿主 class/classes 域登记；盲审批 2 A-2 纳入全库登记口径）"
 
 [sub_resource type="Resource" id="Resource_B2X0"]
@@ -1102,6 +1102,20 @@ domain = &"quest/templates"
 display_name = "酒馆帮工"
 rule_note = "q_<语义>：委托模板（轻度——酒馆帮工/工期 3 天/VANISH）"
 
+[sub_resource type="Resource" id="Resource_P1S_2"]
+script = ExtResource("1_xxsy3")
+resource_id = &"etile_poison_swamp"
+domain = &"map/tiles"
+display_name = "毒瘴"
+rule_note = "etile_<语义>：探索地格（功能一试玩批——毒瘴踏入效果，批次 2 建表补登）"
+
+[sub_resource type="Resource" id="Resource_P1S_1"]
+script = ExtResource("1_xxsy3")
+resource_id = &"DEBUFF_poison"
+domain = &"status/stats"
+display_name = "中毒"
+rule_note = "DEBUFF_<语义>：踏入染毒状态（功能一试玩批——TILE 踏入/CHECKIN 战斗带入双来源）"
+
 [sub_resource type="Resource" id="Resource_M4S_3"]
 script = ExtResource("1_xxsy3")
 resource_id = &"q_chore_messenger"
@@ -1111,5 +1125,5 @@ rule_note = "q_<语义>：委托模板（轻度——城内信使/工期 2 天/R
 
 [resource]
 script = ExtResource("2_8hs6i")
-entries = Array[ExtResource("1_xxsy3")]([SubResource("Resource_7rp6k"), SubResource("Resource_oft80"), SubResource("Resource_n0ea3"), SubResource("Resource_8b336"), SubResource("Resource_hxk6g"), SubResource("Resource_l7131"), SubResource("Resource_8wgs3"), SubResource("Resource_ito87"), SubResource("Resource_mvlxc"), SubResource("Resource_bw3po"), SubResource("Resource_6s0uu"), SubResource("Resource_kpbtc"), SubResource("Resource_p5cqs"), SubResource("Resource_e25vx"), SubResource("Resource_inerj"), SubResource("Resource_pa4wo"), SubResource("Resource_coef1"), SubResource("Resource_dmwsm"), SubResource("Resource_h7b8d"), SubResource("Resource_pvxlm"), SubResource("Resource_8igpl"), SubResource("Resource_cwl1f"), SubResource("Resource_tomj8"), SubResource("Resource_67gfp"), SubResource("Resource_01rdt"), SubResource("Resource_p0axp"), SubResource("Resource_4uaip"), SubResource("Resource_dl7mi"), SubResource("Resource_d0vn1"), SubResource("Resource_wsgw6"), SubResource("Resource_oqqqu"), SubResource("Resource_x4q0o"), SubResource("Resource_0ucge"), SubResource("Resource_h3wwn"), SubResource("Resource_pk2js"), SubResource("Resource_cli47"), SubResource("Resource_w1hfh"), SubResource("Resource_gwor4"), SubResource("Resource_uyas2"), SubResource("Resource_3k27s"), SubResource("Resource_yry1n"), SubResource("Resource_j4c4f"), SubResource("Resource_b83j2"), SubResource("Resource_pubcw"), SubResource("Resource_ywjf5"), SubResource("Resource_fh5vw"), SubResource("Resource_u0rav"), SubResource("Resource_wk6it"), SubResource("Resource_xxsy3"), SubResource("Resource_8hs6i"), SubResource("Resource_xjr3h"), SubResource("Resource_kjgb4"), SubResource("Resource_l8020"), SubResource("Resource_hewr7"), SubResource("Resource_kqsjo"), SubResource("Resource_wxmxw"), SubResource("Resource_3xjaa"), SubResource("Resource_slrmy"), SubResource("Resource_27uxc"), SubResource("Resource_lbffk"), SubResource("Resource_6fscd"), SubResource("Resource_p2ky8"), SubResource("Resource_B2S0"), SubResource("Resource_B2S1"), SubResource("Resource_B2S2"), SubResource("Resource_B2S3"), SubResource("Resource_B2S4"), SubResource("Resource_B2S5"), SubResource("Resource_B2S6"), SubResource("Resource_B2S7"), SubResource("Resource_B2S8"), SubResource("Resource_B2T9"), SubResource("Resource_B2T10"), SubResource("Resource_B2T11"), SubResource("Resource_B2T12"), SubResource("Resource_B2T13"), SubResource("Resource_B2T14"), SubResource("Resource_B2T15"), SubResource("Resource_B2T16"), SubResource("Resource_B2T17"), SubResource("Resource_B2T18"), SubResource("Resource_B2T19"), SubResource("Resource_B2T20"), SubResource("Resource_B2X0"), SubResource("Resource_B2X1"), SubResource("Resource_2ecym"), SubResource("Resource_4r4qe"), SubResource("Resource_pe7pm"), SubResource("Resource_kvllj"), SubResource("Resource_lpihg"), SubResource("Resource_eimhm"), SubResource("Resource_btjvi"), SubResource("Resource_wjna8"), SubResource("Resource_bnusc"), SubResource("Resource_6gijb"), SubResource("Resource_jxvbu"), SubResource("Resource_bi4xl"), SubResource("Resource_yaiqf"), SubResource("Resource_oqig6"), SubResource("Resource_anpy2"), SubResource("Resource_t02th"), SubResource("Resource_4ofvs"), SubResource("Resource_s677f"), SubResource("Resource_3sklr"), SubResource("Resource_jc5g8"), SubResource("Resource_528ok"), SubResource("Resource_aru5v"), SubResource("Resource_vcik6"), SubResource("Resource_rfrhy"), SubResource("Resource_17mgl"), SubResource("Resource_sbkk8"), SubResource("Resource_ucf00"), SubResource("Resource_62ieu"), SubResource("Resource_j46ws"), SubResource("Resource_mvkr6"), SubResource("Resource_7rw8l"), SubResource("Resource_asic3"), SubResource("Resource_hhwg4"), SubResource("Resource_t12hy"), SubResource("Resource_g2rr1"), SubResource("Resource_3x6wm"), SubResource("Resource_os57f"), SubResource("Resource_4d41u"), SubResource("Resource_tkjd7"), SubResource("Resource_166x5"), SubResource("Resource_ims3k"), SubResource("Resource_hbr05"), SubResource("Resource_y1e88"), SubResource("Resource_555je"), SubResource("Resource_5d1pa"), SubResource("Resource_q4f4k"), SubResource("Resource_1j1fi"), SubResource("Resource_n67gn"), SubResource("Resource_laq4p"), SubResource("Resource_4y6xp"), SubResource("Resource_jkjmm"), SubResource("Resource_t0igy"), SubResource("Resource_6eu0y"), SubResource("Resource_bhsmv"), SubResource("Resource_533bw"), SubResource("Resource_thymv"), SubResource("Resource_56ss7"), SubResource("Resource_M4_1"), SubResource("Resource_M4_2"), SubResource("Resource_M4_3"), SubResource("Resource_M4_4"), SubResource("Resource_M4_5"), SubResource("Resource_M4_6"), SubResource("Resource_M4_7"), SubResource("Resource_M4_8"), SubResource("Resource_M4_9"), SubResource("Resource_M4_10"), SubResource("Resource_M4_11"), SubResource("Resource_M4_12"), SubResource("Resource_M4_13"), SubResource("Resource_M4S_1"), SubResource("Resource_M4S_2"), SubResource("Resource_M4S_3")])
+entries = Array[ExtResource("1_xxsy3")]([SubResource("Resource_7rp6k"), SubResource("Resource_oft80"), SubResource("Resource_n0ea3"), SubResource("Resource_8b336"), SubResource("Resource_hxk6g"), SubResource("Resource_l7131"), SubResource("Resource_8wgs3"), SubResource("Resource_ito87"), SubResource("Resource_mvlxc"), SubResource("Resource_bw3po"), SubResource("Resource_6s0uu"), SubResource("Resource_kpbtc"), SubResource("Resource_p5cqs"), SubResource("Resource_e25vx"), SubResource("Resource_inerj"), SubResource("Resource_pa4wo"), SubResource("Resource_coef1"), SubResource("Resource_dmwsm"), SubResource("Resource_h7b8d"), SubResource("Resource_pvxlm"), SubResource("Resource_8igpl"), SubResource("Resource_cwl1f"), SubResource("Resource_tomj8"), SubResource("Resource_67gfp"), SubResource("Resource_01rdt"), SubResource("Resource_p0axp"), SubResource("Resource_4uaip"), SubResource("Resource_dl7mi"), SubResource("Resource_d0vn1"), SubResource("Resource_wsgw6"), SubResource("Resource_oqqqu"), SubResource("Resource_x4q0o"), SubResource("Resource_0ucge"), SubResource("Resource_h3wwn"), SubResource("Resource_pk2js"), SubResource("Resource_cli47"), SubResource("Resource_w1hfh"), SubResource("Resource_gwor4"), SubResource("Resource_uyas2"), SubResource("Resource_3k27s"), SubResource("Resource_yry1n"), SubResource("Resource_j4c4f"), SubResource("Resource_b83j2"), SubResource("Resource_pubcw"), SubResource("Resource_ywjf5"), SubResource("Resource_fh5vw"), SubResource("Resource_u0rav"), SubResource("Resource_wk6it"), SubResource("Resource_xxsy3"), SubResource("Resource_8hs6i"), SubResource("Resource_xjr3h"), SubResource("Resource_kjgb4"), SubResource("Resource_l8020"), SubResource("Resource_hewr7"), SubResource("Resource_kqsjo"), SubResource("Resource_wxmxw"), SubResource("Resource_3xjaa"), SubResource("Resource_slrmy"), SubResource("Resource_27uxc"), SubResource("Resource_lbffk"), SubResource("Resource_6fscd"), SubResource("Resource_p2ky8"), SubResource("Resource_B2S0"), SubResource("Resource_B2S1"), SubResource("Resource_B2S2"), SubResource("Resource_B2S3"), SubResource("Resource_B2S4"), SubResource("Resource_B2S5"), SubResource("Resource_B2S6"), SubResource("Resource_B2S7"), SubResource("Resource_B2S8"), SubResource("Resource_B2T9"), SubResource("Resource_B2T10"), SubResource("Resource_B2T11"), SubResource("Resource_B2T12"), SubResource("Resource_B2T13"), SubResource("Resource_B2T14"), SubResource("Resource_B2T15"), SubResource("Resource_B2T16"), SubResource("Resource_B2T17"), SubResource("Resource_B2T18"), SubResource("Resource_B2T19"), SubResource("Resource_B2T20"), SubResource("Resource_B2X0"), SubResource("Resource_B2X1"), SubResource("Resource_2ecym"), SubResource("Resource_4r4qe"), SubResource("Resource_pe7pm"), SubResource("Resource_kvllj"), SubResource("Resource_lpihg"), SubResource("Resource_eimhm"), SubResource("Resource_btjvi"), SubResource("Resource_wjna8"), SubResource("Resource_bnusc"), SubResource("Resource_6gijb"), SubResource("Resource_jxvbu"), SubResource("Resource_bi4xl"), SubResource("Resource_yaiqf"), SubResource("Resource_oqig6"), SubResource("Resource_anpy2"), SubResource("Resource_t02th"), SubResource("Resource_4ofvs"), SubResource("Resource_s677f"), SubResource("Resource_3sklr"), SubResource("Resource_jc5g8"), SubResource("Resource_528ok"), SubResource("Resource_aru5v"), SubResource("Resource_vcik6"), SubResource("Resource_rfrhy"), SubResource("Resource_17mgl"), SubResource("Resource_sbkk8"), SubResource("Resource_ucf00"), SubResource("Resource_62ieu"), SubResource("Resource_j46ws"), SubResource("Resource_mvkr6"), SubResource("Resource_7rw8l"), SubResource("Resource_asic3"), SubResource("Resource_hhwg4"), SubResource("Resource_t12hy"), SubResource("Resource_g2rr1"), SubResource("Resource_3x6wm"), SubResource("Resource_os57f"), SubResource("Resource_4d41u"), SubResource("Resource_tkjd7"), SubResource("Resource_166x5"), SubResource("Resource_ims3k"), SubResource("Resource_hbr05"), SubResource("Resource_y1e88"), SubResource("Resource_555je"), SubResource("Resource_5d1pa"), SubResource("Resource_q4f4k"), SubResource("Resource_1j1fi"), SubResource("Resource_n67gn"), SubResource("Resource_laq4p"), SubResource("Resource_4y6xp"), SubResource("Resource_jkjmm"), SubResource("Resource_t0igy"), SubResource("Resource_6eu0y"), SubResource("Resource_bhsmv"), SubResource("Resource_533bw"), SubResource("Resource_thymv"), SubResource("Resource_56ss7"), SubResource("Resource_M4_1"), SubResource("Resource_M4_2"), SubResource("Resource_M4_3"), SubResource("Resource_M4_4"), SubResource("Resource_M4_5"), SubResource("Resource_M4_6"), SubResource("Resource_M4_7"), SubResource("Resource_M4_8"), SubResource("Resource_M4_9"), SubResource("Resource_M4_10"), SubResource("Resource_M4_11"), SubResource("Resource_M4_12"), SubResource("Resource_M4_13"), SubResource("Resource_M4S_1"), SubResource("Resource_M4S_2"), SubResource("Resource_M4S_3"), SubResource("Resource_P1S_1"), SubResource("Resource_P1S_2")])
 comment = "全库资源命名登记表（用户拍板②·2026-09-23）：每条记录资源 id/域前缀/中文名/命名规则；条目随资源增删同步维护；M1 批 1 追加战斗域 14 条；盲审批 2 A-2 追加 spr_×9 + tend_×12（含表自身与 registry 补登，共 85 条）；M4 经营层追加 13 条（fac_×2 + adv_ 种子×4 + 板刷 q_×7）；M4 增补批追加 3 条（轻度 q_chore_×3，共 158 条）"

@@ -144,6 +144,9 @@ func show_view(view: EventRunner.EventView) -> void:
 		else:
 			button.pressed.connect(_OnOptionPressed.bind(option_id, entry))
 		_options_box.add_child(button)
+	# S4-R3-01：构建完成才恢复选项区输入（_Reset 已先行隐藏断输入——
+	# queue_free 延迟帧末，纯选择同帧双击会经残留按钮双结算）
+	_options_box.visible = true
 
 func show_settled(grade: int, text: String, reward_text: String,
 		roll_text: String = "") -> void:
@@ -377,15 +380,18 @@ func _GradeColor(grade: int) -> Color:
 					UiTheme.EVENT_GRADE_CRIT_FAILURE)
 
 func _Reset() -> void:
-	## 复位呈现区（切换视图前）
+	## 复位呈现区（切换视图前）；S4-R3-01：选项区先行隐藏断输入——
+	## queue_free 延迟帧末，旧按钮残留期内可点（纯选择同帧双击双结算）；
+	## 重建选项的路径（show_view）构建完成后再置回可见，结算/战前/清空
+	## 视图保持隐藏（沿用 _BeginCast 先例）
 	## 参数：无
 	## 返回：无
+	_options_box.visible = false
 	for child: Node in _options_box.get_children():
 		child.queue_free()
 	for child: Node in _cast_box.get_children():
 		child.queue_free()
 	_cast_box.visible = false
-	_options_box.visible = true
 	_grade_label.visible = false
 	_result_label.text = ""
 	_continue_button.visible = false

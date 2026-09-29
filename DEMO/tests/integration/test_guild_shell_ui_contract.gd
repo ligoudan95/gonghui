@@ -18,6 +18,8 @@ func before_test() -> void:
 	scene_manager.previous_id = -1
 	var no_params: Dictionary = {}
 	scene_manager.pending_params = no_params
+	# S5-R3-01：复位切换重入锁（用例中断残留 _switch_pending=true 会连锁假失败）
+	scene_manager._switch_pending = false
 	for entry_name: String in ["main_save.json", "main_save.json.bak",
 			"main_save.json.tmp"]:
 		DirAccess.remove_absolute("user://saves/" + entry_name)
@@ -124,3 +126,58 @@ func test_summarize_day_light_entries() -> void:
 	var summary2 := GuildCore.DaySummary.new()
 	summary2.light_completed.append(result2)
 	assert_bool(shell._SummarizeDay(summary2).contains("板凳")).is_false()
+
+func test_summarize_day_board_three_behaviors() -> void:
+	## S4-02：轻提示行板刷三表现补齐——「板上到期/刷新补位/替换加急」三组
+	## 均入行（此前双源拼装漏后两组）；单源 = DaySummaryPanel.BuildDetailLines
+	var shell: Control = await _OpenGuildShell()
+	var summary := GuildCore.DaySummary.new()
+	summary.day = 7
+	summary.board_removed.append("q_clean_mine")
+	summary.board_refreshed.append("q_supply_run")
+	summary.board_refreshed.append("q_hunt_rats")
+	summary.board_replaced.append("q_escort")
+	var text: String = shell._SummarizeDay(summary)
+	assert_str(text).contains("板上到期 1 单")
+	assert_str(text).contains("刷新补位 2 单")
+	assert_str(text).contains("替换加急 1 单")
+	assert_str(text).contains("第 7 天")
+
+func test_wait_pressed_blocked_while_summary_popup_open() -> void:
+	## S5-02：日结算汇总弹窗打开期间「等待一天」守卫——不再推一天/不再写
+	## 存档/不再覆盖前日明细（关闭即解锁）
+	var save_manager: Node = get_tree().root.get_node("SaveManager")
+	var guild_state: Node = get_tree().root.get_node("GuildState")
+	guild_state.new_game()
+	assert_int(save_manager.current.game_day).is_equal(1)
+	var shell: Control = await _OpenGuildShell()
+	(shell.get_node("%DaySummaryHost") as Control).visible = true
+	shell._on_wait_pressed()
+	await get_tree().process_frame
+	assert_int(guild_state.core.day).is_equal(1)
+	assert_int(save_manager.current.game_day).is_equal(1)
+	assert_int(save_manager.current.save_point).is_equal(SaveData.SavePoint.NEW_GAME)
+
+func test_s4r205_autosave_warning_appends_not_overwrites() -> void:
+	## S4-R2-05：autosave 失败警示经 RefreshAll 呈现时**拼接**当日摘要行
+	##（不覆写——「弹窗关闭后轻提示行可查」契约）；恢复正常后剥离警示行
+	var guild_state: Node = get_tree().root.get_node("GuildState")
+	guild_state.new_game()
+	var shell: Control = await _OpenGuildShell()
+	(shell.get_node("%WaitButton") as Button).pressed.emit()
+	await get_tree().process_frame
+	shell._OnDaySummaryClosed()
+	var label: Label = shell.get_node("%SettleInfoLabel") as Label
+	assert_str(label.text).contains("第 2 天")
+	# 失败警示：摘要保留 + 警示拼接（幂等——二次刷新不重复追加）
+	guild_state.last_autosave_failed = true
+	shell.RefreshAll()
+	shell.RefreshAll()
+	assert_str(label.text).contains("第 2 天")
+	assert_str(label.text).contains("自动存档写入失败")
+	assert_int(label.text.count("自动存档写入失败")).is_equal(1)
+	# 恢复正常：警示行剥离、摘要保留
+	guild_state.last_autosave_failed = false
+	shell.RefreshAll()
+	assert_str(label.text).contains("第 2 天")
+	assert_bool(label.text.contains("自动存档写入失败")).is_false()

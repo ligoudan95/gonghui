@@ -34,17 +34,17 @@ func test_skill_def_count() -> void:
 	assert_int(_game_data.get_domain(&"class/skills").size()).is_equal(23)
 
 func test_status_def_count() -> void:
-	## status/stats 域 11 状态（17 案 §3.11 #6 的 10-15 带内）
-	assert_int(_game_data.get_domain(&"status/stats").size()).is_equal(11)
+	## status/stats 域 12 状态（17 案 §3.11 #6 的 10-15 带内 + 功能一批 1 染毒 1）
+	assert_int(_game_data.get_domain(&"status/stats").size()).is_equal(12)
 
 func test_enemy_def_count() -> void:
 	## battle/enemies 域 2 杂兵 + 1 精英 = 3
 	assert_int(_game_data.get_domain(&"battle/enemies").size()).is_equal(3)
 
 func test_enemy_pack_and_naming_counts() -> void:
-	## battle/enemy_packs 域 3 配置；命名登记表 158 条（M4 增补批 +3 轻度）（R5-08 勘正：64 tres + 9 spr_ + 12 tend_）（M0 批 2 的 48 条 +
+	## battle/enemy_packs 域 3 配置；命名登记表 160 条（功能一批 1 染毒 + 批 2 毒瘴）（M4 增补批 +3 轻度）（R5-08 勘正：64 tres + 9 spr_ + 12 tend_）（M0 批 2 的 48 条 +
 	## M1 批 1 战斗域 14 条：btm×2 / tile×6 / eqp×6；M2 事件域 28 条；M3 探索层 29 条；
 	## M4 经营层 13 条：fac×2 / adv 种子×4 / 板刷 q×7）
 	assert_int(_game_data.get_domain(&"battle/enemy_packs").size()).is_equal(3)
 	var registry: NamingRegistry = _game_data.get_record(&"naming_registry")
-	assert_int(registry.entries.size()).is_equal(158)
+	assert_int(registry.entries.size()).is_equal(160)

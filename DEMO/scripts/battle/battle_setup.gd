@@ -137,8 +137,11 @@ static func build(params: BattleParams, game_data: Node) -> BattleContext:
 		unit.grid_pos = spawn
 		context.grid.place_unit(spawn, unit)
 		# 开局站位地格状态（M1 批 2 缺口补线 2026-09-24 八轮）：出生位在状态格
-		# 上即开局挂状态（current_round=0 = 回合 1 前锚点，毒沼回合 1 末即跳）
+		# 上即开局挂状态（current_round=0 = 回合 1 前锚点，毒沼回合 1 末即跳）；
+		# 踏入附加（功能一批 1 Q3）：出生位毒沼同时染 DEBUFF_poison（不 emit
+		## ——摆位期无 UI 监听）
 		context.status_manager.apply_tile_standing(unit, context.grid.tile_at(spawn), 0)
+		context.status_manager.apply_tile_pass(unit, context.grid.tile_at(spawn), 0)
 		context.units.append(unit)
 		context.allies.append(unit)
 	# 敌方装配（槽位分配：覆盖序列优先；默认 = 精英首位 + 其余洗位）
@@ -171,8 +174,11 @@ static func build(params: BattleParams, game_data: Node) -> BattleContext:
 			enemy.bind_battle(context.cfg, context.status_manager)
 			enemy.grid_pos = map_def.enemy_spawns[spawn_slots[slot_cursor]]
 			context.grid.place_unit(enemy.grid_pos, enemy)
-			# 开局站位地格状态（同我方口径——敌我同权）
+			# 开局站位地格状态（同我方口径——敌我同权）+ 踏入附加（Q3 敌我
+			## 同权；不 emit）
 			context.status_manager.apply_tile_standing(enemy,
+					context.grid.tile_at(enemy.grid_pos), 0)
+			context.status_manager.apply_tile_pass(enemy,
 					context.grid.tile_at(enemy.grid_pos), 0)
 			context.units.append(enemy)
 			context.enemies.append(enemy)
@@ -193,8 +199,11 @@ static func build(params: BattleParams, game_data: Node) -> BattleContext:
 		if target == null or status == null:
 			push_error("BattleSetup: 开局状态 '%s'（目标 '%s'）无法施加" % [status_id, target_id])
 			continue
+		# S2-03：开局载入视为回合 1 前施加 = 未行动语义（案 11 §2.3 锚点 1）——
+		# target_acted_this_round 传 false：控制类状态经 CHECKIN 载入锁**本回合**
+		# （现值 BUFF_ambush/DEBUFF_exposed 非控制类，行为不变、语义归位）
 		context.status_manager.apply(target, status, StatusInstance.SourceKind.CHECKIN,
-				&"battle_init", duration, 0, true)
+				&"battle_init", duration, 0, false)
 	# M2 挂点提示（M1 默认空不消费）
 	if not params.terrain_override.is_empty():
 		push_warning("BattleSetup: terrain_override 非空——M2 场景联调挂点，M1 未实现")

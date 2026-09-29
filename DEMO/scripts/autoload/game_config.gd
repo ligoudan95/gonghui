@@ -18,9 +18,10 @@ signal config_reloaded
 ## 总控配置资源路径（core 域固定主配置）
 const CONFIG_PATH: String = "res://data/core/cfg_main.tres"
 
-## enabled_systems 合法系统键全集（13 真 + 9 假，案 16 启用清单）
+## enabled_systems 合法系统键全集（14 真 + 8 假，案 16 启用清单；
+## M4 增补批起 quest_noncombat 翻真——轻度委托通道已投产，计数以本表为准）
 const SYSTEM_KEYS: Array[StringName] = [
-	# DEMO 启用（真键 13）
+	# DEMO 启用（真键 14）
 	&"calendar",
 	&"guild_facility",
 	&"economy",
@@ -34,12 +35,12 @@ const SYSTEM_KEYS: Array[StringName] = [
 	&"world_scene",
 	&"ui_config",
 	&"auto_save",
-	# DEMO 禁用（假键 9）
+	&"quest_noncombat",
+	# DEMO 禁用（假键 8）
 	&"stress",
 	&"second_class",
 	&"shop",
 	&"craft_chain",
-	&"quest_noncombat",
 	&"event_exit_d",
 	&"hidden_content",
 	&"npc_place",

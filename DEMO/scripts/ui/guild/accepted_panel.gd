@@ -27,8 +27,8 @@ var _title_label: Label = null
 var _row_box: VBoxContainer = null
 ## 空挂单提示
 var _empty_label: Label = null
-## 行记录（刷新重建——低级1：泛型类型化）
-var _rows: Array[HBoxContainer] = []
+## 行记录（刷新重建——低级1：泛型类型化；S4-R2-01 起行为摘要/操作两行 VBox）
+var _rows: Array[VBoxContainer] = []
 
 func setup(cfg: CoreConfig) -> void:
 	## 构建面板骨架
@@ -51,17 +51,21 @@ func setup(cfg: CoreConfig) -> void:
 	add_child(_empty_label)
 
 func refresh(instances: Array[QuestInstance], core: GuildCore) -> void:
-	## 刷新挂单行（全量重建；成员名读名册、剩余天数读日历）
+	## 刷新挂单行（全量重建；成员名读名册、剩余天数读日历）；S4-R2-01：
+	## 行结构摘要/操作两行化——满编 4 人摘要行 ≈758px 超出列宽 458px，原单行
+	## HBox 溢出把按钮画到招募池上方（参考 roster_overview M4-5 换行先例，
+	## 摘要 Label 补 WORD_SMART 自动换行，按钮恒在本行操作行内）
 	## 参数 instances：挂单实例（ACCEPTED+IN_PROGRESS）；core：公会核心
 	## 返回：无
-	for row: HBoxContainer in _rows:
+	for row: VBoxContainer in _rows:
 		row.queue_free()
 	_rows.clear()
 	for inst: QuestInstance in instances:
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 8)
+		var row := VBoxContainer.new()
+		row.add_theme_constant_override("separation", 2)
 		_row_box.add_child(row)
 		var summary: Label = _MakeRowLabel(row)
+		summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		# M4 增补批：LIGHT_RUNNING 轻度行——状态/剩余取工期、放弃按模板、
 		# 不出征不重编队（战斗三操作仅 ACCEPTED 态呈现）
 		var state_text: String = "进行中" if inst.state == QuestInstance.State.IN_PROGRESS else "已接"
@@ -76,20 +80,22 @@ func refresh(instances: Array[QuestInstance], core: GuildCore) -> void:
 		var party_text: String = "、".join(member_names) if not member_names.is_empty() else "未编队"
 		summary.text = "%s｜%s｜%s｜编队：%s" % [inst.display_name(core.game_data),
 				state_text, remain_text, party_text]
-		summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var actions := HBoxContainer.new()
+		actions.add_theme_constant_override("separation", 8)
+		row.add_child(actions)
 		var row_tpl: QuestTemplateDef = core.game_data.get_record(inst.template_id) as QuestTemplateDef
 		if inst.state == QuestInstance.State.ACCEPTED:
-			_AddRowButton(row, "出征", "StartButton", inst.serial,
+			_AddRowButton(actions, "出征", "StartButton", inst.serial,
 					func(serial: int) -> void: start_requested.emit(serial))
-			_AddRowButton(row, "重编队", "ReassignButton", inst.serial,
+			_AddRowButton(actions, "重编队", "ReassignButton", inst.serial,
 					func(serial: int) -> void: reassign_requested.emit(serial))
 			if row_tpl == null or row_tpl.abandonable:
-				_AddRowButton(row, "放弃", "AbandonButton", inst.serial,
+				_AddRowButton(actions, "放弃", "AbandonButton", inst.serial,
 						func(serial: int) -> void: abandon_requested.emit(serial))
 		elif inst.state == QuestInstance.State.LIGHT_RUNNING:
 			# 轻度进行中：仅放弃（可弃时——工期作废立即释放，二次确认在协会屏）
 			if row_tpl == null or row_tpl.abandonable:
-				_AddRowButton(row, "放弃", "AbandonButton", inst.serial,
+				_AddRowButton(actions, "放弃", "AbandonButton", inst.serial,
 						func(serial: int) -> void: abandon_requested.emit(serial))
 		_rows.append(row)
 	_empty_label.visible = instances.is_empty()

@@ -11,7 +11,15 @@
 ## W4-06 chain-point 反向断言 / W2-6 普攻重复挂载 / W2-9 空敌清单 /
 ## W4-13 空揭示表 / W4-03 cfg 值域与 base_expedition_days 加严）
 ## + M4 批 1 新增（V-M4 五组：quest-template 板刷扩展字段 / quest-count 计数带 /
-## fac-domain 设施域 / adv-seed 初始种子 / cfg-domain 经营层参数扩展）。
+## fac-domain 设施域 / adv-seed 初始种子 / cfg-domain 经营层参数扩展）
+## + 盲审第 1 轮补强（2026-09-29：V-R1 六条——cfg 飘字/tips 四色锚定 /
+## HEAL 源属性七属性域 / DOT 值域 / 职业倾向属性域 / 非空即查资源引用护栏 /
+## CHECK 选项去向=终端节点）
+## + 盲审第 2 轮补强（2026-09-29：V-R2 六条——技能资源轨一致性 / 难度档
+## 判定线值域 / 战场地图连通性 / 区域遭遇权重覆盖 / 状态类别×控制种类双向 /
+## 选项级出口禁 B；V-R1 三条加严：HEAL ratio·flat 值域 / dot 类别反向断言与
+## FIXED ≥1 / icon_id 非空即查；既有规则补漏：quest-goal region_id 全类查 /
+## quest-template time_limit_days ≥1）。
 ## 用法：DataValidator.run_all(game_data)——game_data 为 GameData 自动加载单例或其实例。
 class_name DataValidator
 extends RefCounted
@@ -175,6 +183,29 @@ static func run_all(game_data: Node) -> ValidationReport:
 	_CheckGuildFacilityDomain(report, game_data)
 	_CheckGuildAdvSeed(report, game_data)
 	_CheckGuildCfgDomain(report, game_data)
+	# ---- 盲审第 1 轮补强（V-R1-*——2026-09-29：HEAL 源属性/DOT 值域/倾向属性/
+	# 资源引用护栏/CHECK 去向终端；cfg 四色锚定在 _CheckCfgFallbacks 内联）----
+	_CheckSkillHealSource(report, game_data)
+	_CheckStatusDotDomain(report, game_data)
+	_CheckTendencyFocusAttrs(report, game_data)
+	_CheckOptionalAssetRefs(report, game_data)
+	_CheckEventCheckExit(report, game_data)
+	# ---- 盲审第 2 轮补强（V-R2-*——2026-09-29：资源轨/难度线/战场连通/
+	# 遭遇覆盖/状态控制双向/选项出口禁 B）----
+	_CheckSkillResourceTrack(report, game_data)
+	_CheckTierLineDomain(report, game_data)
+	_CheckBattleMapConnectivity(report, game_data)
+	_CheckEncounterWeightCoverage(report, game_data)
+	_CheckStatusControlKind(report, game_data)
+	_CheckEventOptionExitKind(report, game_data)
+	# ---- 盲审第 3 轮补强（V-R3-*——2026-09-29：检定单点失败出口/链入口叙述）----
+	_CheckSingleCheckOutcome(report, game_data)
+	_CheckChainEntryNarrative(report, game_data)
+	# ---- 功能一试玩批（V-P1-*——毒沼踏入染毒链：tile 附加/探索地格效果/
+	# 地图毒沼使用；etile/map 两条随批 2 数据落地自然生效）----
+	_CheckTilePassStatus(report, game_data)
+	_CheckExploreTileEffect(report, game_data)
+	_CheckMapPoisonUsed(report, game_data)
 	return report
 
 # --------------------------------------------------------------------------
@@ -499,6 +530,10 @@ static func _CheckNumericDomains(report: ValidationReport, game_data: Node) -> v
 		if enemy.resist_pct < 0.0 or enemy.resist_pct > 1.0:
 			report.add_error("V-M0-num-domain", enemy.id,
 					"抗性 %f 越界 [0, 1]" % enemy.resist_pct)
+		# S1-R4-05：敌方单池值域（负池=消耗判定恒真——死字段）
+		if enemy.resource_pool < 0:
+			report.add_error("V-M0-num-domain", enemy.id,
+					"资源池 %d 为负" % enemy.resource_pool)
 		for attr_id: StringName in enemy.attrs:
 			if enemy.attrs[attr_id] <= 0:
 				report.add_error("V-M0-num-domain", enemy.id,
@@ -862,10 +897,12 @@ static func _CheckNamingRegistry(report: ValidationReport, game_data: Node) -> v
 		return
 	var asset_registry: AssetRegistry = game_data.get_record(&"registry") as AssetRegistry
 	var tend_ids: Array[StringName] = []
+	var tend_defs: Dictionary = {}
 	for record: Resource in _DomainRecords(game_data, &"class/classes"):
 		var cls := record as ClassDef
 		for tendency: TendencyDef in cls.tendencies:
 			tend_ids.append(tendency.id)
+			tend_defs[tendency.id] = tendency
 	# 顶层 id -> 实际域映射
 	var id_domains: Dictionary = {}
 	for domain: StringName in _AllDomains(game_data):
@@ -894,18 +931,52 @@ static func _CheckNamingRegistry(report: ValidationReport, game_data: Node) -> v
 				if not tend_ids.has(entry.resource_id):
 					report.add_error("V-B2-naming", entry.resource_id,
 							"%s 登记不存在于任何职业表 tendencies" % prefix_rule["prefix"])
+				else:
+					var tend_def: TendencyDef = tend_defs[entry.resource_id] as TendencyDef
+					# S1-R5-02：倾向实名空串报错（内嵌子资源无 V-M0 兜底——
+					## 第 4 轮 naming 空串跳过在此子资源域是死口）
+					if String(tend_def.display_name).is_empty():
+						report.add_error("V-B2-naming", entry.resource_id,
+								"倾向 display_name 为空（子资源无 V-M0 兜底）")
+					else:
+						# S1-R3-02②：登记名以倾向实名开头（宽松——兼容后缀注记
+						## 风格；占位名「职业 倾向 X」与 UI 已呈现的实名漂移拦截）
+						_ReportNamingNameDrift(report, entry.resource_id, entry.display_name,
+								tend_def.display_name)
 		elif id_domains.has(entry.resource_id):
 			if id_domains[entry.resource_id] != entry.domain:
 				report.add_error("V-B2-naming", entry.resource_id,
 						"登记域 '%s' 与实际所在域 '%s' 错配" % [
 							entry.domain, id_domains[entry.resource_id],
 						])
+			# S1-R3-02②：登记名以记录显示名开头（宽松——兼容 skl_atk_*/chain_*/
+			## evp_* 等后缀注记风格；记录无 display_name 字段/为空则跳过）
+			var named_record: Resource = game_data.get_record(entry.resource_id)
+			if named_record != null and "display_name" in named_record \
+					and not String(named_record.display_name).is_empty():
+				_ReportNamingNameDrift(report, entry.resource_id, entry.display_name,
+						String(named_record.display_name))
 		else:
 			report.add_error("V-B2-naming", entry.resource_id,
 					"登记了不存在的资源（多登记/未知 id）")
 	for record_id: StringName in id_domains:
 		if not registered.has(record_id):
 			report.add_error("V-B2-naming", record_id, "资源未登记命名表（漏登记）")
+
+static func _ReportNamingNameDrift(report: ValidationReport, entry_id: StringName,
+		entry_name: String, record_name: String) -> void:
+	## 登记名与记录显示名一致性（V-B2-naming 内部口——S1-R3-02②宽松断言：
+	## 登记名以记录 display_name 开头即可，兼容后缀注记风格；不匹配即占位名
+	## 漂移，报错提示同步实名）；S1-R4-03：记录显示名为空串时跳过（空串
+	## begins_with 恒真——占位名全放行的逃逸口，与顶层分支非空前置同构）
+	## 参数 report/entry_id/entry_name/record_name：报告 / 登记 id / 登记名 / 记录显示名
+	## 返回：无
+	if record_name.is_empty():
+		return
+	if not entry_name.begins_with(record_name):
+		report.add_error("V-B2-naming", entry_id,
+				"登记名 '%s' 未以记录显示名 '%s' 开头（占位名漂移——同步实名）" % [
+						entry_name, record_name])
 
 static func _CheckStatusSources(report: ValidationReport, game_data: Node) -> void:
 	## V-B2-status-src（A-4）：①技能 STATUS_APPLY 引用的状态 allowed_sources
@@ -1196,6 +1267,11 @@ static func _CheckCfgFallbacks(report: ValidationReport, game_data: Node) -> voi
 		["ui_downed_modulate_color", UiTheme.DOWNED_MODULATE],
 		["ui_highlight_gold_color", UiTheme.HIGHLIGHT_GOLD],
 		["ui_panel_dark_color", UiTheme.PANEL_DARK],
+		# 盲审 R1（S1-01）：M4 飘字/tips 四色锚定（battle_board 兜底常量同源）
+		["ui_damage_crit_color", UiTheme.DAMAGE_CRIT],
+		["ui_damage_normal_color", UiTheme.DAMAGE_NORMAL],
+		["ui_tips_line1_color", UiTheme.TIPS_LINE1],
+		["ui_tips_line2_color", UiTheme.TIPS_LINE2],
 		# M3 探索层配色（表值须回填且 == UiTheme 兜底常量）
 		["ui_fog_unseen_color", UiTheme.FOG_UNSEEN],
 		["ui_fog_dim_color", UiTheme.FOG_DIM],
@@ -1455,7 +1531,9 @@ static func _CheckEventRefGraph(report: ValidationReport, game_data: Node) -> vo
 
 static func _CheckEventRefExit(report: ValidationReport, game_data: Node) -> void:
 	## V-M2-ref-exit：出口类型值域——C/D 计数 == 0（DEMO 零实例口径）；
-	## B 出口必带 battle.pack_id 与 battle.post_battle
+	## B 出口必带 battle.pack_id 与 battle.post_battle；S2-R3-02：B 出口自带
+	## reward/grant_quest_id/unlock_flag 三字段必须为空（运行时静默丢弃——
+	## 错配即报错，奖励/授予/揭示应配在 post_battle 出口上）
 	## 参数：报告 / GameData
 	## 返回：无
 	for outcome_pair: Array in _AllEventOutcomes(game_data):
@@ -1470,6 +1548,27 @@ static func _CheckEventRefExit(report: ValidationReport, game_data: Node) -> voi
 				report.add_error("V-M2-ref-exit", owner_id, "B 出口缺 battle.pack_id")
 			elif outcome.battle.post_battle == null:
 				report.add_error("V-M2-ref-exit", owner_id, "B 出口缺 battle.post_battle（战后出口）")
+			if outcome.reward != null:
+				report.add_error("V-M2-ref-exit", owner_id,
+						"B 出口自带 reward（运行时静默丢弃——奖励应配 post_battle）")
+			if not String(outcome.grant_quest_id).is_empty():
+				report.add_error("V-M2-ref-exit", owner_id,
+						"B 出口自带 grant_quest_id（运行时静默丢弃——授予应配 post_battle）")
+			if not String(outcome.unlock_flag).is_empty():
+				report.add_error("V-M2-ref-exit", owner_id,
+						"B 出口自带 unlock_flag（运行时静默丢弃——揭示应配 post_battle）")
+		# S2-R4-04：battle 子资源仅允许出现在 exit_kind==B 的出口（A 出口带
+		## battle 子资源=永不消费的死配置）
+		if outcome.battle != null and outcome.exit_kind != EventOutcomeDef.ExitKind.B:
+			report.add_error("V-M2-ref-exit", owner_id,
+					"exit_kind=%d 的出口带 battle 子资源（battle 仅允许 B 出口——死配置）"
+					% outcome.exit_kind)
+		# S1-R4-02②：post_battle 出口 exit_kind 必须 A（战后出口=常规结算语义）
+		if String(owner_id).ends_with(":post_battle") \
+				and outcome.exit_kind != EventOutcomeDef.ExitKind.A:
+			report.add_error("V-M2-ref-exit", owner_id,
+					"post_battle 出口 exit_kind=%d（战后出口必须 A——常规结算语义）"
+					% outcome.exit_kind)
 
 static func _CheckEventRefBattle(report: ValidationReport, game_data: Node) -> void:
 	## V-M2-ref-battle：B 出口战斗引用——pack_id ∈ enemy_packs；先手/分布
@@ -1566,7 +1665,8 @@ static func _CheckEventNumDomain(report: ValidationReport, game_data: Node) -> v
 			report.add_error("V-M2-num-domain", single.id,
 					"难度档名 '%s' 不在 cfg 键集" % single.difficulty_tier)
 		# S1-M4-3-b：单点检定联动——attr 非空则 tier 必填（对齐 options 侧；
-		# 运行时空档回退判定线 20 近乎必败）且 attr ∈ 七属性
+		# 运行时空档回退判定线 20 近乎必败）且 attr ∈ 七属性；S1-R4-07 反向：
+		# tier 非空则 attr 必填（无检定配难度档=死字段）
 		if not String(single.check_attr_id).is_empty():
 			if single.difficulty_tier.is_empty():
 				report.add_error("V-M2-num-domain", single.id,
@@ -1574,6 +1674,9 @@ static func _CheckEventNumDomain(report: ValidationReport, game_data: Node) -> v
 			elif not AttrKeys.seven_attrs().has(single.check_attr_id):
 				report.add_error("V-M2-num-domain", single.id,
 						"check_attr_id 不在七属性域")
+		elif not single.difficulty_tier.is_empty():
+			report.add_error("V-M2-num-domain", single.id,
+					"difficulty_tier 非空但 check_attr_id 为空（无检定配难度档——死字段）")
 		for modifier: EventModifierDef in [single.crit_modifier, single.crit_fail_modifier]:
 			if modifier != null and (modifier.party_hp_delta < -10 or modifier.party_hp_delta > 0):
 				report.add_error("V-M2-num-domain", single.id,
@@ -1617,12 +1720,29 @@ static func _CheckEventFourTexts(report: ValidationReport, game_data: Node) -> v
 		var node := record as EventNodeDef
 		if node.outcome != null:
 			_ReportOutcomeTextGaps(node.id, node.outcome, false, report)
+		# S1-R4-02：B 出口战后嵌套出口文本同检（success/failure 非空口径）
+		if node.outcome != null and node.outcome.battle != null \
+				and node.outcome.battle.post_battle != null:
+			_ReportOutcomeTextGaps(StringName(String(node.id) + ":post_battle"),
+					node.outcome.battle.post_battle, false, report)
 	for record: Resource in _DomainRecords(game_data, &"event/singles"):
 		var single := record as SingleEventDef
 		if single.success_outcome != null:
 			_ReportOutcomeTextGaps(single.id, single.success_outcome, false, report)
+			if single.success_outcome.battle != null \
+					and single.success_outcome.battle.post_battle != null:
+				_ReportOutcomeTextGaps(
+						StringName(String(single.id) + ":post_battle"),
+						single.success_outcome.battle.post_battle, false, report)
 		if single.failure_outcome != null:
 			_ReportOutcomeTextGaps(single.id, single.failure_outcome, false, report)
+			# S1-R5-01：failure 半边 post_battle 文本对称收编（与 _AllEventOutcomes
+			## 双半边收编同步——此前手动遍历只补了 success 半边）
+			if single.failure_outcome.battle != null \
+					and single.failure_outcome.battle.post_battle != null:
+				_ReportOutcomeTextGaps(
+						StringName(String(single.id) + ":post_battle"),
+						single.failure_outcome.battle.post_battle, false, report)
 
 static func _ReportOutcomeTextGaps(owner_id: StringName, outcome: EventOutcomeDef,
 		chain_strict: bool, report: ValidationReport) -> void:
@@ -1659,7 +1779,10 @@ static func _CheckEventCounts(report: ValidationReport, game_data: Node) -> void
 
 static func _AllEventOutcomes(game_data: Node) -> Array:
 	## 全库事件出口枚举（节点 outcome / 选项 success/failure outcome / 单点
-	## 双 outcome——校验遍历共用口；元素 [owner_id, EventOutcomeDef]）
+	## 双 outcome——校验遍历共用口；元素 [owner_id, EventOutcomeDef]）；
+	## S1-R4-02/S2-R4-04：B 出口 battle.post_battle 嵌套出口一并收编
+	##（owner 记 "<id>:post_battle" 区分——奖励带/双文本/exit_kind/引用
+	## 此前全漏检；仅节点级与单点级可挂 B 出口，选项级已被 V-R2-option-exit 锁死）
 	## 参数：GameData
 	## 返回：出口对列表
 	var pairs: Array = []
@@ -1667,6 +1790,7 @@ static func _AllEventOutcomes(game_data: Node) -> Array:
 		var node := record as EventNodeDef
 		if node.outcome != null:
 			pairs.append([node.id, node.outcome])
+			_AppendPostBattle(pairs, node.id, node.outcome)
 	for record: Resource in _DomainRecords(game_data, &"event/options"):
 		var option := record as EventOptionDef
 		if option.success_outcome != null:
@@ -1677,9 +1801,22 @@ static func _AllEventOutcomes(game_data: Node) -> Array:
 		var single := record as SingleEventDef
 		if single.success_outcome != null:
 			pairs.append([single.id, single.success_outcome])
+			_AppendPostBattle(pairs, single.id, single.success_outcome)
 		if single.failure_outcome != null:
 			pairs.append([single.id, single.failure_outcome])
+			_AppendPostBattle(pairs, single.id, single.failure_outcome)
 	return pairs
+
+static func _AppendPostBattle(pairs: Array, owner_id: StringName,
+		outcome: EventOutcomeDef) -> void:
+	## B 出口战后嵌套出口收编（_AllEventOutcomes 内部口——S1-R4-02）
+	## 参数 pairs：出口对列表（原地追加）；owner_id：宿主资源 id；
+	## outcome：宿主出口
+	## 返回：无
+	if outcome.battle == null or outcome.battle.post_battle == null:
+		return
+	pairs.append([StringName(String(owner_id) + ":post_battle"),
+			outcome.battle.post_battle])
 
 # --------------------------------------------------------------------------
 # M3 探索层域（V-M3 十一组 + 计数带）
@@ -1927,6 +2064,12 @@ static func _CheckExploreRefQuestGoal(report: ValidationReport, game_data: Node)
 	## 返回：无
 	for record: Resource in _DomainRecords(game_data, &"quest/templates"):
 		var quest := record as QuestTemplateDef
+		# S1-R2-07：region_id 非空查域对全模板生效（此前在 NON_COMBAT 分支
+		# 之后——轻度模板整段跳过；region_id 字段位虽不消费，配了就得可解析）
+		if not String(quest.region_id).is_empty() \
+				and not _InDomain(game_data, &"world/regions", quest.region_id):
+			report.add_error("V-M3-ref-quest-goal", quest.id,
+					"region_id '%s' 不可解析（world/regions 域）" % quest.region_id)
 		# M4 增补批：轻度（NON_COMBAT）不走判据/地图/区域消费通路——goal_param
 		# 与 map_id 恒空，全检查跳过（勿拦）
 		if quest.exec_class == QuestTemplateDef.ExecClass.NON_COMBAT:
@@ -1951,10 +2094,6 @@ static func _CheckExploreRefQuestGoal(report: ValidationReport, game_data: Node)
 				and not _InDomain(game_data, &"map/maps", quest.map_id):
 			report.add_error("V-M3-ref-quest-goal", quest.id,
 					"map_id '%s' 不可解析（map/maps 域）" % quest.map_id)
-		if not String(quest.region_id).is_empty() \
-				and not _InDomain(game_data, &"world/regions", quest.region_id):
-			report.add_error("V-M3-ref-quest-goal", quest.id,
-					"region_id '%s' 不可解析（world/regions 域）" % quest.region_id)
 
 static func _InDomain(game_data: Node, domain: StringName, record_id: StringName) -> bool:
 	## 域成员判定（X3-11 收口口——按域 id 列表而非全域索引）
@@ -2155,21 +2294,9 @@ static func _CheckExploreMapConnectivity(report: ValidationReport, game_data: No
 			var tile: ExploreTileDef = game_data.get_record(tile_id) as ExploreTileDef
 			if tile != null and tile.walkable:
 				walkable_cells[Vector2i(col, row_index)] = true
-	# BFS 自 start_cell（start 不可通行时全部点位报不可达——同口径暴露）
-	var reachable: Dictionary = {}
-	var frontier: Array[Vector2i] = []
-	if walkable_cells.has(map_def.start_cell):
-		reachable[map_def.start_cell] = true
-		frontier.append(map_def.start_cell)
-	while not frontier.is_empty():
-		var current: Vector2i = frontier.pop_front()
-		for direction: Vector2i in [Vector2i.UP, Vector2i.DOWN,
-				Vector2i.LEFT, Vector2i.RIGHT]:
-			var next: Vector2i = current + direction
-			if reachable.has(next) or not walkable_cells.has(next):
-				continue
-			reachable[next] = true
-			frontier.append(next)
+	# BFS 自 start_cell（S1-R4-06：迁移 _BfsWalkable 共用口——种子不可通行
+	# 时闭包为空，全部点位按「不可达」同口径暴露）
+	var reachable: Dictionary = _BfsWalkable(walkable_cells, [map_def.start_cell])
 	# 全点位可达断言（交互点 + 目标点）
 	for record: Resource in _DomainRecords(game_data, &"map/interact_points"):
 		var point := record as InteractPointDef
@@ -2223,6 +2350,10 @@ static func _CheckGuildQuestTemplate(report: ValidationReport, game_data: Node) 
 		if quest.party_min < 1 or quest.party_max < quest.party_min or quest.party_max > 4:
 			report.add_error("V-M4-quest-template", quest.id,
 					"人力区间 [%d, %d] 非法（须 1 ≤ min ≤ max ≤ 4）" % [quest.party_min, quest.party_max])
+		# S1-R2-10：上板时限 ≥ 1（0=首日结算即到期瞬刷）
+		if quest.time_limit_days < 1:
+			report.add_error("V-M4-quest-template", quest.id,
+					"time_limit_days %d < 1（首日结算即到期——瞬刷）" % quest.time_limit_days)
 		if quest.excess_bonus_per_head < 0.0 or quest.excess_bonus_per_head > 1.0:
 			report.add_error("V-M4-quest-template", quest.id,
 					"excess_bonus_per_head %f 越界 [0, 1]" % quest.excess_bonus_per_head)
@@ -2320,6 +2451,9 @@ static func _CheckGuildFacilityDomain(report: ValidationReport, game_data: Node)
 		elif not SceneManagerScript.SCENE_REGISTRY.has(fac.scene_id):
 			report.add_error("V-M4-fac-domain", fac.id,
 					"scene_id '%s' 不在 SceneManager.SCENE_REGISTRY" % fac.scene_id)
+	# S1-R4-04：设施计数带（此前唯一无断言的 content 带——cfg 改带值即生效）
+	_CheckCountBand(report, game_data, "<guild/facilities>", "content_facilities",
+			"设施", game_data.get_domain_ids(&"guild/facilities").size(), 2, "V-M4-fac-domain")
 
 static func _CheckFacilityMonotonic(report: ValidationReport, fac: FacilityDef,
 		field_name: String, strict: bool) -> void:
@@ -2424,6 +2558,467 @@ static func _CheckGuildCfgDomain(report: ValidationReport, game_data: Node) -> v
 	if cfg.quest_excess_bonus_per_head <= 0.0 or cfg.quest_excess_bonus_per_head > 1.0:
 		report.add_error("V-M4-cfg-domain", CoreConfig.CFG_MAIN_ID,
 				"quest_excess_bonus_per_head %f 越界 (0, 1]" % cfg.quest_excess_bonus_per_head)
+
+# --------------------------------------------------------------------------
+# 盲审第 1 轮补强（V-R1-*——2026-09-29）
+# --------------------------------------------------------------------------
+
+static func _CheckSkillHealSource(report: ValidationReport, game_data: Node) -> void:
+	## V-R1-heal-attr（S1-02 + S1-R2-01/S2-R2-02 加严）：技能 HEAL 效果的
+	## source_attr 非空且 ∈ 七属性（BattleRules.heal_amount 的 attrs.get 按
+	## DEFAULT_ATTR_VALUE 静默结算——拼错键零报错，表侧拦截）；ratio/flat
+	## 非负且至少一项为正（均非正=治疗量恒 ≤ 0 死技能）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"class/skills"):
+		var skill := record as SkillDef
+		for effect: SkillEffect in skill.effects:
+			if effect.effect_kind != SkillEffect.EffectKind.HEAL:
+				continue
+			if String(effect.source_attr).is_empty():
+				report.add_error("V-R1-heal-attr", skill.id,
+						"HEAL 效果 source_attr 为空（换算源属性必填）")
+			elif not _SevenAttrs().has(effect.source_attr):
+				report.add_error("V-R1-heal-attr", skill.id,
+						"HEAL 效果 source_attr '%s' 不在七属性集（拼错键会静默按中性值结算）"
+						% effect.source_attr)
+			if effect.ratio < 0.0:
+				report.add_error("V-R1-heal-attr", skill.id,
+						"HEAL 效果 ratio %f 为负（负向治疗=反向伤害）" % effect.ratio)
+			if effect.flat < 0:
+				report.add_error("V-R1-heal-attr", skill.id,
+						"HEAL 效果 flat %d 为负（负向治疗=反向伤害）" % effect.flat)
+			if effect.ratio <= 0.0 and effect.flat <= 0:
+				report.add_error("V-R1-heal-attr", skill.id,
+						"HEAL 效果 ratio 与 flat 均非正（治疗量恒 ≤ 0——死技能）")
+
+static func _CheckStatusDotDomain(report: ValidationReport, game_data: Node) -> void:
+	## V-R1-dot-domain（S1-03 + S1-R2-06 加严）：StatusDef.dot 非空时——
+	## category 必须 == DOT（配在 STAT_MOD/CONTROL 上=永不生效死配置）；
+	## ATTR_RATIO 模式 attr_id ∈ 七属性且 ratio > 0；FIXED 模式 fixed ≥ 1
+	##（0=死 DOT；dot_tick 的 attrs.get 拼错键静默回退中性值——表侧拦截）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"status/stats"):
+		var status := record as StatusDef
+		if status.dot == null:
+			continue
+		if status.category != StatusDef.Category.DOT:
+			report.add_error("V-R1-dot-domain", status.id,
+					"dot 配置在 category=%d 上（非 DOT 类永不生效——死配置）" % status.category)
+		match status.dot.mode:
+			DotParams.Mode.ATTR_RATIO:
+				if not _SevenAttrs().has(status.dot.attr_id):
+					report.add_error("V-R1-dot-domain", status.id,
+							"dot ATTR_RATIO 模式 attr_id '%s' 不在七属性集" % status.dot.attr_id)
+				if status.dot.ratio <= 0.0:
+					report.add_error("V-R1-dot-domain", status.id,
+							"dot ATTR_RATIO 模式 ratio %f ≤ 0" % status.dot.ratio)
+			DotParams.Mode.FIXED:
+				if status.dot.fixed < 1:
+					report.add_error("V-R1-dot-domain", status.id,
+							"dot FIXED 模式 fixed %d < 1（每跳 0——死 DOT）" % status.dot.fixed)
+
+static func _CheckTendencyFocusAttrs(report: ValidationReport, game_data: Node) -> void:
+	## V-R1-tend-attr（S1-04）：cls.tendencies[].focus_attrs 逐项 ∈ 七属性
+	## （拼错键会向 attrs 字典新增垃圾键——成长侧重消费前拦截）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"class/classes"):
+		var cls := record as ClassDef
+		for tendency: TendencyDef in cls.tendencies:
+			for attr_id: StringName in tendency.focus_attrs:
+				if not _SevenAttrs().has(attr_id):
+					report.add_error("V-R1-tend-attr", cls.id,
+							"倾向 '%s' 的 focus_attrs 项 '%s' 不在七属性集" % [
+									tendency.id, attr_id])
+
+static func _CheckOptionalAssetRefs(report: ValidationReport, game_data: Node) -> void:
+	## V-R1-asset-ref（S1-05 + S1-R2-03 补漏）：「非空即查」护栏——EnemyDef.
+	## drop_ref/portrait_id 非空时须在 naming_registry 登记；SkillDef.vfx_id /
+	## StatusDef.icon_id 非空时须在 AssetRegistry 可解析（当前全库恒空——
+	## 先建护栏，回填时即受检）
+	## 参数：报告 / GameData
+	## 返回：无
+	var registry: NamingRegistry = game_data.get_record(&"naming_registry") as NamingRegistry
+	var registered_ids: Dictionary = {}
+	if registry != null:
+		for entry: NamingEntry in registry.entries:
+			registered_ids[entry.resource_id] = true
+	for record: Resource in _DomainRecords(game_data, &"battle/enemies"):
+		var enemy := record as EnemyDef
+		for field_pair: Array in [["drop_ref", enemy.drop_ref],
+				["portrait_id", enemy.portrait_id]]:
+			var field_name: String = field_pair[0]
+			var ref_id: StringName = field_pair[1]
+			if String(ref_id).is_empty():
+				continue
+			if not registered_ids.has(ref_id):
+				report.add_error("V-R1-asset-ref", enemy.id,
+						"%s '%s' 未在 naming_registry 登记（非空即查）" % [field_name, ref_id])
+	for record: Resource in _DomainRecords(game_data, &"class/skills"):
+		var skill := record as SkillDef
+		if String(skill.vfx_id).is_empty():
+			continue
+		if game_data.get_asset_path(skill.vfx_id).is_empty():
+			report.add_error("V-R1-asset-ref", skill.id,
+					"vfx_id '%s' 未在 AssetRegistry 可解析（非空即查）" % skill.vfx_id)
+	for record: Resource in _DomainRecords(game_data, &"status/stats"):
+		var status := record as StatusDef
+		if String(status.icon_id).is_empty():
+			continue
+		if game_data.get_asset_path(status.icon_id).is_empty():
+			report.add_error("V-R1-asset-ref", status.id,
+					"icon_id '%s' 未在 AssetRegistry 可解析（非空即查）" % status.icon_id)
+
+static func _CheckEventCheckExit(report: ValidationReport, game_data: Node) -> void:
+	## V-R1-check-exit（S2-05）：CHECK 类选项的 *_to 去向必须指向终端节点
+	## （outcome 非空）——锁死四档透传协议仅支持「去向=终端」形态（DEMO 三链
+	## 现状全合规；链加深需先扩展协议再松绑）；去向节点不存在已由 V-M2-ref-graph
+	## 拦截，此处只报「去向非终端」形态
+	## 参数：报告 / GameData
+	## 返回：无
+	var nodes: Dictionary = {}
+	for record: Resource in _DomainRecords(game_data, &"event/nodes"):
+		var node := record as EventNodeDef
+		nodes[node.id] = node
+	for record: Resource in _DomainRecords(game_data, &"event/options"):
+		var option := record as EventOptionDef
+		if option.kind != EventOptionDef.OptionKind.CHECK:
+			continue
+		for target_id: StringName in [option.success_to, option.failure_to]:
+			if target_id == &"":
+				continue
+			var target: EventNodeDef = nodes.get(target_id, null) as EventNodeDef
+			if target == null:
+				continue
+			if target.outcome == null:
+				report.add_error("V-R1-check-exit", option.id,
+						"CHECK 选项去向节点 '%s' 非终端（outcome 为空——四档透传协议仅支持去向=终端）"
+						% target_id)
+
+# --------------------------------------------------------------------------
+# 盲审第 2 轮补强（V-R2-*——2026-09-29）
+# --------------------------------------------------------------------------
+
+static func _CheckSkillResourceTrack(report: ValidationReport, game_data: Node) -> void:
+	## V-R2-skill-resource（S1-R2-02 + S1-R3-06/S1-R4-05/S1-R4-08 补口）：
+	## 技能资源轨一致性——owner 为敌人的技能 resource_type 不得为 MANA
+	##（敌方无法力池=死技能）且 resource_cost ≤ owner.resource_pool（超池
+	## 技永不可放）；owner 为职业的技能资源轨映射后必须 == 职业资源轨
+	##（ClassDef.ResourceType 0=MANA/1=STAMINA 与 SkillDef.ResourceKind
+	## 0=NONE/1=MANA/2=STAMINA 两套枚举按语义映射；错轨=UI 资源条与扣池
+	## 错位）；owner 空白名单技能（通用普攻——单池消耗轨对其无定义）
+	## resource_type 必须 NONE；NONE 技 resource_cost 必须 0（非零=死字段
+	##——NONE 不走扣池，消耗值永不消费）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"class/skills"):
+		var skill := record as SkillDef
+		if String(skill.owner_id).is_empty():
+			# S1-R3-06：白名单成员断言 NONE（非白名单空 owner 由
+			# V-M0-ref-skill-owner 拦截，此处不重复报）
+			if OWNER_EMPTY_WHITELIST.has(skill.id) \
+					and skill.resource_type != SkillDef.ResourceKind.NONE:
+				report.add_error("V-R2-skill-resource", skill.id,
+						"owner 空白名单技能 resource_type != NONE（通用普攻无资源轨定义——死技能）")
+			continue
+		# S1-R4-08：NONE 技零消耗（非零消耗值永不消费——死字段拦截）
+		if skill.resource_type == SkillDef.ResourceKind.NONE:
+			if skill.resource_cost != 0:
+				report.add_error("V-R2-skill-resource", skill.id,
+						"resource_type=NONE 但 resource_cost=%d（NONE 不走扣池——死字段）"
+						% skill.resource_cost)
+			continue
+		var owner_class: ClassDef = game_data.get_record(skill.owner_id) as ClassDef
+		var owner_enemy: EnemyDef = game_data.get_record(skill.owner_id) as EnemyDef
+		if owner_enemy != null:
+			if skill.resource_type == SkillDef.ResourceKind.MANA:
+				report.add_error("V-R2-skill-resource", skill.id,
+						"owner 为敌人但 resource_type=MANA（敌方无法力池——死技能）")
+			# S1-R4-05：敌技消耗 ≤ 敌方单池（超池技永不可放）
+			elif skill.resource_cost > owner_enemy.resource_pool:
+				report.add_error("V-R2-skill-resource", skill.id,
+						"resource_cost %d 超出敌人 '%s' 资源池 %d（永不可放）" % [
+								skill.resource_cost, owner_enemy.id, owner_enemy.resource_pool])
+		elif owner_class != null:
+			var expected_kind: int = SkillDef.ResourceKind.MANA \
+					if owner_class.resource_type == ClassDef.ResourceType.MANA \
+					else SkillDef.ResourceKind.STAMINA
+			if skill.resource_type != expected_kind:
+				report.add_error("V-R2-skill-resource", skill.id,
+						"资源轨 %d != 职业轨 %d（UI 资源条与扣池错位）" % [
+								skill.resource_type, expected_kind])
+
+static func _CheckTierLineDomain(report: ValidationReport, game_data: Node) -> void:
+	## V-R2-tier-domain（S1-R2-04）：难度五档判定线值域——每线 ∈ [1,20] 且按
+	## 档序（极易→极难）严格递增（线乱序/等值会让档位判定反转或坍缩）
+	## 参数：报告 / GameData
+	## 返回：无
+	var cfg: CoreConfig = game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
+	if cfg == null:
+		return
+	var previous_line: int = 0
+	for tier_name: String in ["极易", "容易", "普通", "困难", "极难"]:
+		var line_value: Variant = cfg.difficulty_tiers.get(tier_name, null)
+		if not (line_value is int) and not (line_value is float):
+			report.add_error("V-R2-tier-domain", CoreConfig.CFG_MAIN_ID,
+					"难度档 '%s' 判定线缺失或非数值" % tier_name)
+			continue
+		var tier_line: int = int(line_value)
+		if tier_line < 1 or tier_line > 20:
+			report.add_error("V-R2-tier-domain", CoreConfig.CFG_MAIN_ID,
+					"难度档 '%s' 判定线 %d 越界 [1, 20]" % [tier_name, tier_line])
+		if tier_line <= previous_line:
+			report.add_error("V-R2-tier-domain", CoreConfig.CFG_MAIN_ID,
+					"难度档 '%s' 判定线 %d 未严格递增（前档 %d）" % [
+							tier_name, tier_line, previous_line])
+		previous_line = tier_line
+
+static func _CheckBattleMapConnectivity(report: ValidationReport, game_data: Node) -> void:
+	## V-R2-battle-map-conn（S1-R2-05 + S1-R3-01 扩口）：战场地图连通性——
+	## ①我方出生位互相连通（spawns[0] 出发四向 BFS 闭包须含全部 player_spawns
+	## ——圈进障碍的隔离出生位在此拦截）；②全部 player_spawns 并集可达闭包
+	## 须可达全部 enemy_spawns（并集口径——此前恒从 spawns[0] 出发漏其余
+	## 出生位的可达贡献；不可达=战场割裂，战斗永不可接触）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"battle/maps"):
+		var map_def := record as BattleMapDef
+		if map_def.player_spawns.is_empty():
+			continue
+		var walkable_cells: Dictionary = {}
+		for row_index: int in map_def.rows.size():
+			var row: String = map_def.rows[row_index]
+			for col: int in mini(map_def.size.x, row.length()):
+				var char_key: String = row[col]
+				var tile_id: StringName = map_def.legend.get(char_key, &"")
+				var tile: TileTypeDef = game_data.get_record(tile_id) as TileTypeDef
+				if tile != null and tile.walkable:
+					walkable_cells[Vector2i(col, row_index)] = true
+		# ①出生位互连：spawns[0] 闭包须含全部出生位
+		var from_first: Dictionary = _BfsWalkable(walkable_cells,
+				[map_def.player_spawns[0]])
+		for spawn: Vector2i in map_def.player_spawns:
+			if not from_first.has(spawn):
+				report.add_error("V-R2-battle-map-conn", map_def.id,
+						"我方出生位 (%d, %d) 与首位出生位不连通（圈进障碍——隔离出生位）" % [
+								spawn.x, spawn.y])
+		# ②敌方可达：全部出生位并集闭包
+		var union_reachable: Dictionary = _BfsWalkable(walkable_cells,
+				map_def.player_spawns)
+		for spawn: Vector2i in map_def.enemy_spawns:
+			if not union_reachable.has(spawn):
+				report.add_error("V-R2-battle-map-conn", map_def.id,
+						"敌方出生位 (%d, %d) 自我方出生位不可达（战场割裂）" % [
+								spawn.x, spawn.y])
+
+static func _BfsWalkable(walkable_cells: Dictionary, seeds: Array[Vector2i]) -> Dictionary:
+	## 四向 BFS 可达闭包（战场/探索连通检查共用内部口——S1-R3-01 抽取）；
+	## S1-R4-06：种子须自身可通行（落障碍格的种子不入闭包——该规则独立跑
+	## 时不再漏报；不可通行种子返回不含该格的闭包，调用方按「全部点位不可达」
+	## 口径报错）
+	## 参数 walkable_cells：可通行格集合（Vector2i -> true）；seeds：起点集
+	## 返回：可达集合（Vector2i -> true）
+	var reachable: Dictionary = {}
+	var frontier: Array[Vector2i] = []
+	for seed: Vector2i in seeds:
+		if not reachable.has(seed) and walkable_cells.has(seed):
+			reachable[seed] = true
+			frontier.append(seed)
+	while not frontier.is_empty():
+		var current: Vector2i = frontier.pop_front()
+		for direction: Vector2i in [Vector2i.UP, Vector2i.DOWN,
+				Vector2i.LEFT, Vector2i.RIGHT]:
+			var next: Vector2i = current + direction
+			if reachable.has(next) or not walkable_cells.has(next):
+				continue
+			reachable[next] = true
+			frontier.append(next)
+	return reachable
+
+static func _CheckEncounterWeightCoverage(report: ValidationReport, game_data: Node) -> void:
+	## V-R2-encw-coverage（S1-R2-08 + S1-R3-07 反向）：区域遭遇权重双向覆盖
+	## ——①每个 map.region_ids 项须在 encw 域有行（漏配=该区域遭遇静默关闭，
+	## 探索屏查表返 null 恒不掷）；②每行 encw.region_id 须 ∈ 某 map.region_ids
+	##（无主行=死配置——区域下标永不命中）
+	## 参数：报告 / GameData
+	## 返回：无
+	var encw_regions: Dictionary = {}
+	for record: Resource in _DomainRecords(game_data, &"map/encounter_weights"):
+		var weight := record as EncounterWeightDef
+		encw_regions[weight.region_id] = true
+	var map_regions: Dictionary = {}
+	for record: Resource in _DomainRecords(game_data, &"map/maps"):
+		var map_def := record as ExploreMapDef
+		for region_id: StringName in map_def.region_ids:
+			map_regions[region_id] = true
+			if not encw_regions.has(region_id):
+				report.add_error("V-R2-encw-coverage", map_def.id,
+						"区域 '%s' 无遭遇权重行（该区域遭遇静默关闭）" % region_id)
+	for region_id: StringName in encw_regions:
+		if not map_regions.has(region_id):
+			report.add_error("V-R2-encw-coverage", region_id,
+					"遭遇权重行无所属地图区域（无主行——死配置）")
+
+static func _CheckStatusControlKind(report: ValidationReport, game_data: Node) -> void:
+	## V-R2-status-control（S1-R2-09）：StatusDef.category × control_kind
+	## 双向断言——CONTROL ⇒ control_kind ≠ NONE（无控制种类的控制类=纯占位）；
+	## control_kind ≠ NONE ⇒ CONTROL（控制种类配在非控制类上永不生效）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"status/stats"):
+		var status := record as StatusDef
+		if status.category == StatusDef.Category.CONTROL \
+				and status.control_kind == StatusDef.ControlKind.NONE:
+			report.add_error("V-R2-status-control", status.id,
+					"category=CONTROL 但 control_kind=NONE（控制类无控制种类——占位死配置）")
+		elif status.category != StatusDef.Category.CONTROL \
+				and status.control_kind != StatusDef.ControlKind.NONE:
+			report.add_error("V-R2-status-control", status.id,
+					"control_kind=%d 但 category=%d（控制种类在非控制类上永不生效）" % [
+							status.control_kind, status.category])
+
+static func _CheckEventOptionExitKind(report: ValidationReport, game_data: Node) -> void:
+	## V-R2-option-exit（S2-R2-03）：选项级出口禁 B——B 出口（战斗）只能挂
+	## 节点级/单点级（event_runner 选项直挂出口路径不回写 node_id 锚点，
+	## 若为 B 出口则战后 post_battle 续跑链静默跳过——引擎带病，表侧锁死
+	## 形态；当前数据零实例）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"event/options"):
+		var option := record as EventOptionDef
+		for outcome: EventOutcomeDef in [option.success_outcome, option.failure_outcome]:
+			if outcome == null:
+				continue
+			if outcome.exit_kind == EventOutcomeDef.ExitKind.B:
+				report.add_error("V-R2-option-exit", option.id,
+						"选项级出口 exit_kind=B（战斗出口只能节点级/单点级——锚点不回写，战后续跑链断）")
+
+# --------------------------------------------------------------------------
+# 盲审第 3 轮补强（V-R3-*——2026-09-29）
+# --------------------------------------------------------------------------
+
+static func _CheckSingleCheckOutcome(report: ValidationReport, game_data: Node) -> void:
+	## V-R3-single-exit（S2-R3-01 + S1/S2-R4-01 扩双出口）：单点事件出口完备
+	## ——check_attr_id 非空（检定单点）⇒ success/failure 双出口齐备（失败半边
+	## 对齐选项级 failure_ok 口径，运行时检定失败无出口=事件静默烧掉）；
+	## check_attr_id 为空（无检定单点）⇒ success_outcome 必备（死事件拦截）
+	## 且不得配 failure_outcome（无检定无失败分支——死配置）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"event/singles"):
+		var single := record as SingleEventDef
+		if not String(single.check_attr_id).is_empty():
+			if single.failure_outcome == null:
+				report.add_error("V-R3-single-exit", single.id,
+						"检定单点缺 failure_outcome（检定失败无出口——事件静默烧掉）")
+			if single.success_outcome == null:
+				report.add_error("V-R3-single-exit", single.id,
+						"检定单点缺 success_outcome（检定成功无出口——事件静默烧掉）")
+		else:
+			if single.success_outcome == null:
+				report.add_error("V-R3-single-exit", single.id,
+						"无检定单点缺 success_outcome（无出口——死事件）")
+			if single.failure_outcome != null:
+				report.add_error("V-R3-single-exit", single.id,
+						"无检定单点配 failure_outcome（无检定无失败分支——死配置）")
+
+static func _CheckChainEntryNarrative(report: ValidationReport, game_data: Node) -> void:
+	## V-R3-chain-entry（S2-R3-03）：链入口节点 narrative_text 非空——
+	## 运行时空叙述的入口视图不落消耗登记，重踏重触发整链（锁形态）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"event/chains"):
+		var chain := record as EventChainDef
+		var entry: EventNodeDef = game_data.get_record(chain.entry_node_id) as EventNodeDef
+		if entry == null:
+			continue
+		if String(entry.narrative_text).is_empty():
+			report.add_error("V-R3-chain-entry", chain.id,
+					"链入口节点 '%s' narrative_text 为空（空视图不落消耗——重踏重触发整链）"
+					% entry.id)
+
+# --------------------------------------------------------------------------
+# 功能一试玩批（V-P1-*——毒沼踏入染毒链）
+# --------------------------------------------------------------------------
+
+static func _CheckTilePassStatus(report: ValidationReport, game_data: Node) -> void:
+	## V-P1-tile-pass（功能一批 1 Q3）：战场地格 enter_status_id 非空时——
+	## ①kind 必须 STATUS（踏入口径与站位同域）②状态存在（status/stats 域）
+	## ③其 allowed_sources 含 TILE（apply_tile_pass 施加来源）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"battle/tiles"):
+		var tile := record as TileTypeDef
+		if String(tile.enter_status_id).is_empty():
+			continue
+		if tile.kind != TileTypeDef.Kind.STATUS:
+			report.add_error("V-P1-tile-pass", tile.id,
+					"enter_status_id 挂在 kind=%d 地格（仅 STATUS 地格有踏入口径）" % tile.kind)
+		var status: StatusDef = game_data.get_record(tile.enter_status_id) as StatusDef
+		if status == null:
+			report.add_error("V-P1-tile-pass", tile.id,
+					"enter_status_id '%s' 不在 status/stats 域" % tile.enter_status_id)
+		elif not status.allowed_sources.has(&"TILE"):
+			report.add_error("V-P1-tile-pass", tile.id,
+					"enter_status_id '%s' 的 allowed_sources 不含 TILE（踏入口径拒收）"
+					% tile.enter_status_id)
+
+static func _CheckExploreTileEffect(report: ValidationReport, game_data: Node) -> void:
+	## V-P1-etile-effect（功能一批 2——批 1 先登记零实例通过）：探索地格
+	## effect_kind==POISON 时——①effect_status_id 存在（status/stats 域）
+	## ②其 allowed_sources 含 CHECKIN（战斗带入通道 build_poison_initial_statuses
+	## 走 CHECKIN 施加）③effect_damage ≥ 1（踏入零伤=死效果）；字段经 get
+	## 取值（批 1 schema 未含字段时 null 安全跳过）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"map/tiles"):
+		var effect_kind: Variant = record.get("effect_kind")
+		if effect_kind == null or int(effect_kind) != 1:
+			continue
+		var status_id: StringName = record.get("effect_status_id")
+		var effect_damage: Variant = record.get("effect_damage")
+		var status: StatusDef = game_data.get_record(status_id) as StatusDef
+		if String(status_id).is_empty() or status == null:
+			report.add_error("V-P1-etile-effect", record.get("id"),
+					"POISON 地格 effect_status_id '%s' 不在 status/stats 域" % status_id)
+		elif not status.allowed_sources.has(StatusDef.source_kind_token(
+				StatusInstance.SourceKind.CHECKIN)):
+			report.add_error("V-P1-etile-effect", record.get("id"),
+					"effect_status_id '%s' 的 allowed_sources 不含 CHECKIN（战斗带入拒收）"
+					% status_id)
+		if effect_damage == null or int(effect_damage) < 1:
+			report.add_error("V-P1-etile-effect", record.get("id"),
+					"POISON 地格 effect_damage %s < 1（踏入零伤——死效果）" % str(effect_damage))
+
+static func _CheckMapPoisonUsed(report: ValidationReport, game_data: Node) -> void:
+	## V-P1-map-poison（功能一批 2——批 1 先登记零实例通过）：地图 legend
+	## 中值指向 POISON 效果地格的图例字符须在 rows 至少出现一次（登记
+	## 未用=死配置——毒沼视觉/效果配置漂移在此拦截）
+	## 参数：报告 / GameData
+	## 返回：无
+	var poison_chars_by_tile: Dictionary = {}
+	for record: Resource in _DomainRecords(game_data, &"map/tiles"):
+		var effect_kind: Variant = record.get("effect_kind")
+		if effect_kind == null or int(effect_kind) != 1:
+			continue
+		poison_chars_by_tile[record.get("id")] = true
+	for record: Resource in _DomainRecords(game_data, &"map/maps"):
+		var map_def := record as ExploreMapDef
+		for legend_char: StringName in map_def.legend:
+			var tile_id: StringName = map_def.legend[legend_char] as StringName
+			if not poison_chars_by_tile.has(tile_id):
+				continue
+			var used: bool = false
+			for row: String in map_def.rows:
+				if row.contains(String(legend_char)):
+					used = true
+					break
+			if not used:
+				report.add_error("V-P1-map-poison", map_def.id,
+						"毒沼图例 '%s'（地格 '%s'）在 rows 未使用（登记未用——死配置）" % [
+								legend_char, tile_id])
 
 
 static func _AllDomains(game_data: Node) -> Array[StringName]:

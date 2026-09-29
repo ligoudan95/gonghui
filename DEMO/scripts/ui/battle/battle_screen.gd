@@ -33,6 +33,14 @@ const TOOLTIP_TEMPLATES: Dictionary = {
 }
 ## 普攻钮 fallback 文案（B-9：技能查无时的共享常量——tscn 占位留）
 const COMMON_ATTACK_NAME: String = "普攻"
+## 降级返回公会失败提示（S3-06：go 失败的可见反馈——IdleLabel 通道呈现）
+const DEGRADED_RETURN_FAIL_TEXT: String = "返回公会失败（错误码 %d）——请重试。"
+## 返回探索失败提示（S5-R3-02：回探索会话口的语境文案——该口按钮文案为
+## 「继续探索」，失败提示不得显示「返回公会」误导语境）
+const RETURN_EXPLORE_FAIL_TEXT: String = "返回探索失败（错误码 %d）——请重试。"
+## 撤退确认弹窗增强文案（功能二批 3 Q-A 拍板：恒弹+增强——%d=倒地人数 /
+## %s=名单 / %d=休养天数；无倒地时 tscn 静态文案维持不变）
+const RETREAT_CONFIRM_DOWNED: String = "队内 %d 名队员倒地（%s）——撤退回城后他们将转重伤休养 %d 天；撤退将按委托失败结算，途中所得将丢弃。确定撤退吗？"
 ## 控制器（场景内 BattleController 节点）
 var controller: BattleController = null
 ## GameData 单例引用
@@ -257,9 +265,18 @@ func _OnBattleEnded(result: BattleResult) -> void:
 	# M2 批 3+E3-01①：回传包**合并键**写入（战斗结果并入既有 expedition_run/
 	# 锚点——整体替换会丢 run 引用断续跑链）
 	_return_payload[&"battle_result"] = result
+	# 功能二批 3：本战我方倒地名单（context.allies 过滤——不含敌方）传
+	## 结算面板（RETREAT 分流/VICTORY 追加行）
+	var ally_downed: Array[String] = []
+	for ally: BattleUnit in context.allies:
+		if not ally.alive:
+			ally_downed.append(ally.display_name)
 	%ResultPanel.show_result.call_deferred(result,
 			func(unit_id: StringName) -> String: return context.display_name_of(unit_id),
-			context.cfg)
+			context.cfg, ally_downed)
+	# S4-R2-02：终局后按钮组置灰（终局判据 current_unit/awaiting_command 均
+	## 收束自然全灰——此前撤退终局后点撤退钮白弹确认窗、技能钮仍画范围层）
+	_RefreshActionBarForCurrentTurn.call_deferred()
 
 # --------------------------------------------------------------------------
 # 玩家输入（板面点按 → 两段式确认）
@@ -430,11 +447,13 @@ func _RefreshActionBarForCurrentTurn() -> void:
 	## 非指令窗或行动轮已收束（current_unit 为 null——双完成自动结束/非我方轮）
 	## → 全灰（现行行动轮外语义）；指令窗内 → 复用 _RefreshActionBar 按真实
 	## 可用性逐钮判断（has_acted 置灰技能钮、行动结束/撤退保持可用——
-	## 2026-09-24 三轮反馈用户口径：不写死全灰）
+	## 2026-09-24 三轮反馈用户口径：不写死全灰）；S4-R2-02：终局（_battle_over）
+	## 恒全灰——终局若发生在玩家指令窗内 awaiting_command 可能仍为 true，
+	## 单靠窗口判据不全灰（撤退钮白弹确认窗/技能钮画范围层）
 	## 参数：无
 	## 返回：无
 	var unit: BattleUnit = null if controller == null else controller.current_unit
-	if unit == null or not controller.awaiting_command:
+	if unit == null or not controller.awaiting_command or controller._battle_over:
 		%AttackButton.disabled = true
 		%SkillButtonA.disabled = true
 		%SkillButtonB.disabled = true
@@ -460,9 +479,10 @@ func _RefreshActionBar(unit: BattleUnit) -> void:
 	%RetreatButton.disabled = not active
 	if not active:
 		return
-	# 普攻常驻（D3）：标签取技能名 + hover 描述（2026-09-24 二轮反馈）
+	# 普攻常驻（D3）：标签取技能名 + hover 描述（2026-09-24 二轮反馈）；
+	# S4-R5-01③：回退文案改 COMMON_ATTACK_NAME 常量消费（原字面量死键）
 	var attack: SkillDef = context.skill_lookup.call(unit.base_attack_id) as SkillDef
-	%AttackButton.text = attack.display_name if attack != null else "普攻"
+	%AttackButton.text = attack.display_name if attack != null else COMMON_ATTACK_NAME
 	%AttackButton.tooltip_text = _SkillTooltip(unit, attack)
 	# 两个主动技钮（skill_ids 第 2/3 项 = 档 1 技能；不足则隐藏）
 	var skill_slots: Array = [%SkillButtonA, %SkillButtonB]
@@ -645,11 +665,17 @@ func _OnReturnPressed() -> void:
 	## 返回按钮：路由 return_to（缺省公会壳）并回传战斗结果与运行态
 	## 参数：无
 	## 返回：无
-	# R4-15：关键入口消费 go 返回值——切换失败可感知（日志层反馈）
+	# R4-15：关键入口消费 go 返回值——切换失败可感知（日志层反馈）；
+	# S5-R2-01：失败不再仅静默 push_warning——IdleLabel 可见提示；
+	# S5-R3-02：按回向分流语境文案（回探索口按钮是「继续探索」——
+	## 提示不得显示「返回公会」；降级撤退口维持 DEGRADED_RETURN_FAIL_TEXT）
 	var target: int = _return_to if _return_to >= 0 else SceneManagerScript.SceneId.GUILD_SHELL
 	var err: Error = get_node("/root/SceneManager").go(target, _return_payload)
 	if err != OK:
 		push_warning("battle_screen: 返回目标场景失败（错误码 %d）" % err)
+		%IdleLabel.text = RETURN_EXPLORE_FAIL_TEXT % err if _HoldsExpeditionLock() \
+				else DEGRADED_RETURN_FAIL_TEXT % err
+		%IdleLabel.visible = true
 
 func _RestoreMoveRangeIfUsable(unit: BattleUnit) -> void:
 	## 取消选择后回显移动范围（R3-05 拍板：仅未移动且未被控制时回显——
@@ -689,13 +715,36 @@ func _on_retreat_button_pressed() -> void:
 	if controller == null or context == null:
 		_SettleDegradedRunForDeadQuestExit()
 		_return_to = -1
-		# S3-M5-1-c：消费 go 返回值（R4-15 口径——切换失败可感知）
+		# S3-M5-1-c：消费 go 返回值（R4-15 口径——切换失败可感知）；
+		# S3-06：失败不再静默 push_warning 死路——降级待机行转提示（可见反馈）
 		var degraded_err: Error = get_node("/root/SceneManager").go(
 				SceneManagerScript.SceneId.GUILD_SHELL)
 		if degraded_err != OK:
 			push_warning("battle_screen: 降级返回公会壳失败（错误码 %d）" % degraded_err)
+			%IdleLabel.text = DEGRADED_RETURN_FAIL_TEXT % degraded_err
+			%IdleLabel.visible = true
 		return
+	# 功能二批 3（Q-A 拍板：恒弹+增强）：本战倒地名单（context.allies 过滤
+	## not alive——不可用 result.downed_units，其含敌方）非空时注入增强
+	## 文案；无倒地时 tscn 静态文案维持不变
+	var downed_names: Array[String] = []
+	for ally: BattleUnit in context.allies:
+		if not ally.alive:
+			downed_names.append(ally.display_name)
+	if not downed_names.is_empty():
+		%RetreatConfirm.dialog_text = RETREAT_CONFIRM_DOWNED % [downed_names.size(),
+				"、".join(downed_names), _InjuryRestDaysForHint()]
 	%RetreatConfirm.popup_centered()
+
+func _InjuryRestDaysForHint() -> int:
+	## 重伤休养天数读取（功能二批 3：撤退弹窗警示消费——公会会话就绪走
+	## injury_rest_days() 宿舍缩减后值；无公会会话回退战斗上下文 cfg 基础值）
+	## 参数：无
+	## 返回：天数
+	var guild_state: Node = get_node_or_null("/root/GuildState")
+	if guild_state != null and guild_state.core != null and guild_state.core.cfg != null:
+		return guild_state.core.injury_rest_days()
+	return maxi(1, context.cfg.injury_rest_days)
 
 func _SettleDegradedRunForDeadQuestExit() -> void:
 	## 降级路径 run 结算（M-2）：回传包携带出征会话且公会会话就绪时按 RETREAT
@@ -712,7 +761,12 @@ func _SettleDegradedRunForDeadQuestExit() -> void:
 		return
 	if GuildCore.is_demo_session(degraded_run, guild_state.core):
 		return
-	guild_state.settle_expedition(degraded_run, GuildCore.ExpeditionOutcome.RETREAT)
+	# S3-R2-02：消费结算摘要——RETURN_SETTLED 写盘失败不再零感知（摘要此前
+	# 被丢弃；失败置 last_autosave_failed 供回城后 RefreshAll 呈现）
+	var summary: GuildCore.ExpeditionSummary = guild_state.settle_expedition(
+			degraded_run, GuildCore.ExpeditionOutcome.RETREAT)
+	if summary != null and summary.save_failed:
+		guild_state.last_autosave_failed = true
 
 func _on_retreat_confirm_confirmed() -> void:
 	## 撤退确认：发起撤退（RETREAT = 委托失败口径占位）

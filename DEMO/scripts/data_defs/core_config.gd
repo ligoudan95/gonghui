@@ -54,7 +54,8 @@ enum Mode {
 ## 运行模式
 @export var mode: Mode = Mode.DEMO
 ## 系统启用清单：StringName 系统键 -> bool 是否启用
-## （真键 13 个 / 假键 9 个，清单以案 16 启用隔离原则为准；合法键集合见 GameConfig.SYSTEM_KEYS）
+## （真键 14 个 / 假键 8 个——M4 增补批起 quest_noncombat 翻真；清单以案 16
+## 启用隔离原则为准，合法键集合见 GameConfig.SYSTEM_KEYS）
 @export var enabled_systems: Dictionary[StringName, bool] = {}
 ## 调整值换算偏移：调整值 = floor((属性 - attr_modifier_offset) / attr_modifier_divisor)（案 17 §3.3）
 @export var attr_modifier_offset: int = 0

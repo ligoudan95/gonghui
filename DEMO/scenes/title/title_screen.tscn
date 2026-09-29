@@ -77,7 +77,7 @@ ok_button_text = "开始新游戏"
 dialog_text = "已有存档——开始新游戏将覆盖现有存档，确定继续吗？"
 cancel_button_text = "取消"
 
-[node name="SettingsHost" type="Control" parent="." unique_id=1030349495]
+[node name="SettingsHost" type="CenterContainer" parent="." unique_id=1030349495]
 unique_name_in_owner = true
 visible = false
 layout_mode = 1

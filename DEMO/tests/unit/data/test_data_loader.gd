@@ -20,7 +20,12 @@ var _original_map_text: String = ""
 var _original_skill_text: String = ""
 
 func after() -> void:
-	## 套件后置：热重载用例兜底还原（原文缓存非空 = 用例中断未还原）
+	## 套件后置：热重载用例兜底还原（原文缓存非空 = 用例中断未还原）；
+	## S5-R4-03：还原写盘后补对应域 reload——失败路径共享内存实例残留探针
+	## 值，级联误导后续套件红灯。
+	## 口径订正（S5-R5-01，原注释错误论断）：before() 实为**套件级一次**
+	## 钩子（非每用例）——_game_data 套件内共享；用例中断的同套件残留由
+	## 同套件无值断言用例容忍，跨套件污染由本 after() 还原+reload 收口
 	## 参数：无
 	## 返回：无
 	if not _original_cfg_text.is_empty():
@@ -29,18 +34,21 @@ func after() -> void:
 		restorer.store_string(_original_cfg_text)
 		restorer.close()
 		_original_cfg_text = ""
+		_game_data.reload_domain(&"core")
 	if not _original_map_text.is_empty():
 		var map_restorer: FileAccess = FileAccess.open(
 				"res://data/map/maps/map_m1_village_mine.tres", FileAccess.WRITE)
 		map_restorer.store_string(_original_map_text)
 		map_restorer.close()
 		_original_map_text = ""
+		_game_data.reload_domain(&"map/maps")
 	if not _original_skill_text.is_empty():
 		var skill_restorer: FileAccess = FileAccess.open(
 				"res://data/class/skills/skl_arcanist_bewitch.tres", FileAccess.WRITE)
 		skill_restorer.store_string(_original_skill_text)
 		skill_restorer.close()
 		_original_skill_text = ""
+		_game_data.reload_domain(&"class/skills")
 
 func before() -> void:
 	## 套件前置：实例化 GameData 脚本节点并显式初始化（扫描全数据域）

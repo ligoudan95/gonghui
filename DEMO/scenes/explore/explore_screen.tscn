@@ -93,35 +93,37 @@ grow_vertical = 2
 mouse_filter = 2
 z_index = 100
 
-[node name="SettlementPanel" type="PanelContainer" parent="."]
+[node name="SettlementHost" type="CenterContainer" parent="."]
 unique_name_in_owner = true
 visible = false
 layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -360.0
-offset_top = -160.0
-offset_right = 360.0
-offset_bottom = 160.0
-grow_horizontal = 1
-grow_vertical = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
 z_index = 100
 
-[node name="SettleBox" type="VBoxContainer" parent="SettlementPanel"]
+[node name="SettlementPanel" type="PanelContainer" parent="SettlementHost"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(720, 0)
+layout_mode = 2
+z_index = 100
+
+[node name="SettleBox" type="VBoxContainer" parent="SettlementHost/SettlementPanel"]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="SettlementTitle" type="Label" parent="SettlementPanel/SettleBox"]
+[node name="SettlementTitle" type="Label" parent="SettlementHost/SettlementPanel/SettleBox"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 34
 text = ""
 horizontal_alignment = 1
 
-[node name="SettlementBody" type="Label" parent="SettlementPanel/SettleBox"]
+[node name="SettlementBody" type="Label" parent="SettlementHost/SettlementPanel/SettleBox"]
 autowrap_mode = 2
 unique_name_in_owner = true
 layout_mode = 2
@@ -129,7 +131,7 @@ theme_override_font_sizes/font_size = 20
 text = ""
 horizontal_alignment = 1
 
-[node name="SettlementButton" type="Button" parent="SettlementPanel/SettleBox"]
+[node name="SettlementButton" type="Button" parent="SettlementHost/SettlementPanel/SettleBox"]
 unique_name_in_owner = true
 layout_mode = 2
 custom_minimum_size = Vector2(220, 48)

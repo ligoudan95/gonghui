@@ -81,12 +81,16 @@ func _SpawnAndStart(template_id: StringName, party_count: int) -> QuestInstance:
 	return inst
 
 func _MakeRun(template_id: StringName, party_count: int,
-		total_days: int = 1) -> ExpeditionRun:
-	## 构建出征会话（队员=名册前 N 人引用；判据上下文按模板对齐）
+		total_days: int = 1, mark_downed: bool = false) -> ExpeditionRun:
+	## 构建出征会话（队员=名册前 N 人引用；判据上下文按模板对齐；批 3 起
+	## mark_downed=全队 run.downed 标记——DEFEAT 等价性=战败全员必倒地）
 	var run := ExpeditionRun.new()
 	run.base_days = total_days
 	for index: int in party_count:
 		run.party.append(_core.roster[index])
+	if mark_downed:
+		for adv: AdventurerData in run.party:
+			run.downed[adv] = true
 	run.quest_template_id = template_id
 	var tpl: QuestTemplateDef = _game_data.get_record(template_id) as QuestTemplateDef
 	if tpl != null:
@@ -217,6 +221,9 @@ func test_defeat_injury_remaining_by_trip_length() -> void:
 		run.base_days = trip_days
 		run.party = [core.roster[0], core.roster[1], core.roster[2]]
 		run.quest_template_id = &"q_lair_purge"
+		# 批 3：DEFEAT 等价性——战败全员必倒地
+		for adv: AdventurerData in run.party:
+			run.downed[adv] = true
 		var summary: GuildCore.ExpeditionSummary = core.settle_expedition(run,
 				GuildCore.ExpeditionOutcome.DEFEAT)
 		assert_int(summary.injury_rest_days).is_equal(3)

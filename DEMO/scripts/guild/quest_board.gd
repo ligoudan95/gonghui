@@ -342,7 +342,9 @@ func restore_snapshot(data: Dictionary) -> void:
 	## 返回：无
 	board.clear()
 	accepted.clear()
-	serial = int(data.get("serial", 1))
+	# S3-R4-02：serial 裸 int() 前置门卫（容器脏值中止 restore 链——回退默认 1）
+	var raw_serial: Variant = data.get("serial", 1)
+	var serial_value: int = int(raw_serial) if SaveData.IsIntLike(raw_serial) else 1
 	var board_data: Variant = data.get("board", [])
 	if board_data is Array:
 		for inst_data: Variant in board_data:
@@ -359,3 +361,12 @@ func restore_snapshot(data: Dictionary) -> void:
 			var inst: QuestInstance = QuestInstance.from_dict(inst_data)
 			if inst != null:
 				accepted.append(inst)
+	# S3-R5-01：serial 追平已恢复实例最大号 +1——脏 serial 回退 1 后发号会
+	# 追平既有存活实例（find_on_board/find_accepted 首匹配定位歧义——
+	# 玩家点新单接到旧实例、错单出征/放弃）
+	var max_serial: int = 0
+	for inst: QuestInstance in board:
+		max_serial = maxi(max_serial, inst.serial)
+	for inst: QuestInstance in accepted:
+		max_serial = maxi(max_serial, inst.serial)
+	serial = maxi(serial_value, max_serial + 1)

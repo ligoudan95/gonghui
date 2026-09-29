@@ -23,6 +23,8 @@ func before_test() -> void:
 	scene_manager.previous_id = -1
 	var no_params: Dictionary = {}
 	scene_manager.pending_params = no_params
+	# S5-R2-02：复位切换重入锁（用例中断残留 _switch_pending=true 会连锁假失败）
+	scene_manager._switch_pending = false
 	get_tree().root.get_node("SaveManager").set_expedition_lock(false)
 	# M-10：套件卫生统一（P1/P4 用例触真实 GuildState 写档）——统一复位
 	_ResetAutoloadState()
@@ -352,6 +354,36 @@ func test_chain5_random_encounter_cap_once() -> void:
 	assert_int(run.random_encounters_fired).is_equal(1)
 	assert_object(get_tree().root.find_child("BattleScreen", true, false)).is_null()
 
+func test_s2r201_encounter_route_fail_rolls_back_visited() -> void:
+	## S2-R2-01：遭遇路由失败回滚 visited 标记——掷遭遇时触发格已登记
+	## visited，go 失败（_switch_pending 重入锁注入）后计数不增且触发格
+	## visited 回滚（新格资格保留——重踏该格仍可再掷；此前永不再掷=死遭遇）
+	var hit_seed: int = -1
+	for seed_value: int in range(10000):
+		var probe := RandomNumberGenerator.new()
+		probe.seed = seed_value
+		if probe.randf() < 0.04:
+			hit_seed = seed_value
+			break
+	var run := _MakeQuestRun(&"q_lair_purge")
+	var screen: Control = await _OpenExplore(run)
+	screen._encw_by_region[&"reg_mine"] = _ForceHitWeight()
+	screen._rng.seed = hit_seed
+	# 注入 go 失败：切换重入锁（go 返回 FAILED——路由失败零副作用回滚路径）
+	var scene_manager: Node = get_tree().root.get_node("SceneManager")
+	scene_manager._switch_pending = true
+	screen._OnCellPressed(Vector2i(7, 4))
+	await _WaitFrames(12)
+	scene_manager._switch_pending = false
+	# 命中种子首掷即中：移动在首个矿洞格中断（未达目标 (7,4)）、未路由战斗、
+	# 计数不增 + 触发格 visited 回滚
+	assert_bool(run.party_pos != Vector2i(7, 4)) \
+			.override_failure_message("命中遭遇应中断移动").is_true()
+	assert_int(run.random_encounters_fired).is_equal(0)
+	assert_object(get_tree().root.find_child("BattleScreen", true, false)).is_null()
+	assert_bool(run.visited_cells.has(run.party_pos)) \
+			.override_failure_message("路由失败应回滚触发格 visited——新格资格保留").is_false()
+
 func test_lock_channel_defeat_terminates_and_unlocks() -> void:
 	## 锁通道③战败：回传 DEFEAT → 占位终结（委托失败）→ 回城解锁
 	var run := _MakeQuestRun(&"q_lair_purge")
@@ -400,9 +432,10 @@ func test_p1_battle_retreat_maps_retreat_no_injury() -> void:
 	for adv: AdventurerData in core.roster:
 		assert_int(adv.status).is_equal(AdventurerData.Status.HEALTHY)
 
-func test_p1_retreat_with_downed_member_still_no_injury() -> void:
-	## 低危 3（P1 输入形态补全）：战斗中已有队员倒地时撤退——RETREAT 分支
-	## 先于 all_downed/DEFEAT 判定，倒地≠重伤，仍走无重伤口径（名册全员健康）
+func test_p1_retreat_with_downed_member_converts_to_injury() -> void:
+	## 低危 3（P1 输入形态补全；功能二批 3 Q8/P1 修订表述更新）：战斗中已有
+	## 队员倒地时撤退——RETREAT 仍走失败通道，但倒地者回城转重伤（单漏斗：
+	## 有倒地必转），存活者保持健康
 	var guild_state: Node = get_tree().root.get_node("GuildState")
 	guild_state.core = GuildCore.new()
 	guild_state.new_game()
@@ -426,10 +459,13 @@ func test_p1_retreat_with_downed_member_still_no_injury() -> void:
 	assert_bool(run.downed.get(core.roster[0], false)).is_true()
 	assert_bool(screen.get_node("%SettlementPanel").visible).is_true()
 	assert_str(screen.get_node("%SettlementTitle").text).contains("委托失败")
-	assert_str(screen.get_node("%SettlementBody").text).contains("无重伤")
-	# 撤退（含带倒地者）不触发重伤——全名册保持健康
-	for adv: AdventurerData in core.roster:
-		assert_int(adv.status).is_equal(AdventurerData.Status.HEALTHY)
+	# P1 修订（Q8 拍板）：倒地者回城转重伤休养（正文带重伤行）、存活者健康
+	assert_str(screen.get_node("%SettlementBody").text).contains("倒地队员（")
+	assert_str(screen.get_node("%SettlementBody").text).contains("负伤，需休养")
+	assert_int(core.roster[0].status).is_equal(AdventurerData.Status.RESTING)
+	assert_int(core.roster[0].rest_days).is_greater(0)
+	assert_int(core.roster[1].status).is_equal(AdventurerData.Status.HEALTHY)
+	assert_int(core.roster[2].status).is_equal(AdventurerData.Status.HEALTHY)
 
 # --------------------------------------------------------------------------
 # M3 质检修复批（43 项——高危/中危补测）
@@ -870,3 +906,47 @@ func test_g2_all_downed_finish_session_idempotent() -> void:
 	assert_int(core.day).is_equal(day_after)
 	assert_int(core.gold).is_equal(gold_after)
 	assert_bool(screen.get_node("%SettlementPanel").visible).is_true()
+
+func test_s2r405_encounter_victory_resume_triggers_standing_enter_point() -> void:
+	## S2-R4-05：遭遇战胜利原位继续补查当前格未消耗 ENTER 点——「战后站上
+	## 无反应」缺口；站上必然遭遇点应立即路由战斗（重放移动链 d 步检查）；
+	## 内联挂载（不走 _ResumeExplore——其等待后的属性赋值会落在已被路由
+	## 离开的探索屏实例上）
+	var run := _MakeQuestRun(&"q_lair_purge")
+	run.party_pos = Vector2i(7, 14)
+	var scene_manager: Node = get_tree().root.get_node("SceneManager")
+	var payload: Dictionary = {
+		&"expedition_run": run,
+		&"battle_result": _MakeResult(BattleResult.ResultKind.VICTORY, 20, false),
+		&"event_id": &"",
+		&"battle_node_id": &"",
+		&"encounter_pack_id": &"enc_m1_random_pack",
+	}
+	assert_int(scene_manager.go(SCENE_EXPLORE, payload)).is_equal(OK)
+	await _WaitFrames(8)
+	assert_int(scene_manager.current_id).is_equal(SCENE_BATTLE)
+	assert_bool(run.consumed_events.has(&"evp_mine_lair")).is_true()
+
+func test_s4r401_retreat_button_disabled_after_finish() -> void:
+	## S4-R4-01：会话终结后撤退钮视觉禁用（此前视觉可点但静默拦截零反馈）
+	var run := _MakeQuestRun(&"q_lair_purge")
+	var screen: Control = await _ResumeExplore(run,
+			_MakeResult(BattleResult.ResultKind.DEFEAT, 0, true))
+	assert_bool(screen.get_node("%SettlementPanel").visible).is_true()
+	assert_bool((screen.get_node("%RetreatButton") as Button).disabled).is_true()
+
+func test_s2r501_route_fail_rollback_rechecks_standing_enter() -> void:
+	## S2-R5-01：随机遭遇路由失败回滚后就地复查当前格未消耗 ENTER——
+	## 站上链事件点直接打开事件面板（同格再点按 path.size()==1 无 ENTER 段，
+	## 不再依赖「走开再走回」恢复）
+	var run := _MakeQuestRun(&"q_lair_purge")
+	var screen: Control = await _OpenExplore(run)
+	run.party_pos = Vector2i(4, 7)
+	var scene_manager: Node = get_tree().root.get_node("SceneManager")
+	scene_manager._switch_pending = true
+	screen._RunRandomEncounter(_ForceHitWeight(), Vector2i(4, 7), true)
+	scene_manager._switch_pending = false
+	# 回滚（新格资格保留）+ ENTER 复查命中链事件点（面板打开不走 go）
+	assert_bool(run.visited_cells.has(Vector2i(4, 7))).is_false()
+	assert_bool(screen.get_node("%PanelHost").visible).is_true()
+	assert_bool(screen._event_open).is_true()

@@ -39,6 +39,9 @@ var _last_parse_fail_reason: String = ""
 ## 最近一次正本打开失败错误码（W4-10：_ReadSaveTextWithFallback 读正本失败
 ## 当场捕获——load_game 组装 fail_reason 时再取会被后续 .bak 打开覆写）
 var _last_primary_open_error: int = OK
+## 最近一次正本打开成功标记（S3-03：区分「正本打不开」与「正本可打开但
+## 内容为空串」——空文件不再复用残留错误码 0 的「无法打开」文案误导排障）
+var _last_primary_open_ok: bool = false
 
 ## 出征锁（#26：出征中不自动存档；M3 出征层经 set_expedition_lock 调用）
 var _expedition_lock: bool = false
@@ -95,8 +98,11 @@ func load_game() -> SaveData:
 		return null
 	var text: String = _ReadSaveTextWithFallback()
 	# W4-10：正本打开失败码已由 _ReadSaveTextWithFallback 先行捕获（原此处
-	# 再取 get_open_error 会拿到 .bak 兜底打开后的错误码——文案失真）
-	var fail_reason: String = "存档文件无法打开（错误码 %d）" % _last_primary_open_error
+	# 再取 get_open_error 会拿到 .bak 兜底打开后的错误码——文案失真）；
+	# S3-03：正本可打开但内容为空串（半写产物）与「打不开」分文案——空文件
+	# 复用残留错误码 0 的「无法打开」会误导排障
+	var fail_reason: String = "存档文件无法打开（错误码 %d）" % _last_primary_open_error \
+			if not _last_primary_open_ok else "存档文件为空（可能未写完）"
 	var data: SaveData = null
 	if not text.is_empty():
 		data = _ParseSaveText(text)
@@ -144,6 +150,16 @@ func has_save() -> bool:
 	## 返回：true = 正本存在
 	return FileAccess.file_exists(SAVE_PATH)
 
+func has_loadable_save() -> bool:
+	## 是否存在可读档（正本**或 .bak** 任一存在——S3/S5-R4-01：三段式崩溃
+	## 窗口留下「只有 .bak」时 has_save() 恒 false，title「继续」被禁用
+	##（load_game 的 .bak 兜底走不到）且「开始」不弹 P2 覆盖确认直接
+	## new_game——_WriteAtomic 在 has_save()==false 时跳过备份并
+	## remove(BAK_PATH)，唯一幸存档被静默删除；UI 侧存档存在性判定一律走本口）
+	## 参数：无
+	## 返回：true = 正本或 .bak 存在
+	return FileAccess.file_exists(SAVE_PATH) or FileAccess.file_exists(BAK_PATH)
+
 func set_expedition_lock(locked: bool) -> void:
 	## 设置出征锁（M3 出征层调用；锁生效期间 autosave 跳过）
 	## 参数 locked：true = 出征中
@@ -178,14 +194,22 @@ func _CollectSnapshots() -> void:
 			push_warning("SaveManager: 快照 provider '%s' 返回值非 Dictionary，跳过" % sys_name)
 
 func _RestoreSnapshots() -> void:
-	## 遍历 provider 恢复各系统快照（payload 无该系统键则跳过）
+	## 遍历 provider 恢复各系统快照（payload 无该系统键跳过；**值类型不符
+	## 跳过 restore 调用**（S3-R2-01：[]/标量/null 直调会触发 provider 侧
+	## 类型校验错误中止 restore 链——与写入侧 _CollectSnapshots 的 Dictionary
+	## 判定对称；对应系统的残留清空走各自 save_loaded 钩子，GuildState 先例）
 	## 参数：无
 	## 返回：无
 	for sys_name: StringName in _snapshot_providers:
-		if not current.payload.has(sys_name):
+		var raw_payload: Variant = current.payload.get(sys_name, null)
+		if raw_payload == null:
+			continue
+		if not (raw_payload is Dictionary):
+			push_warning("SaveManager: 快照 '%s' 值类型异常（%s，期望 Dictionary）——跳过恢复" % [
+					sys_name, type_string(typeof(raw_payload))])
 			continue
 		var provider: Array = _snapshot_providers[sys_name]
-		provider[1].call(current.payload[sys_name])
+		provider[1].call(raw_payload)
 
 func _WriteAtomic(json_text: String) -> Error:
 	## 原子写（B-2 三段式 + S5-1 半写链加固）：建目录→写 tmp（store 后查
@@ -232,7 +256,21 @@ func _WriteAtomic(json_text: String) -> Error:
 			var remove_err: Error = dir.remove(SAVE_PATH)
 			if remove_err != OK and has_save():
 				return remove_err
-			return dir.rename(TEMP_PATH, SAVE_PATH)
+			# S3-04：降级 rename 失败时用 copy 重建正本（tmp 仍在盘——保证正本
+			# 与 .bak 不双缺失；copy 失败才认输返回错误码）；S3-R4-03：copy
+			# 成功分支同回滚口径清 tmp（copy 不消费源——残留中转文件）
+			var rename_err: Error = dir.rename(TEMP_PATH, SAVE_PATH)
+			if rename_err == OK:
+				return OK
+			var copy_err: Error = dir.copy(TEMP_PATH, SAVE_PATH)
+			if copy_err == OK:
+				push_warning("SaveManager: 降级 rename 失败（错误码 %d），已用 copy 重建正本"
+						% rename_err)
+				dir.remove(TEMP_PATH)
+				return OK
+			push_error("SaveManager: 正本重建失败（rename %d / copy %d）——正本缺失"
+					% [rename_err, copy_err])
+			return rename_err
 	# ③tmp → 正本（正本已挪走，无覆盖冲突）；成功清 .bak
 	var rename_err: Error = dir.rename(TEMP_PATH, SAVE_PATH)
 	if rename_err == OK:
@@ -255,6 +293,7 @@ func _ReadSaveTextWithFallback() -> String:
 	## 参数：无
 	## 返回：存档文本；两处均不可读返回空串
 	var file: FileAccess = FileAccess.open(SAVE_PATH, FileAccess.READ)
+	_last_primary_open_ok = file != null
 	if file == null:
 		_last_primary_open_error = FileAccess.get_open_error()
 		push_warning("SaveManager: 正本无法打开（错误码 %d），尝试 .bak 兜底" % _last_primary_open_error)

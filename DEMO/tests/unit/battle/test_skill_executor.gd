@@ -366,6 +366,23 @@ func test_frost_chain_applies_status_on_hit() -> void:
 	assert_bool(ids.has(&"DEBUFF_root")).is_true()
 	assert_bool(ids.has(&"DEBUFF_slow")).is_true()
 
+func test_kill_target_skips_status_apply_on_corpse() -> void:
+	## S2-02：击杀目标后不再向尸体施加状态（STATUS_APPLY 门补 not target.alive
+	## ——仅 STATUS 类；伤害照常结算、倒地照常回调）
+	var mage := _MakeMage(Vector2i(3, 6))
+	var rat := _MakeTrash(Vector2i(3, 4))
+	rat.hp = 1
+	var result: SkillExecutor.ExecutionResult = _executor.execute(mage,
+			_LoadSkill(&"skl_mage_frost_chain"), rat.grid_pos, _Ctx(1, 0))
+	assert_bool(result.hit).is_true()
+	assert_int(result.damage).is_equal(11)
+	assert_bool(rat.alive).is_false()
+	assert_int(rat.downed_count).is_equal(1)
+	# 击杀链：状态不再施加到尸体（清单空 + 管理器无实例 + trace 无施加记录）
+	assert_int(result.applied_statuses.size()).is_equal(0)
+	assert_int(_manager.get_statuses(rat).size()).is_equal(0)
+	assert_bool(result.trace.has(&"statuses")).is_false()
+
 func test_out_of_range_fails_without_resource() -> void:
 	## 射程校验：超出曼哈顿射程失败且资源未扣（痛击射程 1，目标距 2）
 	var warrior := _MakeWarrior(Vector2i(3, 6))

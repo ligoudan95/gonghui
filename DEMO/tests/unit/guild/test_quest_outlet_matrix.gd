@@ -49,12 +49,16 @@ func _SpawnAndStart(template_id: StringName, party_count: int) -> QuestInstance:
 	return inst
 
 func _MakeRun(template_id: StringName, party_count: int,
-		total_days: int = 1) -> ExpeditionRun:
-	## 构建出征会话（队员=名册前 N 人引用；判据上下文按模板对齐）
+		total_days: int = 1, mark_downed: bool = false) -> ExpeditionRun:
+	## 构建出征会话（队员=名册前 N 人引用；判据上下文按模板对齐；批 3 起
+	## mark_downed=全队 run.downed 标记——DEFEAT 等价性=战败全员必倒地）
 	var run := ExpeditionRun.new()
 	run.base_days = total_days
 	for index: int in party_count:
 		run.party.append(_core.roster[index])
+	if mark_downed:
+		for adv: AdventurerData in run.party:
+			run.downed[adv] = true
 	run.quest_template_id = template_id
 	var tpl: QuestTemplateDef = _game_data.get_record(template_id) as QuestTemplateDef
 	if tpl != null:
@@ -112,7 +116,7 @@ func test_defeat_outlet_full_release_matrix() -> void:
 	var party: Array[StringName] = inst.party_ids.duplicate()
 	var gold_before: int = _core.gold
 	var summary: GuildCore.ExpeditionSummary = _core.settle_expedition(
-			_MakeRun(&"q_vein_survey", 2), GuildCore.ExpeditionOutcome.DEFEAT)
+			_MakeRun(&"q_vein_survey", 2, 1, true), GuildCore.ExpeditionOutcome.DEFEAT)
 	assert_int(summary.gold_gained).is_equal(0)
 	assert_int(_core.gold).is_equal(gold_before)
 	assert_int(summary.injury_rest_days).is_equal(3)
@@ -135,7 +139,7 @@ func test_defeat_bench_member_can_expedition_same_day() -> void:
 	## DEFEAT × 板凳交叉：出征队战败重伤——板凳成员同日（回城日）即可组队出征
 	## （不受牵连的进阶：无出征标记占用）
 	var inst: QuestInstance = _SpawnAndStart(&"q_vein_survey", 2)
-	_core.settle_expedition(_MakeRun(&"q_vein_survey", 2),
+	_core.settle_expedition(_MakeRun(&"q_vein_survey", 2, 1, true),
 			GuildCore.ExpeditionOutcome.DEFEAT)
 	assert_int(_core.roster[0].status).is_equal(AdventurerData.Status.RESTING)
 	assert_int(_core.roster[1].status).is_equal(AdventurerData.Status.RESTING)

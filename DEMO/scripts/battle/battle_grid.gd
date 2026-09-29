@@ -338,6 +338,10 @@ func _BaseTileAt(pos: Vector2i) -> TileTypeDef:
 
 static func _Bresenham(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
 	## Bresenham 格线（整数误差项迭代，端点含）
+	## 消费契约（S2-R4-03，单向）：视线判定 has_line_of_sight 仅以
+	## **施放者→目标**方向消费（from=施放者）——误差项迭代对调 from/to
+	## 不保证产出同一条格线（格线方向不对称）；对称视线或反向消费需求
+	## 出现时须先改双向判定，勿直接复用反向调用
 	## 参数 from/to：起终坐标
 	## 返回：线上的格坐标序列（含两端）
 	var points: Array[Vector2i] = []
