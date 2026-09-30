@@ -25,7 +25,7 @@
 
 ## 近期关键记录
 
-- 2026-09-30（**M5 全链收官：五席盲审修复批闭环+提交推送；下一步 M6 内容填充与美术替换**）：用户指令「审查代码找漏洞修复」→五席盲审（S1 数据/S2 纯逻辑/S3 存档/S4 UI/S5 框架）38 项发现（高1/中7/低30）→33 修+2 勘误+3 挂 M6，809 用例+139 资源全绿（797→+13−1）。**高危 S5-01**：_GoBattle 赋值覆盖 initial_statuses，B 出口战开局载入（evn_wisp_n2 全员 exposed）自 M2 从未生效——改 append_array 合并+屏级合流用例；**中危 7** 含协会屏委托板 11 单溢出（BoardHost 改 ScrollContainer，用户可见）与 battle 屏弹窗守卫残留。V-R4 系列校验 5 条新增（skill-combo/dead-content/asset-reverse/pack-elite-first/enemy-skill-kind）。勘误 2（变异鼠 race_tag 默认即 BEAST 席位看错行；outcome 互斥规则 M2 已存在）。**挂 M6 账 3**：文案单源批量收编（10 文件）/极矮窗口布局/点位 map 归属字段化（多图前必须，本批已加登记注）。用户拍板「M5 结束」——M5 连同三批加固迭代全部收官。本日角色：programmer=agent_a153ef39/docs-updater=agent_ea11a922/git-admin=见下；盲审五席一次性。恢复锚点 logs/2026-09-30.md。
+- 2026-09-30（**M5 全链收官：五席盲审修复批闭环+提交推送；下一步 M6 内容填充与美术替换**）：用户指令「审查代码找漏洞修复」→五席盲审（S1 数据/S2 纯逻辑/S3 存档/S4 UI/S5 框架）38 项发现（高1/中7/低30）→33 修+2 勘误+3 挂 M6，809 用例+139 资源全绿（797→+13−1）。**高危 S5-01**：_GoBattle 赋值覆盖 initial_statuses，B 出口战开局载入（evn_wisp_n2 全员 exposed）自 M2 从未生效——改 append_array 合并+屏级合流用例；**中危 7** 含协会屏委托板 11 单溢出（BoardHost 改 ScrollContainer，用户可见）与 battle 屏弹窗守卫残留。V-R4 系列校验 5 条新增（skill-combo/dead-content/asset-reverse/pack-elite-first/enemy-skill-kind）。勘误 2（变异鼠 race_tag 默认即 BEAST 席位看错行；outcome 互斥规则 M2 已存在）。**挂 M6 账 3**：文案单源批量收编（10 文件）/极矮窗口布局/点位 map 归属字段化（多图前必须，本批已加登记注）。用户拍板「M5 结束」——M5 连同三批加固迭代全部收官。本日角色：programmer=agent_a153ef39/docs-updater=agent_ea11a922/git-admin=agent_03f379ea；盲审五席一次性。提交链 19e21fa/d660d35/e1530d4 已推 origin/main。恢复锚点 logs/2026-09-30.md。
 
 - 2026-09-29（**全日闭环+提交推送：四批 e9d60cc/f515e8f/a541e68/cd0265d 已推 origin/main（远程 HEAD=cd0265d），797 用例+139 资源全绿，总案 v0.5.7**）：本日=①拉取同步（M5 另一机闭环成果入本机）→②五轮循环盲审加固 97 项→③试玩反馈批（毒沼中毒+倒地转重伤）→④提交推送。~~下一步待用户指示：M6~~**→已定：2026-09-30 M5 收官，下一步 M6**。遗留：limboai ~dll 未跟踪（历史注记）。细节见 logs/2026-09-29.md。
 
