@@ -267,6 +267,9 @@ func _BuildIconLayers() -> void:
 	## （Z_PARTY——迷雾之上，深色描边保证可读）
 	## 参数：无
 	## 返回：无
+	## S5-03 登记注：单图假设——全域遍历无 map 归属过滤，多图出现时须为
+	## InteractPointDef/TargetPointDef 增 map 归属字段并按当前图过滤
+	## 图标构建（挂 M6）
 	for record: Resource in _game_data.get_domain(&"map/interact_points"):
 		var point := record as InteractPointDef
 		var icon := _MakeGlyphLabel(KIND_GLYPHS.get(point.kind, "?"))

@@ -692,3 +692,112 @@ func test_r5_tendency_display_name_empty_reported() -> void:
 			.override_failure_message("倾向实名空串应报错").is_true()
 	var report_after: ValidationReport = DataValidator.run_all(_game_data)
 	assert_int(report_after.errors.size()).is_equal(0)
+
+func test_v_b2_status_src_three_pool_orphans() -> void:
+	## S1-05/S5-03 三池孤儿：CHECKIN 池零引用状态（临时加 token 无引用）报
+	## warning；TILE 池同构；SKILL 白名单先例不变；BUFF_ambush 在
+	## CHECKIN_ORPHAN_WHITELIST（占位预留语义）常态零警告
+	var slow: StatusDef = _game_data.get_record(&"DEBUFF_slow") as StatusDef
+	assert_object(slow).is_not_null()
+	var sources_size: int = slow.allowed_sources.size()
+	slow.allowed_sources.append(&"CHECKIN")
+	var report: ValidationReport = DataValidator.run_all(_game_data)
+	slow.allowed_sources.resize(sources_size)
+	var checkin_orphan: bool = false
+	for entry: String in report.warnings:
+		if entry.begins_with("V-B2-status-src") and entry.contains("DEBUFF_slow") \
+				and entry.contains("CHECKIN"):
+			checkin_orphan = true
+	assert_bool(checkin_orphan) \
+			.override_failure_message("CHECKIN 零引用状态应报池孤儿 warning").is_true()
+	# TILE 池同构：零地格引用的 TILE 来源状态报 warning
+	var bewitch: StatusDef = _game_data.get_record(&"DEBUFF_bewitch") as StatusDef
+	var bewitch_size: int = bewitch.allowed_sources.size()
+	bewitch.allowed_sources.append(&"TILE")
+	var tile_report: ValidationReport = DataValidator.run_all(_game_data)
+	bewitch.allowed_sources.resize(bewitch_size)
+	var tile_orphan: bool = false
+	for entry: String in tile_report.warnings:
+		if entry.begins_with("V-B2-status-src") and entry.contains("DEBUFF_bewitch") \
+				and entry.contains("TILE"):
+			tile_orphan = true
+	assert_bool(tile_orphan) \
+			.override_failure_message("TILE 零引用状态应报池孤儿 warning").is_true()
+	# 白名单命中豁免：BUFF_ambush（CHECKIN 孤儿、白名单登记）常态零警告
+	var after: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(after.warnings.size()).is_equal(0)
+
+func _HasWarning(report: ValidationReport, prefix: String, needle: String) -> bool:
+	## 报告内按前缀+关键字匹配警告（S1-08 warning 级规则断言口）
+	## 参数 report/prefix/needle：报告 / 规则前缀 / 关键字
+	## 返回：true = 命中
+	for entry: String in report.warnings:
+		if entry.begins_with(prefix) and entry.contains(needle):
+			return true
+	return false
+
+func test_v_r4_dead_content_reverse() -> void:
+	## V-R4-dead-content（S1-07）：摘除 pack 引用 → 地图零引用 warning；
+	## 职业摘 equip 覆盖 → warning（当前数据全健康，注入后命中、恢复后归零）
+	var pack: EnemyPackDef = _game_data.get_record(&"enc_m1_lair_pack") as EnemyPackDef
+	var original_map_ref: StringName = pack.battle_map_ref
+	pack.battle_map_ref = &"btm_m1_random_8x8"
+	var report: ValidationReport = DataValidator.run_all(_game_data)
+	pack.battle_map_ref = original_map_ref
+	assert_bool(_HasWarning(report, "V-R4-dead-content", "btm_m1_lair")) \
+			.override_failure_message("零 pack 引用地图应报死内容").is_true()
+	var equip: EquipDef = _game_data.get_record(&"eqp_init_warrior") as EquipDef
+	var original_class_ref: StringName = equip.class_ref
+	equip.class_ref = &"cls_nope"
+	var equip_report: ValidationReport = DataValidator.run_all(_game_data)
+	equip.class_ref = original_class_ref
+	assert_bool(_HasWarning(equip_report, "V-R4-dead-content", "cls_warrior")) \
+			.override_failure_message("零 equip 覆盖职业应报死内容").is_true()
+	var report_after: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(report_after.warnings.size()).is_equal(0)
+
+func test_v_r4_fog_lit_prefix_segment() -> void:
+	## S1-09：fog_lit_rows 跳行（[0,1,2] → [0,2]）报 V-M3-fog-lit 前缀段错误
+	var map_def: ExploreMapDef = _game_data.get_record(&"map_m1_village_mine") as ExploreMapDef
+	var original_rows: Array[int] = map_def.fog_lit_rows.duplicate()
+	map_def.fog_lit_rows = [0, 2]
+	var report: ValidationReport = DataValidator.run_all(_game_data)
+	map_def.fog_lit_rows = original_rows
+	assert_bool(_HasError(report, "V-M3-fog-lit", "前缀段")) \
+			.override_failure_message("跳行 fog_lit_rows 应报前缀段错误").is_true()
+	var report_after: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(report_after.errors.size()).is_equal(0)
+
+func test_v_r4_asset_reverse_registered() -> void:
+	## S1-10：registry 摘一条映射 → assets 资源文件未登记报 V-R4-asset-reverse；
+	## _preview* 工具产物不报（白名单排除）
+	var registry: AssetRegistry = _game_data.get_record(&"registry") as AssetRegistry
+	var original_path: String = registry.mapping[&"spr_cls_warrior"]
+	registry.mapping.erase(&"spr_cls_warrior")
+	var report: ValidationReport = DataValidator.run_all(_game_data)
+	registry.mapping[&"spr_cls_warrior"] = original_path
+	assert_bool(_HasError(report, "V-R4-asset-reverse", "spr_cls_warrior")) \
+			.override_failure_message("assets 文件摘登记应报未登记").is_true()
+	var report_after: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(report_after.errors.size()).is_equal(0)
+
+func test_v_r4_pack_elite_first() -> void:
+	## S2-06：精英条目不在 entries[0]（后置）报 V-R4-pack-elite-first；
+	## 生产 lair pack 精英首位常态零错误
+	var pack: EnemyPackDef = _game_data.get_record(&"enc_m1_lair_pack") as EnemyPackDef
+	var elite_index: int = -1
+	for index: int in pack.entries.size():
+		if pack.entries[index].is_elite:
+			elite_index = index
+	assert_int(elite_index).is_equal(0)
+	# 注入：精英条目与非精英条目换位 → 后置精英报错
+	var swapped: Array = pack.entries.duplicate()
+	swapped.reverse()
+	pack.entries = swapped
+	var report: ValidationReport = DataValidator.run_all(_game_data)
+	pack.entries = swapped.duplicate()
+	pack.entries.reverse()
+	assert_bool(_HasError(report, "V-R4-pack-elite-first", "enc_m1_lair_pack")) \
+			.override_failure_message("后置精英条目应报首位约定破坏").is_true()
+	var report_after: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(report_after.errors.size()).is_equal(0)

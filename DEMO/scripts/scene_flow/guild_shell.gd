@@ -284,39 +284,41 @@ func _ApplyAssociationBadge() -> void:
 	%AssociationButton.text = UI_TEXTS[&"association_badge"] \
 			if _guild_state().core.has_unseen_grants else UI_TEXTS[&"association_label"]
 
+func _GoWithHint(target_id: int, label: String) -> void:
+	## 四入口共用跳转（S4-07：go 重入拒绝 FAILED 分流——SceneManager 切换
+	## 进行中属正常切换态，不弹「失败请重试」误报；其余错误码可见提示）
+	## 参数 target_id：目标场景（SceneId）；label：失败提示语境词
+	## 返回：无
+	var err: Error = _scene_manager().go(target_id)
+	if err == OK:
+		return
+	if err == FAILED:
+		push_warning("guild_shell: %s被拒——场景切换进行中（正常重入）" % label)
+		return
+	push_warning("guild_shell: %s失败（错误码 %d）" % [label, err])
+	%SettleInfoLabel.text = String(UI_TEXTS[&"go_fail_hint_format"]) % err
+
 func _on_back_pressed() -> void:
 	## 「返回标题」：纯导航（不触存档——存档走五时点自动存档）
 	## 参数：无
 	## 返回：无
-	var err: Error = _scene_manager().go(SceneManagerScript.SceneId.TITLE)
-	if err != OK:
-		push_warning("guild_shell: 返回标题失败（错误码 %d）" % err)
-		%SettleInfoLabel.text = String(UI_TEXTS[&"go_fail_hint_format"]) % err
+	_GoWithHint(SceneManagerScript.SceneId.TITLE, "返回标题")
 
 func _on_dormitory_pressed() -> void:
 	## 宿舍入口（拍板⑥独立场景；scene_id=批 1 fac_ 表已落值）
 	## 参数：无
 	## 返回：无
-	var err: Error = _scene_manager().go(SceneManagerScript.SceneId.GUILD_DORMITORY)
-	if err != OK:
-		push_warning("guild_shell: 进入宿舍失败（错误码 %d）" % err)
-		%SettleInfoLabel.text = String(UI_TEXTS[&"go_fail_hint_format"]) % err
+	_GoWithHint(SceneManagerScript.SceneId.GUILD_DORMITORY, "进入宿舍")
 
 func _on_training_pressed() -> void:
 	## 训练场入口
 	## 参数：无
 	## 返回：无
-	var err: Error = _scene_manager().go(SceneManagerScript.SceneId.GUILD_TRAINING_GROUND)
-	if err != OK:
-		push_warning("guild_shell: 进入训练场失败（错误码 %d）" % err)
-		%SettleInfoLabel.text = String(UI_TEXTS[&"go_fail_hint_format"]) % err
+	_GoWithHint(SceneManagerScript.SceneId.GUILD_TRAINING_GROUND, "进入训练场")
 
 func _on_association_pressed() -> void:
 	## 协会入口（委托板/挂单管理/招募池——M4 出征入口移驻；未查看挂单标志由
 	## 协会屏 _ready 清除）
 	## 参数：无
 	## 返回：无
-	var err: Error = _scene_manager().go(SceneManagerScript.SceneId.ASSOCIATION_SCREEN)
-	if err != OK:
-		push_warning("guild_shell: 进入协会失败（错误码 %d）" % err)
-		%SettleInfoLabel.text = String(UI_TEXTS[&"go_fail_hint_format"]) % err
+	_GoWithHint(SceneManagerScript.SceneId.ASSOCIATION_SCREEN, "进入协会")

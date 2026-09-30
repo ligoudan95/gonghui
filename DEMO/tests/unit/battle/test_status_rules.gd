@@ -3,7 +3,7 @@
 ## （新 ≥ 旧才重起算）、叠层 2 上限、互斥覆盖（定身↔蛊惑）、递减三锚点
 ## （施加回合末不递减/开局载入回合 1 末递减/3 回合诅咒恰 3 跳）、即时增益
 ## duration=0 当回合末移除、控制窗口（未行动锁本回合/已行动锁下回合/蛊惑固定
-## 下回合不锁本回合 P3）、DOT 免减免、修正求和、clear_all。
+## 下回合不锁本回合 P3）、DOT 免减免、修正求和。
 ## 状态定义经字典闭包注入（带真实 DEMO 数值），不触 autoload。
 extends GdUnitTestSuite
 
@@ -400,15 +400,6 @@ func test_get_stat_mod_sums_same_key() -> void:
 	_manager.apply(unit, _statuses[&"BUFF_sprint"],
 			StatusInstance.SourceKind.SKILL, &"skl_y", 0, 1, false)
 	assert_float(_manager.get_stat_mod(unit, &"move_range")).is_equal(0.0)
-
-func test_clear_all() -> void:
-	## 清空：全部状态与行动标记归零
-	var unit := FakeUnit.new()
-	_manager.apply(unit, _statuses[&"DEBUFF_slow"],
-			StatusInstance.SourceKind.SKILL, &"skl_x", 2, 1, false)
-	_manager.on_unit_turn_finished(unit)
-	_manager.clear_all()
-	assert_int(_manager.get_statuses(unit).size()).is_equal(0)
 
 func test_end_of_round_tick_returns_dot_report() -> void:
 	## 回合末结算返回 DOT 跳伤清单（盲审批 3 D-2）：逐跳一条 {&"unit",

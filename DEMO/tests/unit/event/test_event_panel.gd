@@ -198,3 +198,30 @@ func test_s4r301_view_transition_cuts_option_input() -> void:
 	view.options.append({&"id": &"opt_pure2", &"text": "纯选择项二", &"cost_days": 0})
 	panel.show_view(view)
 	assert_bool(panel._options_box.visible).is_true()
+
+func test_cast_panel_back_button_restores_options() -> void:
+	## S4-04：非空改派名单同置「返回」钮（尾部）——误入改派可返回恢复选项
+	## 视图，不被迫选人；候选钮仍居首序（默认最高高亮口径不变）
+	var cfg: CoreConfig = _MakeCfg(0.05)
+	var panel := EventPanel.new()
+	panel.setup(cfg)
+	var candidate := AdventurerData.new()
+	candidate.display_name = "候选甲"
+	panel.set_cast_provider(func(_attr_id: StringName) -> Array:
+			return [{&"adv": candidate, &"modifier": 3}])
+	add_child(panel)
+	auto_free(panel)
+	panel.show_view(_MakeView())
+	(panel._options_box.get_child(0) as Button).pressed.emit()
+	await get_tree().process_frame
+	assert_bool(panel._cast_box.visible).is_true()
+	var cast_buttons: Array = panel._cast_box.get_children().filter(
+			func(child: Node) -> bool: return child is Button)
+	assert_int(cast_buttons.size()).is_equal(2)
+	assert_str((cast_buttons[0] as Button).text).contains("候选甲")
+	var back: Button = cast_buttons[1] as Button
+	assert_str(back.text).is_equal("返回")
+	back.pressed.emit()
+	await get_tree().process_frame
+	assert_bool(panel._options_box.visible).is_true()
+	assert_int(panel._options_box.get_child_count()).is_equal(1)

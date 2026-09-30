@@ -58,7 +58,10 @@ var _rng: RandomNumberGenerator = null
 ## 已终局事件集（E7：choose_option 结算视图已产出——同 run 同事件重复调用
 ## 拒绝，防重复入账；键 = run.get_instance_id() → {event_id: true}——W2-8：
 ## 对象键在 run 释放后仍占键位（哈希表保强引用隐患），instance_id 轻量且
-## 按 run 隔离语义不变，同 runner 驱动多 run 互不串扰）
+## 按 run 隔离语义不变，同 runner 驱动多 run 互不串扰）。
+## 生命周期（S2-13）：EventRunner 每次探索屏 _ready 新建（explore_screen
+## 装配期 new），无跨 run 复用——终局集随屏实例销毁释放，不存在永不清理
+## 的增长泄漏；键为 int（instance_id）不持 run 强引用
 var _finalized_events: Dictionary = {}
 
 func setup(cfg: CoreConfig, lookup: Callable, rng: RandomNumberGenerator) -> void:
@@ -324,8 +327,15 @@ func _ResolveOutcome(view: EventView, outcome: EventOutcomeDef, is_crit_success:
 		if not modifier.text.is_empty():
 			view.narrative += "\n" + modifier.text
 	if modifier != null and modifier.party_hp_delta != 0:
-		view.hp_delta = modifier.party_hp_delta
-		run.apply_party_damage(modifier.party_hp_delta)
+		if modifier.party_hp_delta > 0:
+			# S2-02：正值拒收——apply_party_damage 仅负损耗生效（案 18 §3.4），
+			# 显示与账面对齐（正值不显示不生效，不产「+5 恢复」虚假反馈）；
+			# 数据侧 V-M2-num-domain 已拦 party_hp_delta ∈ [-10,0]，此处运行时兜底
+			push_warning("EventRunner: party_hp_delta 正值 %d 不支持（仅负损耗）——拒收" %
+					modifier.party_hp_delta)
+		else:
+			view.hp_delta = modifier.party_hp_delta
+			run.apply_party_damage(modifier.party_hp_delta)
 	# B 出口：战前演出视图（宿主路由 build_battle_params → 战斗 → 战后
 	# resolve_outcome(post_battle)）；奖励不入账（战后 post_battle 结算——E2-8：
 	# 战败/撤退不拿）
@@ -357,14 +367,11 @@ func _FillNodeView(view: EventView, node_id: StringName, run: ExpeditionRun,
 	view.narrative = node.narrative_text
 	view.node_id = node_id
 	if node.outcome != null:
-		if node.outcome.exit_kind == EventOutcomeDef.ExitKind.B:
-			# B 出口：播叙述+战前结算（初始损耗）后由宿主路由战斗
-			_ResolveOutcome(view, node.outcome, is_crit_success, is_crit_failure,
-					is_success, modifier, run)
-		else:
-			# A/C/D 终端：到达即结算（叙述+奖励/拦截——档位透传 E1）
-			_ResolveOutcome(view, node.outcome, is_crit_success, is_crit_failure,
-					is_success, modifier, run)
+		# 终端节点到达即结算（S2-14：B 与 A/C/D 的结算调用逐字相同——
+		# _ResolveOutcome 内部按 exit_kind 分叉：B 挂 pending 宿主路由、
+		# A 落账、C/D 拦截，此处无需外层分流）
+		_ResolveOutcome(view, node.outcome, is_crit_success, is_crit_failure,
+				is_success, modifier, run)
 		return
 	for option_id: StringName in node.option_ids:
 		var option: EventOptionDef = _Lookup(option_id) as EventOptionDef

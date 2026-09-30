@@ -584,6 +584,12 @@ func test_guild_screens_layout_contract_1080p() -> void:
 					and rect.position.y >= -2.0 and rect.position.x >= -2.0) \
 					.override_failure_message("%s 分区溢出视口：%s" % [
 							scene_path.get_file(), str(rect)]).is_true()
+		# S4-02：委托板宿主为 ScrollContainer（板刷稳态 11 单卡片高度超出可视区
+		## ——裸 VBox 第 5 张起不可见不可接；对齐 AcceptedHost 滚动先例）
+		if scene_path == ASSOC_SCENE:
+			var board_host: Control = screen.find_child("BoardHost", true, false) as Control
+			assert_bool(board_host is ScrollContainer) \
+					.override_failure_message("BoardHost 须为 ScrollContainer（委托板溢出修复）").is_true()
 		await _WaitFrames(1)
 
 func test_light_quest_full_chain() -> void:

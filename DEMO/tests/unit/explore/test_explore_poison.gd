@@ -278,13 +278,65 @@ func test_v_p1_etile_effect_negative() -> void:
 	assert_int(report_after.errors.size()).is_equal(0)
 
 func test_v_p1_map_poison_negative() -> void:
-	## V-P1-map-poison 负反：legend 配毒沼图例但 rows 未使用（死配置）报错
+	## V-P1-map-poison 负反（S1-08 一般化——全部 legend 字符查 rows 出现，
+	## warning 级死图例）：legend 配图例但 rows 未使用报 warning；生产数据
+	## 删死图例 'p' 后全图例零死配置
 	var game_data: Node = get_tree().root.get_node("GameData")
 	var map_def: ExploreMapDef = game_data.get_record(&"map_m1_village_mine") as ExploreMapDef
 	map_def.legend[&"Z"] = &"etile_poison_swamp"
 	var report: ValidationReport = DataValidator.run_all(game_data)
 	map_def.legend.erase(&"Z")
-	assert_bool(_HasError(report, "V-P1-map-poison", "Z")) \
-			.override_failure_message("未使用的毒沼图例应报死配置").is_true()
+	var warned: bool = false
+	for entry: String in report.warnings:
+		if entry.begins_with("V-P1-map-poison") and entry.contains("Z"):
+			warned = true
+	assert_bool(warned) \
+			.override_failure_message("未使用图例应报死图例 warning").is_true()
 	var report_after: ValidationReport = DataValidator.run_all(game_data)
 	assert_int(report_after.errors.size()).is_equal(0)
+	assert_int(report_after.warnings.size()).is_equal(0)
+
+# --------------------------------------------------------------------------
+# P1/S5-01 回归：屏级 _GoBattle 合流——exposed 与染毒开局状态并存
+# --------------------------------------------------------------------------
+
+func test_go_battle_b_exit_merges_exposed_and_poison() -> void:
+	## S5-01 回归（经屏级合流点 _GoBattle）：B 出口战 initial_status_id 载入
+	## 条目（evn_wisp_n2 → DEBUFF_exposed，build_battle_params 填充）与染毒
+	## 条目（DEBUFF_poison，_GoBattle 追加）并存不被覆写；无染毒时仅含
+	## exposed 条目（原无条件赋值会抹掉 exposed）
+	var game_data: Node = get_tree().root.get_node("GameData")
+	var node: EventNodeDef = game_data.get_record(&"evn_wisp_n2") as EventNodeDef
+	assert_object(node).is_not_null()
+	var scene_manager: Node = get_tree().root.get_node("SceneManager")
+	var run := _MakeScreenRun()
+	run.poisoned[run.party[0]] = &"DEBUFF_poison"
+	var screen: Control = await _OpenScreen(run)
+	# go 拒注入（_switch_pending=true → FAILED）阻断真实路由——断言停留参数层
+	scene_manager._switch_pending = true
+	var params: BattleParams = screen._runner.build_battle_params(node.outcome, run)
+	assert_bool(screen._GoBattle(params, {
+			&"event_id": &"chain_mine_wisp",
+			&"battle_node_id": &"evn_wisp_n2",
+	})).is_false()
+	scene_manager._switch_pending = false
+	assert_int(params.initial_statuses.size()).is_equal(2)
+	var status_ids: PackedStringArray = []
+	for entry: Dictionary in params.initial_statuses:
+		status_ids.append(String(entry.get(&"status_id", &"")))
+	assert_bool(status_ids.has("DEBUFF_exposed")) \
+			.override_failure_message("B 出口开局载入状态（exposed）被染毒注入覆写").is_true()
+	assert_bool(status_ids.has("DEBUFF_poison")) \
+			.override_failure_message("染毒条目未合入开局状态清单").is_true()
+	# 无染毒基线：清毒后仅含 exposed 条目
+	run.clear_poison()
+	scene_manager._switch_pending = true
+	var clean_params: BattleParams = screen._runner.build_battle_params(node.outcome, run)
+	assert_bool(screen._GoBattle(clean_params, {
+			&"event_id": &"chain_mine_wisp",
+			&"battle_node_id": &"evn_wisp_n2",
+	})).is_false()
+	scene_manager._switch_pending = false
+	assert_int(clean_params.initial_statuses.size()).is_equal(1)
+	assert_str(String(clean_params.initial_statuses[0].get(&"status_id", &""))) \
+			.is_equal("DEBUFF_exposed")

@@ -337,7 +337,10 @@ func restore_snapshot(data: Dictionary) -> void:
 	## 快照恢复（键缺失或实例损坏时保守清空对应槽——存档结构问题在
 	## SaveManager 层已由 schema_version 拦截，此处只做容错重建；
 	## **容器类型不符保守清空**（S3-M2 拍板——board/accepted 被破坏成
-	## Dictionary/标量时不再 SCRIPT ERROR，清空重建、读档可继续））
+	## Dictionary/标量时不再 SCRIPT ERROR，清空重建、读档可继续）；
+	## S3-05：serial 跨容器查重（board+accepted 共用 seen 集——同 serial 双
+	## 实例会让 find_on_board/find_accepted 首匹配定位歧义，重复按损坏条目
+	## 跳过，对齐 guild_core roster 口径）
 	## 参数 data：to_snapshot 产出的 Dictionary
 	## 返回：无
 	board.clear()
@@ -345,13 +348,15 @@ func restore_snapshot(data: Dictionary) -> void:
 	# S3-R4-02：serial 裸 int() 前置门卫（容器脏值中止 restore 链——回退默认 1）
 	var raw_serial: Variant = data.get("serial", 1)
 	var serial_value: int = int(raw_serial) if SaveData.IsIntLike(raw_serial) else 1
+	var seen_serials: Dictionary = {}
 	var board_data: Variant = data.get("board", [])
 	if board_data is Array:
 		for inst_data: Variant in board_data:
 			if not (inst_data is Dictionary):
 				continue
 			var inst: QuestInstance = QuestInstance.from_dict(inst_data)
-			if inst != null:
+			if inst != null and not seen_serials.has(inst.serial):
+				seen_serials[inst.serial] = true
 				board.append(inst)
 	var accepted_data: Variant = data.get("accepted", [])
 	if accepted_data is Array:
@@ -359,7 +364,8 @@ func restore_snapshot(data: Dictionary) -> void:
 			if not (inst_data is Dictionary):
 				continue
 			var inst: QuestInstance = QuestInstance.from_dict(inst_data)
-			if inst != null:
+			if inst != null and not seen_serials.has(inst.serial):
+				seen_serials[inst.serial] = true
 				accepted.append(inst)
 	# S3-R5-01：serial 追平已恢复实例最大号 +1——脏 serial 回退 1 后发号会
 	# 追平既有存活实例（find_on_board/find_accepted 首匹配定位歧义——

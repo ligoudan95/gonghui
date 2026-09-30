@@ -11,7 +11,6 @@ rows = Array[String](["vvvvvvvvvvvvvvv", "vvvvvvvvvvvvvvv", "vvvvvvvvvvvvvvv", "
 legend = Dictionary[StringName, StringName]({
 &".": &"etile_floor",
 &"X": &"etile_wall",
-&"p": &"etile_path",
 &"v": &"etile_village_ground",
 &"S": &"etile_poison_swamp"
 })

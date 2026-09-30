@@ -249,9 +249,17 @@ func _BeginCast(entry: Dictionary, option_id: StringName) -> void:
 					UiTheme.HIGHLIGHT_GOLD)
 		button.pressed.connect(_OnCastPicked.bind(adv))
 		_cast_box.add_child(button)
+	# S4-04：非空名单同补「返回」钮（复用 _OnCastCancelled 现成恢复口——
+	# 误入改派不被迫选人）
+	var back_button := Button.new()
+	back_button.text = "返回"
+	back_button.custom_minimum_size = Vector2(160, 48)
+	back_button.pressed.connect(_OnCastCancelled)
+	_cast_box.add_child(back_button)
 
 func _OnCastCancelled() -> void:
-	## 空名单取消：恢复当前选项视图呈现（E3-13 取消路径）
+	## 改派取消（空名单「返回」与非空名单补的「返回」钮共用——S4-04）：
+	## 恢复当前选项视图呈现（E3-13 取消路径）
 	## 参数：无
 	## 返回：无
 	if _current_view != null:

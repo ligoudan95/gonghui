@@ -255,6 +255,8 @@ func _WriteAtomic(json_text: String) -> Error:
 			push_warning("SaveManager: 正本备份失败（错误码 %d），降级 remove+rename" % backup_err)
 			var remove_err: Error = dir.remove(SAVE_PATH)
 			if remove_err != OK and has_save():
+				# S4-09：早退分支同其余失败口径清 tmp（残留中转文件）
+				DirAccess.remove_absolute(TEMP_PATH)
 				return remove_err
 			# S3-04：降级 rename 失败时用 copy 重建正本（tmp 仍在盘——保证正本
 			# 与 .bak 不双缺失；copy 失败才认输返回错误码）；S3-R4-03：copy

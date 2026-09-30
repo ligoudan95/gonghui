@@ -41,6 +41,9 @@ const RETURN_EXPLORE_FAIL_TEXT: String = "返回探索失败（错误码 %d）�
 ## 撤退确认弹窗增强文案（功能二批 3 Q-A 拍板：恒弹+增强——%d=倒地人数 /
 ## %s=名单 / %d=休养天数；无倒地时 tscn 静态文案维持不变）
 const RETREAT_CONFIRM_DOWNED: String = "队内 %d 名队员倒地（%s）——撤退回城后他们将转重伤休养 %d 天；撤退将按委托失败结算，途中所得将丢弃。确定撤退吗？"
+## 撤退弹窗 tscn 静态文案（S4-09：无倒地时显式还原的锚定值——须与
+## battle_screen.tscn RetreatConfirm.dialog_text 同步）
+const RETREAT_CONFIRM_STATIC_TEXT: String = "确认撤退？撤退将按委托失败结算，但队伍不会重伤，途中所得将丢弃。"
 ## 控制器（场景内 BattleController 节点）
 var controller: BattleController = null
 ## GameData 单例引用
@@ -284,9 +287,12 @@ func _OnBattleEnded(result: BattleResult) -> void:
 
 func _on_board_gui_input(event: InputEvent) -> void:
 	## 板面点按入口：左键点按 → 格命中 → 分发（我方指令窗 = 移动/技能两段式；
-	## 非指令窗 = 点按跳过演出延迟——拍板 D）
+	## 非指令窗 = 点按跳过演出延迟——拍板 D）；W2-11 同式守卫（S4-01）：撤退
+	## 确认弹窗挂起期忽略板面点按（模态弹窗期间点格抢跑指令）
 	## 参数 event：输入事件
 	## 返回：无
+	if %RetreatConfirm.visible:
+		return
 	if not (event is InputEventMouseButton):
 		return
 	var mouse_event: InputEventMouseButton = event as InputEventMouseButton
@@ -447,13 +453,13 @@ func _RefreshActionBarForCurrentTurn() -> void:
 	## 非指令窗或行动轮已收束（current_unit 为 null——双完成自动结束/非我方轮）
 	## → 全灰（现行行动轮外语义）；指令窗内 → 复用 _RefreshActionBar 按真实
 	## 可用性逐钮判断（has_acted 置灰技能钮、行动结束/撤退保持可用——
-	## 2026-09-24 三轮反馈用户口径：不写死全灰）；S4-R2-02：终局（_battle_over）
+	## 2026-09-24 三轮反馈用户口径：不写死全灰）；S4-R2-02：终局（is_battle_over）
 	## 恒全灰——终局若发生在玩家指令窗内 awaiting_command 可能仍为 true，
 	## 单靠窗口判据不全灰（撤退钮白弹确认窗/技能钮画范围层）
 	## 参数：无
 	## 返回：无
 	var unit: BattleUnit = null if controller == null else controller.current_unit
-	if unit == null or not controller.awaiting_command or controller._battle_over:
+	if unit == null or not controller.awaiting_command or controller.is_battle_over():
 		%AttackButton.disabled = true
 		%SkillButtonA.disabled = true
 		%SkillButtonB.disabled = true
@@ -672,6 +678,11 @@ func _OnReturnPressed() -> void:
 	var target: int = _return_to if _return_to >= 0 else SceneManagerScript.SceneId.GUILD_SHELL
 	var err: Error = get_node("/root/SceneManager").go(target, _return_payload)
 	if err != OK:
+		if err == FAILED:
+			# S4-07：重入拒绝（SceneManager 切换进行中）属正常切换态——
+			# 不弹「失败请重试」误报
+			push_warning("battle_screen: 返回被拒——场景切换进行中（正常重入）")
+			return
 		push_warning("battle_screen: 返回目标场景失败（错误码 %d）" % err)
 		%IdleLabel.text = RETURN_EXPLORE_FAIL_TEXT % err if _HoldsExpeditionLock() \
 				else DEGRADED_RETURN_FAIL_TEXT % err
@@ -734,6 +745,9 @@ func _on_retreat_button_pressed() -> void:
 	if not downed_names.is_empty():
 		%RetreatConfirm.dialog_text = RETREAT_CONFIRM_DOWNED % [downed_names.size(),
 				"、".join(downed_names), _InjuryRestDaysForHint()]
+	else:
+		# S4-09：无倒地时显式还原 tscn 静态文案（防上局增强文案残留）
+		%RetreatConfirm.dialog_text = RETREAT_CONFIRM_STATIC_TEXT
 	%RetreatConfirm.popup_centered()
 
 func _InjuryRestDaysForHint() -> int:

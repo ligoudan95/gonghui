@@ -633,7 +633,9 @@ func _SettleQuestOutlet(run: ExpeditionRun, outcome: ExpeditionOutcome,
 			for adv: AdventurerData in run.party:
 				_GainExp(adv, exp_won, summary)
 			_ShareBenchExp(exp_base, run, summary)
-	# RETREAT / GOAL_FAILED：无奖励无重伤（判据失败=案 6 §2.4 枚举口径）
+	# RETREAT / GOAL_FAILED：无奖励入账（重伤由 _ApplyDownedInjury 四出口
+	# 统一处理——v0.5.7 拍板：倒地者回城转重伤，非胜利出口不再「无重伤」；
+	# 判据失败=案 6 §2.4 枚举口径）
 	if inst != null:
 		board.remove(inst)
 

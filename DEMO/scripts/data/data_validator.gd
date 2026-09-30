@@ -63,6 +63,16 @@ const OWNER_EMPTY_WHITELIST: Array[StringName] = [&"skl_atk_enemy_common"]
 ## SKILL 来源状态全部有技能引用，白名单为空集）
 const SKILL_ORPHAN_WHITELIST: Array[StringName] = []
 
+## TILE 来源孤儿白名单（S1-05/S5-03 三池扩展：战场地格 status_id/
+## enter_status_id 引用池的零引用豁免——当前全库 TILE 来源状态全部被
+## 地格引用，白名单为空集）
+const TILE_ORPHAN_WHITELIST: Array[StringName] = []
+
+## CHECKIN 来源孤儿白名单（三池扩展：B 出口 initial_status_id + 探索地格
+## effect_status_id 引用池——BUFF_ambush 为【占位·完整版】检定带入技能
+## 未实现前的预留，占位语义豁免）
+const CHECKIN_ORPHAN_WHITELIST: Array[StringName] = [&"BUFF_ambush"]
+
 ## GameConfig 脚本引用（SYSTEM_KEYS 常量——enabled_systems 键域校验消费；
 ## preload 脚本常量，headless 测试无 autoload 节点也可取）
 const GameConfigScript: GDScript = preload("res://scripts/autoload/game_config.gd")
@@ -206,6 +216,12 @@ static func run_all(game_data: Node) -> ValidationReport:
 	_CheckTilePassStatus(report, game_data)
 	_CheckExploreTileEffect(report, game_data)
 	_CheckMapPoisonUsed(report, game_data)
+	# ---- 五席架构盲审修复批（V-R4-*——2026-09-30：组合拦截见
+	# BattleSetup.validate_skill_resources 运行时层；数据侧五条）----
+	_CheckDeadContentReverse(report, game_data)
+	_CheckAssetReverseRegistered(report, game_data)
+	_CheckPackEliteFirst(report, game_data)
+	_CheckEnemySkillKind(report, game_data)
 	return report
 
 # --------------------------------------------------------------------------
@@ -646,6 +662,10 @@ static func _CheckMapSpawns(report: ValidationReport, game_data: Node) -> void:
 					report.add_error("V-M1-map-spawns", map_def.id,
 							"出生位 (%d, %d) 越界" % [cell.x, cell.y])
 					continue
+				# S1-02：行长错位保护（对齐连通性检查 mini 口径）——行短于 size.x 的
+				# 错位数据跳过取格判定，行长合法域归 V-M1-map-layout 拦截
+				if cell.x >= map_def.rows[cell.y].length():
+					continue
 				var char_key: String = map_def.rows[cell.y][cell.x]
 				var tile: TileTypeDef = game_data.get_record(map_def.legend.get(char_key, &"")) as TileTypeDef
 				if tile == null or not tile.walkable:
@@ -979,10 +999,12 @@ static func _ReportNamingNameDrift(report: ValidationReport, entry_id: StringNam
 						entry_name, record_name])
 
 static func _CheckStatusSources(report: ValidationReport, game_data: Node) -> void:
-	## V-B2-status-src（A-4）：①技能 STATUS_APPLY 引用的状态 allowed_sources
-	## 必含 SKILL（error）；②allowed_sources 含 SKILL 的状态零技能引用 →
-	## warning（意外孤儿；SKILL_ORPHAN_WHITELIST 豁免——【占位·完整版】预留，
-	## 当前空集：全库 SKILL 来源状态均被技能引用）
+	## V-B2-status-src（A-4 + S1-05/S5-03 三池扩展）：①技能 STATUS_APPLY 引用
+	## 的状态 allowed_sources 必含 SKILL（error）；②-④按来源类别分池的零引用
+	## 孤儿检查（warning，各配白名单）——SKILL 池 = 技能 STATUS_APPLY 引用；
+	## TILE 池 = 战场地格 status_id/enter_status_id 引用；CHECKIN 池 = B 出口
+	## initial_status_id + 探索地格 effect_status_id 引用（战斗带入通道
+	## build_poison_initial_statuses 走 CHECKIN 施加——V-P1-etile-effect 同口径）
 	## 参数：报告 / GameData
 	## 返回：无
 	var skill_referenced: Dictionary = {}
@@ -998,13 +1020,54 @@ static func _CheckStatusSources(report: ValidationReport, game_data: Node) -> vo
 			if not status.allowed_sources.has(&"SKILL"):
 				report.add_error("V-B2-status-src", status.id,
 						"被技能 '%s' 引用但 allowed_sources 不含 SKILL" % skill.id)
+	var tile_referenced: Dictionary = {}
+	for record: Resource in _DomainRecords(game_data, &"battle/tiles"):
+		var tile := record as TileTypeDef
+		for status_id: StringName in [tile.status_id, tile.enter_status_id]:
+			if String(status_id).is_empty():
+				continue
+			var tile_status: StatusDef = game_data.get_record(status_id) as StatusDef
+			if tile_status != null:
+				tile_referenced[tile_status.id] = true
+	var checkin_referenced: Dictionary = {}
+	for outcome_pair: Array in _AllEventOutcomes(game_data):
+		var outcome: EventOutcomeDef = outcome_pair[1]
+		if outcome.battle == null or String(outcome.battle.initial_status_id).is_empty():
+			continue
+		var checkin_status: StatusDef = game_data.get_record(
+				outcome.battle.initial_status_id) as StatusDef
+		if checkin_status != null:
+			checkin_referenced[checkin_status.id] = true
+	for record: Resource in _DomainRecords(game_data, &"map/tiles"):
+		var etile := record as ExploreTileDef
+		if String(etile.effect_status_id).is_empty():
+			continue
+		var effect_status: StatusDef = game_data.get_record(
+				etile.effect_status_id) as StatusDef
+		if effect_status != null:
+			checkin_referenced[effect_status.id] = true
+	# 三池孤儿检查（warning + 各自白名单豁免）
 	for record: Resource in _DomainRecords(game_data, &"status/stats"):
 		var status := record as StatusDef
-		if not status.allowed_sources.has(&"SKILL"):
-			continue
-		if not skill_referenced.has(status.id) and not SKILL_ORPHAN_WHITELIST.has(status.id):
-			report.add_warning("V-B2-status-src", status.id,
-					"allowed_sources 含 SKILL 但零技能引用（意外孤儿）")
+		_ReportSourcePoolOrphan(report, status, &"SKILL", skill_referenced,
+				SKILL_ORPHAN_WHITELIST)
+		_ReportSourcePoolOrphan(report, status, &"TILE", tile_referenced,
+				TILE_ORPHAN_WHITELIST)
+		_ReportSourcePoolOrphan(report, status, &"CHECKIN", checkin_referenced,
+				CHECKIN_ORPHAN_WHITELIST)
+
+static func _ReportSourcePoolOrphan(report: ValidationReport, status: StatusDef,
+		source_token: StringName, referenced: Dictionary,
+		whitelist: Array[StringName]) -> void:
+	## 单池零引用孤儿检查（V-B2-status-src 内部口——三池共用；S1-05）
+	## 参数 report/status：报告 / 状态；source_token：来源类别 token；
+	## referenced：该池引用集合（状态 id -> true）；whitelist：豁免白名单
+	## 返回：无
+	if not status.allowed_sources.has(source_token):
+		return
+	if not referenced.has(status.id) and not whitelist.has(status.id):
+		report.add_warning("V-B2-status-src", status.id,
+				"allowed_sources 含 %s 但零引用（意外孤儿）" % source_token)
 
 static func _CheckOwnerClosure(report: ValidationReport, game_data: Node) -> void:
 	## V-B2-owner（A-5）：①普攻 owner == 引用职业（error）；②owner 为敌人的
@@ -1930,6 +1993,10 @@ static func _CheckExplorePointCell(report: ValidationReport, game_data: Node,
 		report.add_error("V-M3-map-points", owner_id,
 				"坐标 (%d, %d) 越界" % [cell.x, cell.y])
 		return
+	# S1-02：行长错位保护（对齐连通性检查 mini 口径）——行短于 size.x 的错位
+	# 数据跳过取格判定，行长合法域归 V-M3-map-layout 拦截
+	if cell.x >= map_def.rows[cell.y].length():
+		return
 	var char_key: StringName = StringName(String(map_def.rows[cell.y][cell.x]))
 	var tile: ExploreTileDef = game_data.get_record(
 			map_def.legend.get(char_key, &"")) as ExploreTileDef
@@ -1965,6 +2032,15 @@ static func _CheckExploreFogLit(report: ValidationReport, game_data: Node) -> vo
 			if row < 0 or row >= map_def.size.y:
 				report.add_error("V-M3-fog-lit", map_def.id,
 						"fog_lit_rows 行号 %d 越界 [0, %d)" % [row, map_def.size.y])
+		# S1-09：前缀段断言——fog_lit_rows 须为自 0 起的连续段 [0, k)（
+		# ExploreMapState.region_index_of 按「行 ∈ fog_lit_rows → 区 0」推导，
+		# 跳行/非 0 起会让前缀段外的亮行落错区——区域归属撕裂在此拦截）
+		for row_index: int in map_def.fog_lit_rows.size():
+			if map_def.fog_lit_rows[row_index] != row_index:
+				report.add_error("V-M3-fog-lit", map_def.id,
+						"fog_lit_rows 须为自 0 起的连续前缀段（第 %d 项 = %d——跳行/非 0 起）" % [
+								row_index, map_def.fog_lit_rows[row_index]])
+				break
 		var has_lit_rows: bool = not map_def.fog_lit_rows.is_empty()
 		if has_lit_rows and map_def.region_ids.size() != 2:
 			report.add_error("V-M3-fog-lit", map_def.id,
@@ -2975,7 +3051,7 @@ static func _CheckExploreTileEffect(report: ValidationReport, game_data: Node) -
 	## 返回：无
 	for record: Resource in _DomainRecords(game_data, &"map/tiles"):
 		var effect_kind: Variant = record.get("effect_kind")
-		if effect_kind == null or int(effect_kind) != 1:
+		if effect_kind == null or int(effect_kind) != ExploreTileDef.EffectKind.POISON:
 			continue
 		var status_id: StringName = record.get("effect_status_id")
 		var effect_damage: Variant = record.get("effect_damage")
@@ -2993,32 +3069,154 @@ static func _CheckExploreTileEffect(report: ValidationReport, game_data: Node) -
 					"POISON 地格 effect_damage %s < 1（踏入零伤——死效果）" % str(effect_damage))
 
 static func _CheckMapPoisonUsed(report: ValidationReport, game_data: Node) -> void:
-	## V-P1-map-poison（功能一批 2——批 1 先登记零实例通过）：地图 legend
-	## 中值指向 POISON 效果地格的图例字符须在 rows 至少出现一次（登记
-	## 未用=死配置——毒沼视觉/效果配置漂移在此拦截）
+	## V-P1-map-poison（功能一批 2 登记；S1-08 一般化）：地图**全部 legend 字符**
+	## 须在 rows 至少出现一次（'.' 空格图例同查——登记未用 = 死图例，视觉/效果
+	## 配置漂移在此拦截；warning 级——功能图例专用原口径 error 起步，一般化后
+	## 按死内容口径降 warning 对齐 V-R4-dead-content）
 	## 参数：报告 / GameData
 	## 返回：无
-	var poison_chars_by_tile: Dictionary = {}
-	for record: Resource in _DomainRecords(game_data, &"map/tiles"):
-		var effect_kind: Variant = record.get("effect_kind")
-		if effect_kind == null or int(effect_kind) != 1:
-			continue
-		poison_chars_by_tile[record.get("id")] = true
 	for record: Resource in _DomainRecords(game_data, &"map/maps"):
 		var map_def := record as ExploreMapDef
 		for legend_char: StringName in map_def.legend:
 			var tile_id: StringName = map_def.legend[legend_char] as StringName
-			if not poison_chars_by_tile.has(tile_id):
-				continue
 			var used: bool = false
 			for row: String in map_def.rows:
 				if row.contains(String(legend_char)):
 					used = true
 					break
 			if not used:
-				report.add_error("V-P1-map-poison", map_def.id,
-						"毒沼图例 '%s'（地格 '%s'）在 rows 未使用（登记未用——死配置）" % [
+				report.add_warning("V-P1-map-poison", map_def.id,
+						"图例 '%s'（地格 '%s'）在 rows 未使用（登记未用——死图例）" % [
 								legend_char, tile_id])
+
+
+# --------------------------------------------------------------------------
+# 五席架构盲审修复批（V-R4-*——2026-09-30）
+# --------------------------------------------------------------------------
+
+static func _CheckDeadContentReverse(report: ValidationReport, game_data: Node) -> void:
+	## V-R4-dead-content（S1-07）：四类死内容反向断言（warning 级——当前数据
+	## 全健康，规则防未来）——战场地图被零 pack 引用 / 敌人被零 pack 引用 /
+	## 职业未被 equip 覆盖 / 目标点被零委托引用（运行时不可达内容的表侧预警）
+	## 参数：报告 / GameData
+	## 返回：无
+	var map_referenced: Dictionary = {}
+	var enemy_referenced: Dictionary = {}
+	for record: Resource in _DomainRecords(game_data, &"battle/enemy_packs"):
+		var pack := record as EnemyPackDef
+		if not String(pack.battle_map_ref).is_empty():
+			map_referenced[pack.battle_map_ref] = true
+		for entry: PackEntry in pack.entries:
+			for enemy_id: StringName in entry.enemy_ids:
+				enemy_referenced[enemy_id] = true
+	for record: Resource in _DomainRecords(game_data, &"battle/maps"):
+		if not map_referenced.has(record.id):
+			report.add_warning("V-R4-dead-content", record.id,
+					"战场地图未被任何 enemy_pack 引用（死内容——运行时不可达）")
+	for record: Resource in _DomainRecords(game_data, &"battle/enemies"):
+		if not enemy_referenced.has(record.id):
+			report.add_warning("V-R4-dead-content", record.id,
+					"敌人未被任何 enemy_pack 引用（死内容——运行时不可达）")
+	var equip_classes: Dictionary = {}
+	for record: Resource in _DomainRecords(game_data, &"equip"):
+		var equip := record as EquipDef
+		if not String(equip.class_ref).is_empty():
+			equip_classes[equip.class_ref] = true
+	for record: Resource in _DomainRecords(game_data, &"class/classes"):
+		if not equip_classes.has(record.id):
+			report.add_warning("V-R4-dead-content", record.id,
+					"职业未被任何初始装备覆盖（死内容——装配侧按零装备兜底）")
+	var target_referenced: Dictionary = {}
+	for record: Resource in _DomainRecords(game_data, &"quest/templates"):
+		var quest := record as QuestTemplateDef
+		if quest.goal_type == QuestTemplateDef.GoalType.EXPLORE \
+				and not String(quest.goal_param).is_empty():
+			target_referenced[quest.goal_param] = true
+	for record: Resource in _DomainRecords(game_data, &"map/target_points"):
+		if not target_referenced.has(record.id):
+			report.add_warning("V-R4-dead-content", record.id,
+					"目标点未被任何委托判据引用（死内容——TAP 提示仍可达，判据侧不可达）")
+
+## assets 目录反向登记排除前缀（V-R4-asset-reverse——工具产物不入登记域）
+const ASSET_REVERSE_EXCLUDE_PREFIXES: Array[String] = ["_preview"]
+
+static func _CheckAssetReverseRegistered(report: ValidationReport, game_data: Node) -> void:
+	## V-R4-asset-reverse（S1-10）：assets/ 目录资源文件须在 AssetRegistry 登记
+	##（path 反查——漏登记 = 运行时 get_asset_path 不可达；M6 美术同 id 替换
+	## 前：新资源文件落 assets 即受检）；_preview* 工具产物与 .import 元数据
+	## 白名单排除
+	## 参数：报告 / GameData
+	## 返回：无
+	var registry: AssetRegistry = game_data.get_record(&"registry") as AssetRegistry
+	if registry == null:
+		return
+	var registered_paths: Dictionary = {}
+	for asset_id: StringName in registry.mapping:
+		registered_paths[registry.mapping[asset_id]] = asset_id
+	for file_path: String in _CollectAssetFiles("res://assets"):
+		if not registered_paths.has(file_path):
+			report.add_error("V-R4-asset-reverse", String(file_path.get_file().get_basename()),
+					"assets 资源文件 '%s' 未在 AssetRegistry 登记（运行时不可达）" % file_path)
+
+static func _CollectAssetFiles(dir_path: String) -> Array[String]:
+	## assets 目录资源文件递归收集（V-R4-asset-reverse 内部口——排除 .import
+	## 元数据 / 隐藏文件 / _preview* 工具产物）
+	## 参数 dir_path：目录 res:// 路径
+	## 返回：资源文件路径列表
+	var files: Array[String] = []
+	var dir: DirAccess = DirAccess.open(dir_path)
+	if dir == null:
+		return files
+	dir.list_dir_begin()
+	var entry_name: String = dir.get_next()
+	while not entry_name.is_empty():
+		if entry_name.begins_with("."):
+			pass
+		elif dir.current_is_dir():
+			files.append_array(_CollectAssetFiles(dir_path + "/" + entry_name))
+		elif entry_name.ends_with(".import"):
+			pass
+		else:
+			var excluded: bool = false
+			for exclude_prefix: String in ASSET_REVERSE_EXCLUDE_PREFIXES:
+				if entry_name.begins_with(exclude_prefix):
+					excluded = true
+					break
+			if not excluded:
+				files.append(dir_path + "/" + entry_name)
+		entry_name = dir.get_next()
+	dir.list_dir_end()
+	return files
+
+static func _CheckPackEliteFirst(report: ValidationReport, game_data: Node) -> void:
+	## V-R4-pack-elite-first（S2-06）：精英首位数据约定护栏——pack 含 elite
+	## 条目时该条目须为 entries[0]（battle_setup._AllocateSpawnSlots 的「精英
+	## 首位」槽位约定：has_elite 即槽 0 预留给**首个分配条目**，精英条目不在
+	## entries[0] 会落到洗牌槽——约定破坏；现无校验）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"battle/enemy_packs"):
+		var pack := record as EnemyPackDef
+		for entry_index: int in pack.entries.size():
+			if pack.entries[entry_index].is_elite and entry_index != 0:
+				report.add_error("V-R4-pack-elite-first", pack.id,
+						"精英条目须为 entries[0]（当前 index %d——装配侧首位槽约定破坏）"
+						% entry_index)
+
+static func _CheckEnemySkillKind(report: ValidationReport, game_data: Node) -> void:
+	## V-R4-enemy-skill-kind（S2-05）：敌方技能表技能须为伤害型或 AURA 型
+	##（enemy_ai._ChooseSkill 只收 AURA/伤害技——辅助型敌技永不被 AI 选中 =
+	## 死技能；登记性校验防未来数据误配，不改 AI；warning 级）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"class/skills"):
+		var skill := record as SkillDef
+		if skill.side != SkillDef.SkillSide.ENEMY:
+			continue
+		if skill.damage_type == SkillDef.DamageType.NONE \
+				and skill.target_shape != SkillDef.TargetShape.AURA_3X3:
+			report.add_warning("V-R4-enemy-skill-kind", skill.id,
+					"敌方技能非伤害型且非 AURA 型（AI 只收两类——永不被选中）")
 
 
 static func _AllDomains(game_data: Node) -> Array[StringName]:

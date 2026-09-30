@@ -16,5 +16,6 @@ category = 1
 polarity = 1
 dot = SubResource("Resource_poisn")
 default_duration = 2
+stack_rule = &"no_stack_take_larger"
 allowed_sources = Array[StringName]([&"TILE", &"CHECKIN"])
-comment = "【占位·试玩校准】毒沼踏入染毒（功能一 Q2/Q3 拍板）：踏入/途经毒沼附加、不随离格移除，回合末固定 2 伤持续 2 回合（免判定免减免，同陷阱 D7 口径）；allowed_sources 含 CHECKIN 供探索层战斗带入（build_poison_initial_statuses 通道）；与站位毒 DEBUFF_tile_poison（6 伤·离格移除）两条并存"
+comment = "【占位·试玩校准】毒沼踏入染毒（功能一 Q2/Q3 拍板）：踏入/途经毒沼附加、不随离格移除，回合末固定 2 伤持续 2 回合（免判定免减免，同陷阱 D7 口径）；allowed_sources 含 CHECKIN 供探索层战斗带入（build_poison_initial_statuses 通道）；与站位毒 DEBUFF_tile_poison（6 伤·离格移除）两条并存；stack_rule = no_stack_take_larger（案 17 §3.9 同名不叠加取大拍板标注位——StatusManager.apply ①同名分支即该语义，本位运行时零消费、防未来分叉登记）"

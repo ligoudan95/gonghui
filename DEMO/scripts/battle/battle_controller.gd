@@ -324,9 +324,15 @@ func _move_unit(unit: BattleUnit, dest: Vector2i) -> void:
 		settle_dest = trap_cell
 	# 踏过格集（功能一试玩批 Q3 踏入染毒）：实际踏过=path[0..trap_index]
 	#（截断含触发格）或全路径（无陷阱；起点 index0 已被 find_path 排除——
-	# 站毒沼起跳不重复施加）；退化情形（路径空）= 仅停格
+	# 站毒沼起跳不重复施加）；退化情形（路径空）= 仅停格——S2-01 复检防御：
+	# dest 须过 _IsEnterable（界内+可通行+无存活占位），非法则原地不动
+	# 记 warning（原无条件 place_unit 覆写占位索引会顶出原占位单位）
 	var stepped_cells: Array[Vector2i] = []
 	if path.is_empty():
+		if not _IsEnterable(dest):
+			push_warning("BattleController: 退化移动复检不过（%s → (%d,%d)）——原地不动" % [
+					unit.unit_id, dest.x, dest.y])
+			return
 		stepped_cells.append(dest)
 	else:
 		for index: int in range(0, trap_index + 1):
@@ -357,6 +363,19 @@ func _move_unit(unit: BattleUnit, dest: Vector2i) -> void:
 	elif _IsHostileTrapAt(unit, settle_dest):
 		_FireTrapAt(unit, settle_dest)
 	unit_moved.emit(unit, from_pos, settle_dest)
+
+func _IsEnterable(cell: Vector2i) -> bool:
+	## 退化移动复检（S2-01）：格界内 + 地格可通行 + 无存活单位占位
+	## ——find_path 返回空时的防御判定（非法 dest 不落位不覆写占位索引）
+	## 参数 cell：复检格
+	## 返回：true = 可进入
+	if cell.x < 0 or cell.x >= _context.grid.size.x \
+			or cell.y < 0 or cell.y >= _context.grid.size.y:
+		return false
+	var tile: TileTypeDef = _context.grid.tile_at(cell)
+	var occupant: Object = _context.grid.get_unit_at(cell)
+	return tile != null and tile.walkable \
+			and not (occupant != null and occupant.alive)
 
 func _IsHostileTrapAt(unit: BattleUnit, cell: Vector2i) -> bool:
 	## 陷阱敌对判定（S2-R1-01 抽取单源——途经扫描/停格补判共用）：
@@ -528,6 +547,12 @@ func skip_current_delay() -> void:
 	## 参数：无
 	## 返回：无
 	_delay_skip_requested = true
+
+func is_battle_over() -> bool:
+	## 战局收束只读口（S4-11：UI 层消费公开口，不读 _battle_over 私有成员）
+	## 参数：无
+	## 返回：true = 战局已收束（终局/中止）
+	return _battle_over
 
 func _wait_delay() -> void:
 	## 演出延时（delay_seconds ≤0 跳过——headless 测试注入 0；逐帧累计 + 点按跳过；

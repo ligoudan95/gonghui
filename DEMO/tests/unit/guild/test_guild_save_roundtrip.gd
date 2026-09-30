@@ -697,3 +697,56 @@ func test_b3_resting_member_roundtrip() -> void:
 	assert_int(restored.rest_days).is_equal(3)
 	state.free()
 	save_manager.free()
+
+func _QuestDict(serial_value: int, template_id: String) -> Dictionary:
+	## 构造合法 QuestInstance 快照条目（P18 脏档用例共用）
+	## 参数 serial_value：实例序号；template_id：模板 id
+	## 返回：快照字典
+	return {
+		"serial": serial_value, "template_id": template_id, "state": 0,
+		"expire_day": 9, "party_ids": [], "urgent": false,
+		"work_days_left": 0,
+	}
+
+func test_s2r7_restore_snapshot_duplicate_serial_skipped() -> void:
+	## S2-07（P18）：restore_snapshot serial 查重——board 内同 serial 双条目
+	## 与跨容器（board+accepted）同 serial 均按损坏条目跳过（首条保留，
+	## find_on_board/find_accepted 定位歧义拦截；对齐 roster 口径）
+	var board := QuestBoard.new()
+	board.restore_snapshot({
+		"serial": 5,
+		"board": [
+			_QuestDict(1, "q_lair_purge"),
+			_QuestDict(1, "q_chore_supply_run"),
+			_QuestDict(2, "q_chore_tavern_help"),
+		],
+		"accepted": [
+			_QuestDict(2, "q_chore_messenger"),
+			_QuestDict(3, "q_lost_miner_keepsake"),
+		],
+	})
+	assert_int(board.board.size()).is_equal(2)
+	assert_str(String(board.board[0].template_id)).is_equal("q_lair_purge")
+	assert_str(String(board.board[1].template_id)).is_equal("q_chore_tavern_help")
+	assert_int(board.accepted.size()).is_equal(1)
+	assert_str(String(board.accepted[0].template_id)).is_equal("q_lost_miner_keepsake")
+	# serial 追平口径不受查重影响：max(快照声明 5, 已恢复实例最大号 3 + 1) = 5
+	assert_int(board.serial).is_equal(5)
+
+func test_s2r9_adventurer_negative_values_rejected() -> void:
+	## S2-09（P19）：exp/skill_points/rest_days/last_expedition_day 四键负值
+	## 拒载（与 level 下界同式——脏档负经验回滚经济/负技能点免费解锁）
+	for negative_key: String in ["exp", "skill_points", "rest_days",
+			"last_expedition_day"]:
+		var adv_data: Dictionary = {
+			"unit_id": "adv_test", "class_id": "cls_warrior", "display_name": "测试",
+			"level": 1, "exp": 0,
+			"attrs": {}, "skill_ids": [],
+			"skill_points": 0, "tendency_id": "", "status": 0, "rest_days": 0,
+			"last_expedition_day": 0, "pre_unlocked": true, "equip_slots": {},
+			"stress": 0, "quirks": [],
+		}
+		adv_data[negative_key] = -1
+		var loaded: AdventurerData = AdventurerData.from_dict(adv_data)
+		assert_bool(loaded == null) \
+				.override_failure_message("负值键 %s 应拒载" % negative_key).is_true()

@@ -128,6 +128,12 @@ static func from_dict(data: Dictionary) -> AdventurerData:
 	# work_days_left < 0 拒载同式）
 	if int(data["level"]) < 1:
 		return null
+	# S2-09：四数值键负值拒载（脏档负经验回滚经济/负技能点免费解锁/
+	# 负休养天/负出征日——与 level 下界同式）
+	for negative_key: String in ["exp", "skill_points", "rest_days",
+			"last_expedition_day"]:
+		if int(data[negative_key]) < 0:
+			return null
 	if not (data["pre_unlocked"] is bool):
 		return null
 	if not (data["unit_id"] is String) or not (data["class_id"] is String):

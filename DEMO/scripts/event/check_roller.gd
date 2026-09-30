@@ -24,9 +24,9 @@ static func crit_line_of(luck: int, cfg: CoreConfig) -> int:
 	var offset: int = cfg.attr_modifier_offset if cfg != null \
 			else DerivedStats.ATTR_MODIFIER_OFFSET_FALLBACK
 	var divisor: int = cfg.crit_success_drop_divisor if cfg != null and cfg.crit_success_drop_divisor > 0 \
-			else 3
+			else CRIT_SUCCESS_DROP_DIVISOR_FALLBACK
 	var line_min: int = cfg.crit_success_line_min if cfg != null and cfg.crit_success_line_min > 0 \
-			else 16
+			else CRIT_SUCCESS_LINE_MIN_FALLBACK
 	var drop: int = maxi(0, int(floor((luck - offset) / float(divisor))))
 	return maxi(line_min, 20 - drop)
 
@@ -38,9 +38,9 @@ static func z_of(luck: int, cfg: CoreConfig) -> int:
 	var offset: int = cfg.attr_modifier_offset if cfg != null \
 			else DerivedStats.ATTR_MODIFIER_OFFSET_FALLBACK
 	var z_base: int = cfg.luck_floor_z_base if cfg != null and cfg.luck_floor_z_base > 0 \
-			else 2
+			else LUCK_FLOOR_Z_BASE_FALLBACK
 	var z_divisor: int = cfg.luck_floor_z_divisor if cfg != null and cfg.luck_floor_z_divisor > 0 \
-			else 4
+			else LUCK_FLOOR_Z_DIVISOR_FALLBACK
 	return maxi(z_base, z_base + int(floor((luck - offset) / float(z_divisor))))
 
 ## 判定线查表（难度档名 → cfg.difficulty_tiers 值；未知档名报错回退 20）

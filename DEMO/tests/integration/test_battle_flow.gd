@@ -659,7 +659,7 @@ func test_w21_ally_trap_death_auto_ends_turn() -> void:
 	# 移动致死受理 → 行动轮应自动结束（不悬置在等待死人指令）
 	assert_bool(controller.request_move(reachable[0])).is_true()
 	assert_bool(unit.alive).is_false()
-	assert_bool(controller._battle_over).is_false()
+	assert_bool(controller.is_battle_over()).is_false()
 	# 战局推进：指令窗必然回到下一存活我方单位（修复前恒等死者 = 超时）；
 	# 先等死者行动轮退出（request_move 同帧 _turn_done 置位、轮询循环次帧
 	# 才退出 awaiting_command——须等 false→true 完整翻转）
@@ -747,3 +747,25 @@ func test_trap_pass_through_own_trap_not_triggered() -> void:
 	assert_bool(warrior.grid_pos == Vector2i(4, 6)).is_true()
 	assert_int(warrior.current_hp).is_equal(warrior.max_hp)
 	assert_bool(context.grid.dynamic_tile_at(Vector2i(3, 6)).is_empty()).is_false()
+
+func test_move_unit_degenerate_path_defensive_recheck() -> void:
+	## S2-01 回归：退化路径（find_path 空）dest 复检不过（界外/有存活占位）→
+	## 原地不动 + 原占位单位不被顶出（原无条件 place_unit 覆写占位索引）
+	var context := _MakeContext(&"enc_m1_random_pack", 77)
+	var controller := BattleController.new()
+	controller.delay_seconds = 0.0
+	controller.prepare(context)
+	auto_free(controller)
+	var warrior: BattleUnit = context.find_unit(&"warrior")
+	var from_pos: Vector2i = warrior.grid_pos
+	# 界外 dest：复检不过 → 原地不动、原占位保留
+	controller._move_unit(warrior, Vector2i(-99, -99))
+	assert_bool(warrior.grid_pos == from_pos) \
+			.override_failure_message("界外 dest 应原地不动").is_true()
+	assert_object(context.grid.get_unit_at(from_pos)).is_same(warrior)
+	# 敌方存活占位格 dest：复检不过 → 敌方占位不被顶出
+	var enemy: BattleUnit = context.enemies[0]
+	controller._move_unit(warrior, enemy.grid_pos)
+	assert_bool(warrior.grid_pos == from_pos) \
+			.override_failure_message("占位格 dest 应原地不动").is_true()
+	assert_object(context.grid.get_unit_at(enemy.grid_pos)).is_same(enemy)

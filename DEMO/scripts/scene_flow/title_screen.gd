@@ -42,9 +42,6 @@ func _ready() -> void:
 	## 参数：无
 	## 返回：无
 	AppSettings.apply_window_size(AppSettings.load_window_size())
-	## 按档位覆写（tscn 值留占位——字号体系只动 cfg）；订阅存档拒载信号
-	## 参数：无
-	## 返回：无
 	_ApplyFontTiers()
 	%VersionLabel.text = _BuildVersionText()
 	# S3/S5-R4-01：可读档判定走正本或 .bak 任一（bak-only 崩溃窗口下
@@ -162,6 +159,11 @@ func _StartNewGame() -> void:
 	get_node("/root/GuildState").new_game()
 	var err: Error = _scene_manager().go(SceneManagerScript.SceneId.GUILD_SHELL)
 	if err != OK:
+		if err == FAILED:
+			# S4-07：重入拒绝（SceneManager 切换进行中）属正常切换态——
+			# 不弹「进入游戏失败」误报
+			push_warning("title_screen: 进入公会壳被拒——场景切换进行中（正常重入）")
+			return
 		push_warning("title_screen: 进入公会壳失败（错误码 %d）" % err)
 		%HintLabel.text = String(UI_TEXTS[&"go_fail_hint_format"]) % err
 

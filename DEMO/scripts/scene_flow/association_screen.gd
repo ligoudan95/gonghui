@@ -59,6 +59,9 @@ func _ready() -> void:
 	_core().has_unseen_grants = false
 	_board_panel = QuestBoardPanel.new()
 	_board_panel.setup(_cfg)
+	# S4-02：板刷稳态 11 单卡片高度超出可视区——BoardHost 改 ScrollContainer
+	# （对齐 AcceptedHost 先例），面板撑满滚动区宽度防卡片塌缩
+	_board_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	%BoardHost.add_child(_board_panel)
 	_board_panel.quest_picked.connect(_OnQuestPicked)
 	_accepted_panel = AcceptedPanel.new()

@@ -232,9 +232,12 @@ func test_validate_skill_resources_detects_missing_refs() -> void:
 	var warrior: BattleUnit = context.find_unit(&"warrior")
 	# 坏 1：技能 id 本身不可解析（skill_lookup 查无）
 	warrior.skill_ids.append(&"skl_broken_missing")
-	# 坏 2/3：可解析的假技能（闭包补登）挂坏状态引用 + 坏地格引用
+	# 坏 2/3：可解析的假技能（闭包补登）挂坏状态引用 + 坏地格引用；
+	# target_shape 置 CELL（本用例聚焦引用缺失——TILE_SPAWN 组合拦截另测，
+	# S2-03 组合规则不在此重复报）
 	var fake_skill: SkillDef = SkillDef.new()
 	fake_skill.id = &"skl_fake_bad_refs"
+	fake_skill.target_shape = SkillDef.TargetShape.CELL
 	var bad_status_effect: SkillEffect = SkillEffect.new()
 	bad_status_effect.effect_kind = SkillEffect.EffectKind.STATUS_APPLY
 	bad_status_effect.status_id = &"DEBUFF_missing_status"
@@ -335,3 +338,43 @@ func test_formation_invalid_falls_back_to_spawns() -> void:
 	assert_vector(first.grid_pos).is_equal(map_def.player_spawns[0]) \
 			.override_failure_message("非法 formation 条目应回退顺排位")
 	assert_vector(context.allies[1].grid_pos).is_equal(Vector2i(1, 7))
+
+func test_validate_skill_resources_tile_spawn_combo_intercept() -> void:
+	## S2-03 组合形态前置拦截：AURA_3X3 + TILE_SPAWN（AURA 特化分支效果遍历
+	## 只实现 STATUS_APPLY——资源照扣地格不生成）与非 CELL 单体 + TILE_SPAWN
+	## （目标解析须有存活敌方 vs 陷阱格校验须无存活占位——结构性恒
+	## BLOCKED_CELL）均入清单；CELL 型陷阱技（生产 skl_ranger_set_trap）零报
+	var spawn_effect: SkillEffect = SkillEffect.new()
+	spawn_effect.effect_kind = SkillEffect.EffectKind.TILE_SPAWN
+	spawn_effect.tile_type_id = &"tile_trap"
+	var aura_bad: SkillDef = SkillDef.new()
+	aura_bad.id = &"skl_fake_aura_trap"
+	aura_bad.target_shape = SkillDef.TargetShape.AURA_3X3
+	aura_bad.effects = [spawn_effect]
+	var aura_issues: Array[String] = BattleSetup._ReportSkillComboIssue(aura_bad)
+	assert_int(aura_issues.size()).is_equal(1)
+	assert_bool(aura_issues[0].contains("AURA_3X3")).is_true()
+	var single_bad: SkillDef = SkillDef.new()
+	single_bad.id = &"skl_fake_single_trap"
+	single_bad.target_shape = SkillDef.TargetShape.SINGLE
+	single_bad.effects = [spawn_effect]
+	var single_issues: Array[String] = BattleSetup._ReportSkillComboIssue(single_bad)
+	assert_int(single_issues.size()).is_equal(1)
+	assert_bool(single_issues[0].contains("BLOCKED_CELL")).is_true()
+	# 正例：生产 CELL 型陷阱技零报
+	var real_trap: SkillDef = _game_data.get_record(&"skl_ranger_set_trap") as SkillDef
+	assert_object(real_trap).is_not_null()
+	assert_int(BattleSetup._ReportSkillComboIssue(real_trap).size()).is_equal(0)
+	# 全链路检出：挂 AURA+TILE_SPAWN 假技的上下文经 validate_skill_resources 报单条
+	var context := BattleSetup.build(_MakeParams(&"enc_m1_random_pack", 11), _game_data)
+	assert_object(context).is_not_null()
+	var warrior: BattleUnit = context.find_unit(&"warrior")
+	var base_lookup: Callable = context.skill_lookup
+	context.skill_lookup = func(skill_id: StringName) -> Resource:
+		if skill_id == aura_bad.id:
+			return aura_bad
+		return base_lookup.call(skill_id)
+	warrior.skill_ids.append(aura_bad.id)
+	var issues: Array[String] = BattleSetup.validate_skill_resources(context)
+	assert_int(issues.size()).is_equal(1)
+	assert_bool(issues[0].contains(aura_bad.id)).is_true()

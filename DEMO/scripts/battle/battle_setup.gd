@@ -258,7 +258,9 @@ static func validate_skill_resources(context: BattleContext) -> Array[String]:
 	## 战斗开始前技能资源预校验（盲审批 3 D-1——AURA 资源校验提前）：全部参战
 	## 单位技能清单逐技经 skill_lookup 解析，STATUS_APPLY 引用状态 /
 	## TILE_SPAWN 引用地格逐条经对应 lookup 解析（AURA_3X3 怒吼的施加链同
-	## STATUS_APPLY 覆盖，不再等执行中才 push_error 空转）
+	## STATUS_APPLY 覆盖，不再等执行中才 push_error 空转）；S2-03：TILE_SPAWN
+	## 组合形态前置拦截（AURA 分支效果遍历只实现 STATUS_APPLY、非 CELL 型
+	## 目标恒 BLOCKED_CELL——组合盲区见 _ReportSkillComboIssue）
 	## 参数 context：已装配的战斗上下文
 	## 返回：问题清单（空 = 零问题；build 侧逐条 push_error）
 	var issues: Array[String] = []
@@ -268,6 +270,7 @@ static func validate_skill_resources(context: BattleContext) -> Array[String]:
 			if skill == null:
 				issues.append("技能 '%s' 无法解析（单位 '%s'）" % [skill_id, unit.unit_id])
 				continue
+			issues.append_array(_ReportSkillComboIssue(skill))
 			for effect: SkillEffect in skill.effects:
 				match effect.effect_kind:
 					SkillEffect.EffectKind.STATUS_APPLY:
@@ -280,6 +283,28 @@ static func validate_skill_resources(context: BattleContext) -> Array[String]:
 							issues.append("技能 '%s' 引用地格 '%s' 无法解析" % [skill_id, effect.tile_type_id])
 					_:
 						continue
+	return issues
+
+static func _ReportSkillComboIssue(skill: SkillDef) -> Array[String]:
+	## TILE_SPAWN 组合形态检查（S2-03 可测口——测试侧手造坏技能直调）：
+	## ①AURA_3X3 技禁 TILE_SPAWN——AURA 特化分支效果遍历只实现 STATUS_APPLY
+	## （TILE_SPAWN 照扣资源但地格不生成）；②携带 TILE_SPAWN 的技 target_shape
+	## 须 CELL——敌/友侧单体技目标解析要求目标格有存活单位，而 TILE_SPAWN
+	## 前置校验要求无存活占位（结构性恒 BLOCKED_CELL）
+	## 参数 skill：技能定义
+	## 返回：问题清单（空 = 零问题）
+	var issues: Array[String] = []
+	for effect: SkillEffect in skill.effects:
+		if effect.effect_kind != SkillEffect.EffectKind.TILE_SPAWN:
+			continue
+		if skill.target_shape == SkillDef.TargetShape.AURA_3X3:
+			issues.append(
+					"AURA_3X3 技 '%s' 含 TILE_SPAWN 效果（AURA 分支无地格生成通路——资源照扣不落地格）"
+					% skill.id)
+		elif skill.target_shape != SkillDef.TargetShape.CELL:
+			issues.append(
+					"技能 '%s' 含 TILE_SPAWN 但 target_shape=%d（非 CELL 型目标格须无存活占位——单体技恒 BLOCKED_CELL）"
+					% [skill.id, skill.target_shape])
 	return issues
 
 static func _MakeLookup(game_data: Node, domain: StringName) -> Callable:

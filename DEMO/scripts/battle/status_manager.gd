@@ -9,6 +9,9 @@
 ## §3.4（跳伤免减免轨）。
 ## 纯逻辑约束：不触任何 autoload——cfg 与 status_lookup（StringName 状态 id ->
 ## StatusDef）经 setup 注入；随机源 rng/forced 注入保证测试确定性。
+## 生命周期（S2-10）：每场战斗新建实例（battle_setup.gd:111 装配期 new）——
+## 无跨场复用，战斗结束随 BattleContext 释放即清理，不提供 clear_all 口
+## （原方法全库零调用方，死代码已删）。
 ## 单位鸭子契约（批 2 BattleUnit 实现同契约）：
 ## - side: int（0 = 我方 / 1 = 敌方，与 SkillDef.SkillSide 对齐）
 ## - alive: bool（倒地跳过 DOT 与递减结算）
@@ -124,6 +127,13 @@ func apply(target: Object, status: StatusDef, source_kind: int, source_id: Strin
 	for instance: StatusInstance in target_statuses:
 		if instance.status_id != status.id:
 			continue
+		# S2-09：即时/常规互压交叉分支可见化——即时实例被常规重施加（转常规
+		# 语义）或常规实例被即时重施加（remaining 钳 0 但保留实例）均为语义
+		# 降级路径，push_warning 留痕（数据侧 default_duration 与施加方 duration
+		# 口径漂移在此暴露）
+		if instance.duration_zero != (effective <= 0):
+			push_warning("StatusManager: 状态 '%s' 同名刷新跨即时/常规语义（在场 duration_zero=%s，重施加 effective=%d）" % [
+					status.id, str(instance.duration_zero), effective])
 		if effective >= instance.remaining:
 			instance.remaining = maxi(0, effective)
 			instance.first_tick_round = _CalcFirstTick(effective, current_round)
@@ -314,7 +324,10 @@ func on_unit_turn_locked(unit: Object) -> bool:
 
 func get_active_control(unit: Object) -> int:
 	## 行动轮生效的控制种类（M1 批 2 增）：定身 = 完全跳过行动轮、蛊惑 = 自动
-	## 随机行动——BattleController 分派消费；返回首个生效控制实例的种类
+	## 随机行动——BattleController 分派消费；返回首个生效控制实例的种类。
+	## 已知限制（S2-12 登记，不改行为）：多控制状态并存时按施加顺序取首个
+	## 生效实例——DEMO 状态池（定身/蛊惑）无并存组合，多控制组合出现时
+	## 须定优先级口径
 	## 参数 unit：待行动单位
 	## 返回：StatusDef.ControlKind（NONE = 未被控制）
 	for instance: StatusInstance in _GetUnitStatuses(unit):
@@ -340,11 +353,15 @@ func on_unit_turn_finished(unit: Object) -> void:
 
 func on_unit_moved(unit: Object) -> void:
 	## 单位移动后：移除离格移除类站位状态（草丛/高地/毒沼——判据 =
-	## StatusDef.remove_policy == on_leave_tile，站上地格期间的再施加归
+	## StatusDef.remove_policy == on_leave_tile **且施加来源为 TILE**（S2-04：
+	## 离格清除策略只对地格源站位状态成立——技能/检定源施加的同策略状态
+	## 生命周期不绑定站位，移动不清），站上地格期间的再施加归
 	## 批 2 战斗流程：入格/站位时调 apply(TILE) 重建）
 	## 参数 unit：移动单位
 	## 返回：无
 	for instance: StatusInstance in _GetUnitStatuses(unit).duplicate():
+		if instance.source_kind != StatusInstance.SourceKind.TILE:
+			continue
 		var status: StatusDef = _LookupStatus(instance.status_id)
 		if status != null and status.remove_policy == REMOVE_ON_LEAVE_TILE:
 			_GetUnitStatuses(unit).erase(instance)
@@ -368,13 +385,6 @@ func get_statuses(unit: Object) -> Array[StatusInstance]:
 	var result: Array[StatusInstance] = []
 	result.append_array(_GetUnitStatuses(unit))
 	return result
-
-func clear_all() -> void:
-	## 清空全部状态（战斗结束/重置）
-	## 参数：无
-	## 返回：无
-	_statuses = {}
-	_acted_this_round = {}
 
 func _GetUnitStatuses(unit: Object) -> Array:
 	## 取单位状态数组（懒建，内部可变引用）

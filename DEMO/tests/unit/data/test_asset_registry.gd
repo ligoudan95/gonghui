@@ -44,8 +44,9 @@ func test_run_all_clean_with_registry() -> void:
 	assert_bool(report.is_ok()).is_true()
 
 func test_broken_asset_path_is_caught_and_restored() -> void:
-	## 断链注入：战士映射改为不存在路径 → 校验必须抓到单条 V-M1-ref-asset
-	## 错误且 to_text 含资源 id；恢复后归零
+	## 断链注入：战士映射改为不存在路径 → 校验必须抓到 V-M1-ref-asset
+	## 错误且 to_text 含资源 id（S1-10 起原路径文件脱离映射，V-R4-asset-reverse
+	## 反向规则同报一条——双向命中 2 条）；恢复后归零
 	var registry: AssetRegistry = _game_data.get_record(&"registry") as AssetRegistry
 	assert_object(registry).is_not_null()
 	var original_path: String = registry.mapping[&"spr_cls_warrior"]
@@ -53,9 +54,18 @@ func test_broken_asset_path_is_caught_and_restored() -> void:
 	var report: ValidationReport = DataValidator.run_all(_game_data)
 	# 立即恢复（gdUnit 断言失败不中断函数，恢复代码必达，不污染缓存共享实例）
 	registry.mapping[&"spr_cls_warrior"] = original_path
-	assert_int(report.errors.size()).is_equal(1)
-	assert_bool(report.errors[0].begins_with("V-M1-ref-asset")).is_true()
-	assert_str(report.errors[0]).contains("spr_cls_warrior")
+	assert_int(report.errors.size()).is_equal(2)
+	var ref_asset_caught: bool = false
+	var reverse_caught: bool = false
+	for entry: String in report.errors:
+		if entry.begins_with("V-M1-ref-asset") and entry.contains("spr_cls_warrior"):
+			ref_asset_caught = true
+		if entry.begins_with("V-R4-asset-reverse") and entry.contains("spr_cls_warrior"):
+			reverse_caught = true
+	assert_bool(ref_asset_caught) \
+			.override_failure_message("坏路径应报 V-M1-ref-asset").is_true()
+	assert_bool(reverse_caught) \
+			.override_failure_message("摘映射的原文件应报 V-R4-asset-reverse").is_true()
 	assert_str(report.to_text()).contains("spr_cls_warrior")
 	# 恢复后复查归零
 	var report_after: ValidationReport = DataValidator.run_all(_game_data)

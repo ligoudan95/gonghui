@@ -14,6 +14,8 @@ const RETURN_LABEL_EXPLORE: String = "继续探索"
 const RETURN_LABEL_GUILD: String = "返回公会"
 ## 面板最小尺寸（S5-M5-1-h：原 Vector2 字面量提常量）
 const PANEL_MIN_SIZE: Vector2 = Vector2(420, 0)
+## 返回按钮最小尺寸（S4-10：与 PANEL_MIN_SIZE 同口径提常量——原内联字面量）
+const RETURN_BUTTON_MIN_SIZE: Vector2 = Vector2(200, 56)
 ## 撤退分流文案（功能二批 3 Q-A：有倒地者——委托失败但倒地队员回城转重伤）
 const RETREAT_DOWNED_DETAIL: String = "委托按失败结算；倒地的 %d 名队员回城将转重伤休养（天数以回城结算为准）。"
 ## 胜利追加行（功能二批 3：胜利但有倒地者——回城同样转重伤）
@@ -38,11 +40,9 @@ func _ready() -> void:
 	box.add_theme_constant_override("separation", 14)
 	box.custom_minimum_size = PANEL_MIN_SIZE
 	_title_label = Label.new()
-	_title_label.add_theme_font_size_override("font_size", 34)
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_title_label)
 	_detail_label = Label.new()
-	_detail_label.add_theme_font_size_override("font_size", 16)
 	_detail_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(_detail_label)
@@ -51,7 +51,7 @@ func _ready() -> void:
 	# R3-08：占位字号档位化（弹出前布局按档位预估——tscn/默认值不参与体系）
 	_title_label.add_theme_font_size_override("font_size", UiTheme.FONT_HEADING)
 	_detail_label.add_theme_font_size_override("font_size", UiTheme.FONT_NORMAL)
-	_return_button.custom_minimum_size = Vector2(200, 56)
+	_return_button.custom_minimum_size = RETURN_BUTTON_MIN_SIZE
 	_return_button.pressed.connect(func() -> void: return_pressed.emit())
 	box.add_child(_return_button)
 	add_child(box)

@@ -232,7 +232,8 @@ func test_chain2_secret_door_success_and_failure_branches() -> void:
 	await _WaitFrames(2)
 	var cast_buttons: Array = screen._panel._cast_box.get_children().filter(
 			func(child: Node) -> bool: return child is Button)
-	assert_int(cast_buttons.size()).is_equal(1)
+	# S4-04：改派面板 = 候选钮（首序）+ 尾部「返回」钮
+	assert_int(cast_buttons.size()).is_equal(2)
 	(cast_buttons[0] as Button).pressed.emit()
 	screen._panel.skip_d20()
 	await _WaitFrames(4)

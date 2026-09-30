@@ -36,6 +36,9 @@ const UI_POPUP_Z_INDEX: int = 100
 const EVENT_PANEL_WIDTH: int = 720
 ## 提示行描边宽（占位视觉结构参数——X3-06 豁免先例同口径）
 const HINT_OUTLINE_SIZE: int = 4
+## 撤退弹窗 tscn 静态文案（S4-09：无倒地时显式还原的锚定值——须与
+## explore_screen.tscn RetreatConfirm.dialog_text 同步）
+const RETREAT_CONFIRM_STATIC_TEXT: String = "撤退 = 委托失败（本次出征进度不保留、队伍不会重伤，途中所得将丢弃）。确定撤退吗？"
 
 ## UI 文案模板（逻辑层零文案——UI 层单源；tscn 占位文本运行时覆写 X3-08）
 ## W3-09 消重注（M4 批 2 收口）：event_screen 已拆除（拍板①），本屏为
@@ -489,6 +492,8 @@ func _PointAt(cell: Vector2i, trigger: int) -> InteractPointDef:
 	## 按格与触发方式查交互点
 	## 参数 cell：查询格；trigger：触发方式枚举值
 	## 返回：交互点；无则 null
+	## S5-03 登记注：单图假设——全域遍历无 map 归属过滤，多图出现时须为
+	## InteractPointDef 增 map 归属字段并按 _run.map_id 过滤查询（挂 M6）
 	for record: Resource in _game_data.get_domain(&"map/interact_points"):
 		var point := record as InteractPointDef
 		if point.cell == cell and point.trigger == trigger:
@@ -499,6 +504,8 @@ func _TargetAt(cell: Vector2i) -> TargetPointDef:
 	## 按格查目标点
 	## 参数 cell：查询格
 	## 返回：目标点；无则 null
+	## S5-03 登记注：单图假设——全域遍历无 map 归属过滤，多图出现时须为
+	## TargetPointDef 增 map 归属字段并按 _run.map_id 过滤查询（挂 M6）
 	for record: Resource in _game_data.get_domain(&"map/target_points"):
 		var target := record as TargetPointDef
 		if target.cell == cell:
@@ -630,6 +637,8 @@ func _SecretDoorPointAt(cell: Vector2i) -> InteractPointDef:
 	## 距离内可触发的暗门交互点查询（未消耗未揭示 + 半径内——遍历取首个）
 	## 参数 cell：小队当前格
 	## 返回：交互点；无则 null
+	## S5-03 登记注：单图假设——全域遍历无 map 归属过滤，多图出现时须为
+	## InteractPointDef 增 map 归属字段并按 _run.map_id 过滤查询（挂 M6）
 	var radius: int = _cfg.secret_door_trigger_radius if _cfg != null else 0
 	for record: Resource in _game_data.get_domain(&"map/interact_points"):
 		var point := record as InteractPointDef
@@ -831,6 +840,8 @@ func _ApplySecretRevealIfNeeded() -> void:
 	## 事件继续双入口共用；幂等——重复应用同值覆写）
 	## 参数：无
 	## 返回：无
+	## S5-03 登记注：单图假设——全域遍历无 map 归属过滤，多图出现时须为
+	## InteractPointDef 增 map 归属字段并按 _run.map_id 过滤查询（挂 M6）
 	if _state == null:
 		return
 	var applied: bool = false
@@ -927,8 +938,11 @@ func _GoBattle(params: BattleParams, extra_payload: Dictionary) -> bool:
 		return false
 	params.party = alive_party
 	params.hp_overrides = _run.build_hp_overrides()
-	# 功能一批 2 Q5：染毒成员战斗带入（三路由共用单点——CHECKIN 施加通道）
-	params.initial_statuses = _run.build_poison_initial_statuses()
+	# 功能一批 2 Q5：染毒成员战斗带入（三路由共用单点——CHECKIN 施加通道）；
+	# S5-01：追加合并不覆写——B 出口战经 build_battle_params 为 initial_status_id
+	# 非空节点填充的开局载入状态（如 evn_wisp_n2 → DEBUFF_exposed）须与染毒
+	# 条目并存（原无条件赋值抹掉前者）
+	params.initial_statuses.append_array(_run.build_poison_initial_statuses())
 	_routing_battle = true
 	# R4-15：关键入口消费 go 返回值（失败可感知 + 回滚）
 	var err: Error = get_node("/root/SceneManager").go(SceneManagerScript.SceneId.BATTLE_SCREEN, {
@@ -983,9 +997,10 @@ func _ResumeAfterBattle(result: BattleResult, battle_node_id: StringName,
 		if not _run.downed.get(adv, false):
 			all_downed = false
 			break
-	# P1 拍板：战斗层撤退单独映射 RETREAT（不与 DEFEAT 同轨——撤退=委托失败
-	# 但无重伤）；其余非胜利（DEFEAT）走战败重伤通道；低危 5：自由探索会话
-	# 文案分流（free 专属位）
+	# P1 拍板：战斗层撤退单独映射 RETREAT（不与 DEFEAT 同轨——重伤由
+	# _ApplyDownedInjury 四出口统一处理：倒地者回城转重伤，撤退/战败/判据
+	# 失败/成功带倒地同权）；其余非胜利（DEFEAT）同走重伤通道；低危 5：
+	# 自由探索会话文案分流（free 专属位）
 	if result.kind == BattleResult.ResultKind.RETREAT:
 		_FinishSession(GuildCore.ExpeditionOutcome.RETREAT,
 				_OutcomeTextPair(&"battle_retreat", &"battle_retreat_free"))
@@ -1248,6 +1263,11 @@ func _OnSettleReturnPressed() -> void:
 	## 返回：无
 	var err: Error = get_node("/root/SceneManager").go(SceneManagerScript.SceneId.GUILD_SHELL)
 	if err != OK:
+		if err == FAILED:
+			# S4-07：重入拒绝（SceneManager 切换进行中）属正常切换态——
+			# 不弹「失败请重试」误报
+			push_warning("explore_screen: 结算回城被拒——场景切换进行中（正常重入）")
+			return
 		push_warning("explore_screen: 结算回城失败（错误码 %d）" % err)
 		_SetHint(String(UI_TEXTS[&"settle_return_failed"]) % err)
 
@@ -1264,6 +1284,9 @@ func _OnRetreatPressed() -> void:
 	if not downed_names.is_empty():
 		%RetreatConfirm.dialog_text = String(UI_TEXTS[&"retreat_confirm_downed"]) % [
 				downed_names.size(), "、".join(downed_names), _InjuryRestDaysForHint()]
+	else:
+		# S4-09：无倒地时显式还原 tscn 静态文案（防上次有倒地增强文案残留）
+		%RetreatConfirm.dialog_text = RETREAT_CONFIRM_STATIC_TEXT
 	%RetreatConfirm.popup_centered()
 
 func _OnRetreatConfirmConfirmed() -> void:

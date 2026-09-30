@@ -412,3 +412,26 @@ func test_s2m1_no_check_single_finalized_once() -> void:
 			&"", _run.party[0], run)
 	assert_bool(second.narrative.is_empty()).is_true()
 	assert_int(int(run.rewards[&"exp"])).is_equal(first_exp)
+
+func test_s2_02_positive_hp_delta_rejected() -> void:
+	## S2-02 回归：正值 party_hp_delta 修饰拒收——不显示（hp_delta 不回带
+	## 正值）不生效（HP 不动），不产「+N 恢复」虚假反馈（数据侧带宽
+	## [-10,0] 已拦，此处运行时兜底口径）
+	var outcome := EventOutcomeDef.new()
+	outcome.exit_kind = EventOutcomeDef.ExitKind.A
+	outcome.texts = {&"success": "修饰校验用出口", &"failure": "修饰校验用出口"}
+	var modifier := EventModifierDef.new()
+	modifier.party_hp_delta = 5
+	var run := _FreshRun()
+	var view := EventRunner.EventView.new()
+	_runner._ResolveOutcome(view, outcome, false, false, true, modifier, run)
+	assert_int(view.hp_delta).is_equal(0)
+	assert_int(int(run.hp[run.party[0]])).is_equal(40)
+	assert_int(int(run.hp[run.party[1]])).is_equal(30)
+	# 负值对照：照常生效回带（HP 40→35 / 30→25）
+	modifier.party_hp_delta = -5
+	var view_negative := EventRunner.EventView.new()
+	_runner._ResolveOutcome(view_negative, outcome, false, false, true, modifier, run)
+	assert_int(view_negative.hp_delta).is_equal(-5)
+	assert_int(int(run.hp[run.party[0]])).is_equal(35)
+	assert_int(int(run.hp[run.party[1]])).is_equal(25)

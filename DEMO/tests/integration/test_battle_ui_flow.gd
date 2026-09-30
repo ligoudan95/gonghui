@@ -861,3 +861,24 @@ func test_s4m1_degraded_demo_run_pure_navigation() -> void:
 	assert_int(core.day).is_equal(day_before)
 	assert_bool(save_manager.current.save_point == SaveData.SavePoint.RETURN_SETTLED) \
 			.is_false()
+
+func test_s4_01_board_input_gated_while_retreat_confirm_visible() -> void:
+	## S4-01：撤退确认弹窗挂起期板面点按被守卫忽略（镜像 explore W2-11 先例）
+	## ——注入鼠标按下事件后无任何路径生效（不 skip 演出、不进两段式选择）
+	await _EnterRandomBattle()
+	var screen: Control = get_tree().current_scene as Control
+	assert_object(screen).is_not_null()
+	var controller: BattleController = screen.controller
+	assert_object(controller).is_not_null()
+	controller._delay_skip_requested = false
+	screen._pending_cell = screen.NO_CELL
+	(screen.get_node("%RetreatConfirm") as ConfirmationDialog).visible = true
+	var event := InputEventMouseButton.new()
+	event.button_index = MOUSE_BUTTON_LEFT
+	event.pressed = true
+	event.position = Vector2(60, 60)
+	screen._on_board_gui_input(event)
+	assert_bool(controller._delay_skip_requested) \
+			.override_failure_message("弹窗期点按不得跳过演出").is_false()
+	assert_bool(screen._pending_cell == screen.NO_CELL) \
+			.override_failure_message("弹窗期点按不得进两段式选择").is_true()
