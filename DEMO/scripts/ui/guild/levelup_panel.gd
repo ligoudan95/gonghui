@@ -52,6 +52,19 @@ func open(core: GuildCore, focus_unit_id: StringName = &"") -> void:
 	_Rebuild(focus_unit_id)
 	visible = true
 
+## UI 文案单源（M6 批 2 挂账 4.2：内联 UI 中文收编——改措辞只动此处）
+const UI_TEXTS: Dictionary = {
+	&"title": "升级与倾向",
+	&"explain": "升级效果：每级全属性 +1；选定倾向后，侧重属性每级额外 +1（升级时未选的档数会在选择时一次补加）。",
+	&"empty_hint": "（暂无待选倾向的成员——升级且未选倾向时会出现在这里）",
+	&"close_button": "关闭",
+	&"member_header_format": "%s（Lv%d）%s",
+	&"header_chosen_format": "——已选「%s」",
+	&"header_pending_backlog_format": "——待选倾向（悬置 %d 级）",
+	&"header_pending": "——待选倾向",
+	&"tendency_option_format": "%s（侧重 %s）",
+}
+
 func close() -> void:
 	## 关闭弹层
 	## 参数：无
@@ -67,13 +80,13 @@ func _Rebuild(focus_unit_id: StringName) -> void:
 	_sections.clear()
 	var title := Label.new()
 	title.name = "TitleLabel"
-	title.text = "升级与倾向"
+	title.text = UI_TEXTS[&"title"]
 	title.add_theme_font_size_override("font_size",
 			UiTheme.font_of(_cfg, &"ui_font_size_subheading", UiTheme.FONT_SUBHEADING))
 	_box.add_child(title)
 	var explain := Label.new()
 	explain.name = "EffectLabel"
-	explain.text = "升级效果：每级全属性 +1；选定倾向后，侧重属性每级额外 +1（升级时未选的档数会在选择时一次补加）。"
+	explain.text = UI_TEXTS[&"explain"]
 	explain.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	explain.add_theme_font_size_override("font_size",
 			UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
@@ -89,7 +102,7 @@ func _Rebuild(focus_unit_id: StringName) -> void:
 	if unit_queue.is_empty():
 		var empty := Label.new()
 		empty.name = "EmptyLabel"
-		empty.text = "（暂无待选倾向的成员——升级且未选倾向时会出现在这里）"
+		empty.text = UI_TEXTS[&"empty_hint"]
 		empty.add_theme_font_size_override("font_size",
 				UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 		_box.add_child(empty)
@@ -97,7 +110,7 @@ func _Rebuild(focus_unit_id: StringName) -> void:
 		_AddMemberSection(unit_id)
 	var close_button := Button.new()
 	close_button.name = "CloseLevelupButton"
-	close_button.text = "关闭"
+	close_button.text = UI_TEXTS[&"close_button"]
 	close_button.add_theme_font_size_override("font_size",
 			UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 	close_button.pressed.connect(func() -> void: close_requested.emit())
@@ -118,9 +131,10 @@ func _AddMemberSection(unit_id: StringName) -> void:
 	header.add_theme_font_size_override("font_size",
 			UiTheme.font_of(_cfg, &"ui_font_size_body", UiTheme.FONT_BODY))
 	var chosen: TendencyDef = GrowthCore.resolve_tendency(member, game_data)
-	header.text = "%s（Lv%d）%s" % [member.display_name, member.level,
-			"——已选「%s」" % chosen.display_name if chosen != null
-			else "——待选倾向（悬置 %d 级）" % backlog if backlog > 0 else "——待选倾向"]
+	header.text = UI_TEXTS[&"member_header_format"] % [member.display_name, member.level,
+			UI_TEXTS[&"header_chosen_format"] % chosen.display_name if chosen != null
+			else UI_TEXTS[&"header_pending_backlog_format"] % backlog if backlog > 0
+			else UI_TEXTS[&"header_pending"]]
 	_box.add_child(header)
 	section_nodes.append(header)
 	if chosen != null:
@@ -143,7 +157,7 @@ func _AddMemberSection(unit_id: StringName) -> void:
 		var focus_names: PackedStringArray = []
 		for attr_id: StringName in tendency.focus_attrs:
 			focus_names.append(String(QuestCard.ATTR_NAMES.get(attr_id, attr_id)))
-		button.text = "%s（侧重 %s）" % [tendency.display_name, "、".join(focus_names)]
+		button.text = UI_TEXTS[&"tendency_option_format"] % [tendency.display_name, "、".join(focus_names)]
 		button.add_theme_font_size_override("font_size",
 				UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 		button.pressed.connect(_OnTendencyChosen.bind(unit_id, tendency.id))

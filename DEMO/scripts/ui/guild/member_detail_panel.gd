@@ -18,6 +18,31 @@ signal member_changed(unit_id: StringName)
 ## 弹层 z（单源置顶——organize_panel 先例）
 const POPUP_Z_INDEX: int = 100
 
+## UI 文案单源（M6 批 2 挂账 4.2：内联 UI 中文收编——改措辞只动此处）
+const UI_TEXTS: Dictionary = {
+	&"title_format": "%s（%s Lv%d）",
+	&"status_healthy": "健康",
+	&"status_resting_format": "休养 %d 天",
+	&"status_backlog_format": "｜有 %d 级成长待选倾向",
+	&"exp_format": "经验 %d/%d",
+	&"exp_capped": "已满级",
+	&"status_line_format": "状态：%s｜%s｜技能点 %d",
+	&"attr_line_format": "%s %d",
+	&"skills_title": "技能",
+	&"attack_skill_format": "· %s（普攻·常驻不占点）",
+	&"learned_skill_format": "· %s（已解锁）",
+	&"no_learned_skill": "·（暂无已解锁技能——初始队员技能已预解锁、招募成员花点解锁）",
+	&"locked_skill_format": "· %s（未解锁）",
+	&"unlock_button_format": "解锁（%d 点）",
+	&"tendency_chosen_format": "倾向：%s（侧重 %s）",
+	&"tendency_none_format": "倾向：未选（升级侧重成长待定%s）",
+	&"tendency_backlog_format": "——已有 %d 级悬置",
+	&"choose_tendency_button": "选择倾向",
+	&"close_button": "关闭",
+	&"equip_format": "装备（初始套装·固定）：%s｜武器加值 %d｜护甲 %d",
+	&"equip_missing": "装备（初始套装·固定）：未查到职业套装",
+}
+
 ## 总控配置
 var _cfg: CoreConfig = null
 ## 内容容器
@@ -64,38 +89,40 @@ func _Rebuild() -> void:
 	var cls: ClassDef = game_data.get_record(_member.class_id) as ClassDef
 	var class_name_text: String = cls.display_name if cls != null else String(_member.class_id)
 	_MakeLabel("title", &"ui_font_size_subheading", UiTheme.FONT_SUBHEADING).text = \
-			"%s（%s Lv%d）" % [_member.display_name, class_name_text, _member.level]
+			UI_TEXTS[&"title_format"] % [_member.display_name, class_name_text, _member.level]
 	# 状态行（健康/休养 + 悬置倾向提示；满级成员经验段显示「已满级」——M4-8）
-	var status_text: String = "健康" if _member.status == AdventurerData.Status.HEALTHY \
-			else "休养 %d 天" % _member.rest_days
+	var status_text: String = UI_TEXTS[&"status_healthy"] \
+			if _member.status == AdventurerData.Status.HEALTHY \
+			else UI_TEXTS[&"status_resting_format"] % _member.rest_days
 	var backlog: int = int(_core.pending_tendency_levels.get(String(_member.unit_id), 0))
 	if backlog > 0:
-		status_text += "｜有 %d 级成长待选倾向" % backlog
-	var exp_text: String = "经验 %d/%d" % [_member.exp,
+		status_text += UI_TEXTS[&"status_backlog_format"] % backlog
+	var exp_text: String = UI_TEXTS[&"exp_format"] % [_member.exp,
 			GrowthCore.exp_to_next(_member.level, _cfg)] \
-			if _member.level < _cfg.level_cap else "已满级"
-	_MakeLabel("", &"ui_font_size_normal", UiTheme.FONT_NORMAL).text = "状态：%s｜%s｜技能点 %d" % [
+			if _member.level < _cfg.level_cap else UI_TEXTS[&"exp_capped"]
+	_MakeLabel("", &"ui_font_size_normal", UiTheme.FONT_NORMAL).text = \
+			UI_TEXTS[&"status_line_format"] % [
 			status_text, exp_text, _member.skill_points]
 	# 属性行（七属性中文——QuestCard.ATTR_NAMES 单源复用）
 	var attr_parts: PackedStringArray = []
 	for attr_id: StringName in AttrKeys.seven_attrs():
-		attr_parts.append("%s %d" % [String(QuestCard.ATTR_NAMES.get(attr_id, attr_id)),
+		attr_parts.append(UI_TEXTS[&"attr_line_format"] % [String(QuestCard.ATTR_NAMES.get(attr_id, attr_id)),
 				int(_member.attrs.get(attr_id, AttrKeys.DEFAULT_ATTR_VALUE))])
 	_MakeLabel("", &"ui_font_size_normal", UiTheme.FONT_NORMAL).text = " ".join(attr_parts)
 	# 装备槽位（字段位展示——DEMO 固定初始套装：按职业查 equip 域）
 	_MakeLabel("", &"ui_font_size_normal", UiTheme.FONT_NORMAL).text = _EquipText(game_data)
 	# 技能总览：普攻（D3 常驻不占点）+ 已解锁 + 可解锁（花点按钮）
-	_MakeLabel("", &"ui_font_size_body", UiTheme.FONT_BODY).text = "技能"
+	_MakeLabel("", &"ui_font_size_body", UiTheme.FONT_BODY).text = UI_TEXTS[&"skills_title"]
 	var attack_id: StringName = cls.base_attack_skill_id if cls != null else &""
 	var attack: SkillDef = game_data.get_record(attack_id) as SkillDef
-	_MakeLabel("", &"ui_font_size_normal", UiTheme.FONT_NORMAL).text = "· %s（普攻·常驻不占点）" % [
+	_MakeLabel("", &"ui_font_size_normal", UiTheme.FONT_NORMAL).text = UI_TEXTS[&"attack_skill_format"] % [
 			attack.display_name if attack != null else String(attack_id)]
 	var learned: PackedStringArray = []
 	for skill_id: StringName in _member.skill_ids:
 		var skill: SkillDef = game_data.get_record(skill_id) as SkillDef
-		learned.append("· %s（已解锁）" % (skill.display_name if skill != null else String(skill_id)))
+		learned.append(UI_TEXTS[&"learned_skill_format"] % (skill.display_name if skill != null else String(skill_id)))
 	if learned.is_empty():
-		learned.append("·（暂无已解锁技能——初始队员技能已预解锁、招募成员花点解锁）")
+		learned.append(UI_TEXTS[&"no_learned_skill"])
 	for line: String in learned:
 		_MakeLabel("", &"ui_font_size_normal", UiTheme.FONT_NORMAL).text = line
 	var tier_one_ids: Array[StringName] = []
@@ -114,11 +141,11 @@ func _Rebuild() -> void:
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		label.add_theme_font_size_override("font_size",
 				UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
-		label.text = "· %s（未解锁）" % (skill.display_name if skill != null else String(skill_id))
+		label.text = UI_TEXTS[&"locked_skill_format"] % (skill.display_name if skill != null else String(skill_id))
 		row.add_child(label)
 		var button := Button.new()
 		button.name = "UnlockButton"
-		button.text = "解锁（%d 点）" % _cfg.skill_unlock_cost
+		button.text = UI_TEXTS[&"unlock_button_format"] % _cfg.skill_unlock_cost
 		button.disabled = _member.skill_points < _cfg.skill_unlock_cost
 		button.add_theme_font_size_override("font_size",
 				UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
@@ -137,15 +164,15 @@ func _Rebuild() -> void:
 		var focus_names: PackedStringArray = []
 		for attr_id: StringName in chosen.focus_attrs:
 			focus_names.append(String(QuestCard.ATTR_NAMES.get(attr_id, attr_id)))
-		tendency_label.text = "倾向：%s（侧重 %s）" % [chosen.display_name, "、".join(focus_names)]
+		tendency_label.text = UI_TEXTS[&"tendency_chosen_format"] % [chosen.display_name, "、".join(focus_names)]
 	else:
-		tendency_label.text = "倾向：未选（升级侧重成长待定%s）" % \
-				("——已有 %d 级悬置" % backlog if backlog > 0 else "")
+		tendency_label.text = UI_TEXTS[&"tendency_none_format"] % \
+				(UI_TEXTS[&"tendency_backlog_format"] % backlog if backlog > 0 else "")
 	tendency_area.add_child(tendency_label)
 	if chosen == null:
 		var tendency_button := Button.new()
 		tendency_button.name = "ChooseTendencyButton"
-		tendency_button.text = "选择倾向"
+		tendency_button.text = UI_TEXTS[&"choose_tendency_button"]
 		tendency_button.add_theme_font_size_override("font_size",
 				UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 		tendency_button.pressed.connect(func() -> void:
@@ -154,7 +181,7 @@ func _Rebuild() -> void:
 	# 关闭
 	var close_button := Button.new()
 	close_button.name = "CloseDetailButton"
-	close_button.text = "关闭"
+	close_button.text = UI_TEXTS[&"close_button"]
 	close_button.add_theme_font_size_override("font_size",
 			UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 	close_button.pressed.connect(func() -> void: close_requested.emit())
@@ -168,9 +195,9 @@ func _EquipText(game_data: Node) -> String:
 	for record: Resource in game_data.get_domain(&"equip"):
 		var equip := record as EquipDef
 		if equip.class_ref == _member.class_id:
-			return "装备（初始套装·固定）：%s｜武器加值 %d｜护甲 %d" % [
+			return UI_TEXTS[&"equip_format"] % [
 					equip.display_name, equip.weapon_bonus, equip.armor_value]
-	return "装备（初始套装·固定）：未查到职业套装"
+	return UI_TEXTS[&"equip_missing"]
 
 func _OnUnlockPressed(skill_id: StringName) -> void:
 	## 技能解锁（GrowthCore.unlock_skill——校验点数/归属/重复；成功后重建+通知）

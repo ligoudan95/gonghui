@@ -48,8 +48,9 @@ enum Trigger {
 @export var reveal_cells: Array[Vector2i] = []
 ## 暗门揭示目标地格 id（map/tiles 域；须可通行——V-M3-secret-reveal 拦截）
 @export var reveal_tile_id: StringName = &""
-## 点位归属图 id（W3-05 登记注：字段**未加**——2026-09-26 拍板归 M4 多图时
-## 与 target_points 同步补 map_ref 字段并收紧 V-M3-map-points 多图分支，勿提前）
+## 点位归属图 id（M6 批 2 挂账 4.1：map/maps 域记录 id——V-M3-map-points
+## 校验非空且可解析；explore 层五处点位查询按当前图过滤，多图数据前置护栏）
+@export var map_ref: StringName = &""
 
 ## 设计备注（【占位·试玩校准】等标注与数据来源说明，Inspector 可编辑）
 @export var comment: String = ""

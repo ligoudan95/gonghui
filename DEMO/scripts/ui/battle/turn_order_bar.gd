@@ -1,6 +1,7 @@
 ## 回合序条（TurnOrderBar，HBoxContainer——TopBar 内）
-## 职责：展示本回合行动序列——各单位小头像（sprite 36×36 Nearest）+ 速度值，
-## 当前行动位金色高亮、倒地灰显；每回合初（round_started）重建。
+## 职责：展示本回合行动序列——各单位小头像（M6：idle 竖条首帧 AtlasTexture
+## 36×36 Nearest）+ 速度值，当前行动位金色高亮、倒地灰显；每回合初
+## （round_started）重建。
 ## 数据来源：M1 批 3 方案 §7.1（TopBar.TurnOrderBar：头像+速度值当前高亮）。
 class_name TurnOrderBar
 extends HBoxContainer
@@ -60,8 +61,11 @@ func rebuild(units: Array) -> void:
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.custom_minimum_size = Vector2(ICON_SIZE, ICON_SIZE)
 		icon.size = Vector2(ICON_SIZE, ICON_SIZE)
-		icon.texture = SpriteResolver.texture_of(
-				SpriteResolver.sprite_id_of(unit, _game_data), _game_data)
+		# M6 批 1：头像 = idle 竖条首帧 atlas（静态单图键已退役——
+		# 整竖条直显契约由 frame_atlas_of 首帧切片杜绝）
+		icon.texture = SpriteResolver.frame_atlas_of(
+				SpriteResolver.sprite_id_of(unit, _game_data),
+				UnitAnimState.Action.IDLE, 0, _game_data)
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		box.add_child(icon)
 		var speed_label := Label.new()

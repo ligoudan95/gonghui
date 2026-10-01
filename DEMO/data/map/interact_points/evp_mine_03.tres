@@ -8,4 +8,5 @@ id = &"evp_mine_03"
 display_name = "废弃矿工营地"
 cell = Vector2i(4, 7)
 ref_id = &"chain_mine_camp"
+map_ref = &"map_m1_village_mine"
 comment = "【占位·试玩校准】evp_<区域>_<序>：交互点（链入口——西巷营地）"

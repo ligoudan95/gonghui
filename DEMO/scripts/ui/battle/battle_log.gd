@@ -47,6 +47,32 @@ const APPLY_FAIL_TEXTS: Dictionary = {
 	&"source_not_allowed": "来源不符",
 }
 
+## UI 文案单源（M6 批 2 挂账 4.2：内联 UI 中文收编——改措辞只动此处）
+const UI_TEXTS: Dictionary = {
+	&"round_line_format": "—— 回合 %d ——",
+	&"turn_line_format": "▶ %s 行动",
+	&"move_line_format": "%s 移动 (%d,%d)→(%d,%d)",
+	&"dot_line_format": "%s 跳伤 −%d",
+	&"status_line_format": "%s 状态变化：%s",
+	&"downed_line_format": "%s 倒地",
+	&"trap_line_format": "%s 踩中陷阱 −%d",
+	&"end_line_format": "◆ %s（%d 回合）",
+	&"fail_line_format": "%s · %s → 失败：%s",
+	&"header_target_format": " → %s",
+	&"hit_line_format": "  命中 %d%%（基准 %d +修正 %d −闪避 %d）→ %s",
+	&"hit_passed": "命中",
+	&"hit_missed": "失手",
+	&"crit_none": "未暴击",
+	&"crit_format": "暴击 %d%%",
+	&"damage_chain_format": "  输出 %.1f（站位×%.1f 克制×%.1f）→ 减免（抗 %d%% 甲 %d 穿 %d）%d → %s → 最终 %d",
+	&"downed_sub_format": "  %s 倒地",
+	&"heal_sub_format": "  治疗 %d",
+	&"apply_sub_format": "  施加 %s %d 回合 %s",
+	&"apply_fail_format": "✗（%s）",
+	&"apply_ok": "✓",
+	&"trap_sub_format": "  布置于 (%d,%d)｜预结算伤害 %d",
+}
+
 ## 战斗上下文（单位名解析；可空）
 var context: BattleSetup.BattleContext = null
 
@@ -95,12 +121,13 @@ func setup(log_controller: BattleController, log_context: BattleSetup.BattleCont
 	## 返回：无
 	context = log_context
 	log_controller.round_started.connect(func(round_no: int) -> void:
-		push_line("—— 回合 %d ——" % round_no, LineKind.SYSTEM))
+		push_line(UI_TEXTS[&"round_line_format"] % round_no, LineKind.SYSTEM))
 	log_controller.turn_started.connect(func(unit: BattleUnit) -> void:
-		push_line("▶ %s 行动" % _NameOf(unit.unit_id), LineKind.SYSTEM))
+		push_line(UI_TEXTS[&"turn_line_format"] % _NameOf(unit.unit_id), LineKind.SYSTEM))
 	log_controller.unit_moved.connect(
-			func(unit: BattleUnit, from_pos: Vector2i, to_pos: Vector2i) -> void:
-		push_line("%s 移动 (%d,%d)→(%d,%d)" % [
+			func(unit: BattleUnit, from_pos: Vector2i, to_pos: Vector2i,
+					_path: Array) -> void:
+		push_line(UI_TEXTS[&"move_line_format"] % [
 			_NameOf(unit.unit_id), from_pos.x, from_pos.y, to_pos.x, to_pos.y,
 		], LineKind.MOVE))
 	log_controller.skill_executed.connect(
@@ -112,18 +139,18 @@ func setup(log_controller: BattleController, log_context: BattleSetup.BattleCont
 		for entry: Dictionary in dot_damage:
 			var unit: BattleUnit = entry.get(&"unit", null) as BattleUnit
 			if unit != null:
-				push_line("%s 跳伤 −%d" % [_NameOf(unit.unit_id), int(entry.get(&"damage", 0))],
+				push_line(UI_TEXTS[&"dot_line_format"] % [_NameOf(unit.unit_id), int(entry.get(&"damage", 0))],
 						LineKind.DAMAGE))
 	log_controller.status_changed.connect(
 			func(unit: BattleUnit, status_id: StringName) -> void:
-		push_line("%s 状态变化：%s" % [_NameOf(unit.unit_id), _StatusNameOf(status_id)],
+		push_line(UI_TEXTS[&"status_line_format"] % [_NameOf(unit.unit_id), _StatusNameOf(status_id)],
 				LineKind.STATUS))
 	log_controller.unit_downed.connect(func(unit: BattleUnit) -> void:
-		push_line("%s 倒地" % _NameOf(unit.unit_id), LineKind.DAMAGE))
+		push_line(UI_TEXTS[&"downed_line_format"] % _NameOf(unit.unit_id), LineKind.DAMAGE))
 	log_controller.trap_triggered.connect(func(unit: BattleUnit, damage: int) -> void:
-		push_line("%s 踩中陷阱 −%d" % [_NameOf(unit.unit_id), damage], LineKind.DAMAGE))
+		push_line(UI_TEXTS[&"trap_line_format"] % [_NameOf(unit.unit_id), damage], LineKind.DAMAGE))
 	log_controller.battle_ended.connect(func(result: BattleResult) -> void:
-		push_line("◆ %s（%d 回合）" % [result.kind_text(), result.rounds_used],
+		push_line(UI_TEXTS[&"end_line_format"] % [result.kind_text(), result.rounds_used],
 				LineKind.SYSTEM))
 	# R3-01：setup 时 context 就绪——按表值重建面板样式（_ready 期 context
 	# 为空只能用兜底色，表驱动的深底色自此生效）
@@ -159,14 +186,14 @@ func push_skill_trace(caster_name: String, result: SkillExecutor.ExecutionResult
 	# 失败：失败码中文映射（无后续链）
 	if trace.has(&"fail_reason"):
 		var reason: StringName = trace[&"fail_reason"]
-		push_line("%s · %s → 失败：%s" % [caster_name, skill_name,
+		push_line(UI_TEXTS[&"fail_line_format"] % [caster_name, skill_name,
 				FAIL_TEXTS.get(reason, String(reason))], LineKind.SYSTEM)
 		return
 	# 主行：施放者 · 技能 → 目标
 	var target_name: String = _NameOf(trace.get(&"target", &""))
 	var header: String = "%s · %s" % [caster_name, skill_name]
 	if not target_name.is_empty():
-		header += " → %s" % target_name
+		header += UI_TEXTS[&"header_target_format"] % target_name
 	var header_kind: int = LineKind.SYSTEM
 	if trace.has(&"damage_chain"):
 		header_kind = LineKind.DAMAGE
@@ -178,12 +205,12 @@ func push_skill_trace(caster_name: String, result: SkillExecutor.ExecutionResult
 	# 命中链：构成（基础+修正−闪避）→ 掷骰结果
 	if trace.has(&"hit_chain"):
 		var hit_chain: Dictionary = trace[&"hit_chain"]
-		var hit_line: String = "  命中 %d%%（基准 %d +修正 %d −闪避 %d）→ %s" % [
+		var hit_line: String = UI_TEXTS[&"hit_line_format"] % [
 			UiTheme.pct(float(hit_chain[&"final"])),
 			UiTheme.pct(float(hit_chain[&"base"])),
 			int(hit_chain[&"mod"]),
 			UiTheme.pct(float(hit_chain[&"dodge"])),
-			"命中" if hit_chain[&"passed"] else "失手",
+			UI_TEXTS[&"hit_passed"] if hit_chain[&"passed"] else UI_TEXTS[&"hit_missed"],
 		]
 		push_line(hit_line, LineKind.SYSTEM)
 		if not hit_chain[&"passed"]:
@@ -191,10 +218,10 @@ func push_skill_trace(caster_name: String, result: SkillExecutor.ExecutionResult
 	# 伤害链：面板输出 → 减免轨 → 暴击 → 最终
 	if trace.has(&"damage_chain"):
 		var chain: Dictionary = trace[&"damage_chain"]
-		var crit_text: String = "未暴击"
+		var crit_text: String = UI_TEXTS[&"crit_none"]
 		if chain[&"crit"]:
-			crit_text = "暴击 %d%%" % UiTheme.pct(float(chain[&"crit_chance"]))
-		push_line("  输出 %.1f（站位×%.1f 克制×%.1f）→ 减免（抗 %d%% 甲 %d 穿 %d）%d → %s → 最终 %d" % [
+			crit_text = UI_TEXTS[&"crit_format"] % UiTheme.pct(float(chain[&"crit_chance"]))
+		push_line(UI_TEXTS[&"damage_chain_format"] % [
 			float(chain[&"raw"]),
 			float(chain[&"panel_mult"]),
 			float(chain[&"race_mult"]),
@@ -207,26 +234,26 @@ func push_skill_trace(caster_name: String, result: SkillExecutor.ExecutionResult
 		], LineKind.DAMAGE)
 	# 倒地
 	for unit_id: StringName in result.downed_units:
-		push_line("  %s 倒地" % _NameOf(unit_id), LineKind.DAMAGE)
+		push_line(UI_TEXTS[&"downed_sub_format"] % _NameOf(unit_id), LineKind.DAMAGE)
 	# 治疗链
 	if trace.has(&"heal"):
-		push_line("  治疗 %d" % int(trace[&"heal"]), LineKind.HEAL)
+		push_line(UI_TEXTS[&"heal_sub_format"] % int(trace[&"heal"]), LineKind.HEAL)
 	# 状态链：逐条施加成败（状态名中文——批 D L7；S2-2：失败原因区分——
 	# 未命中/被抵抗/叠层已满/来源不符，资源白扣可感知）
 	if trace.has(&"statuses"):
 		for entry: Dictionary in trace[&"statuses"]:
-			var applied_text: String = "✓"
+			var applied_text: String = UI_TEXTS[&"apply_ok"]
 			if not entry[&"applied"]:
 				var reason: StringName = entry.get(&"reason", &"resisted")
-				applied_text = "✗（%s）" % APPLY_FAIL_TEXTS.get(reason, String(reason))
-			push_line("  施加 %s %d 回合 %s" % [
+				applied_text = UI_TEXTS[&"apply_fail_format"] % APPLY_FAIL_TEXTS.get(reason, String(reason))
+			push_line(UI_TEXTS[&"apply_sub_format"] % [
 					_StatusNameOf(entry[&"id"]), int(entry[&"duration"]), applied_text],
 					LineKind.STATUS)
 	# 陷阱链
 	if trace.has(&"trap"):
 		var trap: Dictionary = trace[&"trap"]
 		var cell: Vector2i = trap[&"cell"]
-		push_line("  布置于 (%d,%d)｜预结算伤害 %d" % [
+		push_line(UI_TEXTS[&"trap_sub_format"] % [
 				cell.x, cell.y, int(trap[&"damage"])], LineKind.STATUS)
 
 func get_entries() -> VBoxContainer:

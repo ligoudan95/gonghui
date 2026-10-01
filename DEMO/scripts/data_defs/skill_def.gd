@@ -47,6 +47,14 @@ enum DamageType {
 	NONE,
 }
 
+## 攻击姿态（M6 批 1 D4=A 拍板：技能级动作路由——技能执行时施放者徽章播
+## 哪套攻击动作；NONE = 纯自身增益不播攻击动作）
+enum AttackPose {
+	NONE,
+	MELEE,
+	CAST,
+}
+
 ## 技能 id（skl_ 前缀，如 &"skl_atk_warrior"）
 @export var id: StringName = &""
 ## 中文名（如「挥击」）
@@ -73,6 +81,9 @@ enum DamageType {
 @export var attr_weights: Dictionary[StringName, float] = {}
 ## 伤害类型（决定物理/法术减免轨；非伤害技能填 NONE）
 @export var damage_type: DamageType = DamageType.NONE
+## 攻击姿态（M6 批 1：伤害型技能须 MELEE/CAST——V-M6-skill-pose 拦截；
+## 纯自身增益/纯施放类按演出语义回填，DEMO 23 条全回填）
+@export var attack_pose: AttackPose = AttackPose.NONE
 ## 技能强度系数（伤害 =（Σ 权重×属性 + 武器加值）× 系数，再走减免轨，案 17 §3.4）
 @export var power_coefficient: float = 1.0
 ## 效果列表（SkillEffect 子资源数组：状态施加/治疗/地格生成/战斗修正）

@@ -94,7 +94,7 @@ func test_equip_values() -> void:
 func test_naming_registry_extended() -> void:
 	## 命名登记表：160 条（48 + 14 + M2 28 + M3 29 + M4 13 + 功能一批 2 染毒毒瘴 2），新资源全部登记且含域前缀规则注
 	var registry: NamingRegistry = _game_data.get_record(&"naming_registry")
-	assert_int(registry.entries.size()).is_equal(160)
+	assert_int(registry.entries.size()).is_equal(205)
 	var registered: Dictionary = {}
 	for entry: NamingEntry in registry.entries:
 		registered[entry.resource_id] = entry
@@ -141,9 +141,12 @@ func test_sprite_ids_backfilled_and_registered() -> void:
 				.override_failure_message("%s 缺 sprite_id" % enemy.id).is_false()
 		sprite_ids.append(enemy.sprite_id)
 	assert_int(sprite_ids.size()).is_equal(9)
+	# M6 批 1：单图键退役——登记断言改六动作件齐套（<sprite_id>_<action>）
 	for sprite_id: StringName in sprite_ids:
-		assert_bool(_game_data.get_asset_path(sprite_id).is_empty()) \
-				.override_failure_message("sprite '%s' 未在 AssetRegistry 登记" % sprite_id).is_false()
+		for action: StringName in SpriteResolver.ANIM_ACTIONS:
+			var asset_id: StringName = StringName(String(sprite_id) + "_" + String(action))
+			assert_bool(_game_data.get_asset_path(asset_id).is_empty()) \
+					.override_failure_message("动作件 '%s' 未在 AssetRegistry 登记" % asset_id).is_false()
 
 func test_broken_mod_key_caught() -> void:
 	## V-A-mod-keys 注入（批 A H4）：状态表 modifiers 拼错键 → 报错 → 恢复归零；

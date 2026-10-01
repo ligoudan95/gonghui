@@ -45,6 +45,15 @@ const DAMAGE_OUTLINE_SIZE: int = 4
 ## 飘字文案模板（B-8：暴击/普通两态——文案单源，改措辞只动此处）
 const DAMAGE_TEXT_CRIT: String = "暴击 %d"
 const DAMAGE_TEXT_NORMAL: String = "%d"
+## 飘字文案（M6 批 1：MISS 变体——闪避=不播受击+MISS 飘字拍板口径；
+## per-file UI_TEXTS 既定模式）
+const UI_TEXTS: Dictionary = {
+	&"miss_text": "闪避",
+}
+## 移动演出步数上限口径注（D6：tween 总时长 = 步长 × min(路径步数, 上限)——
+## 远距移动时长钳制防长路径演出拖沓；低15 盲审修复：上限值入表
+## cfg.ui_battle_move_max_steps（UiTheme.BATTLE_MOVE_MAX_STEPS 兜底 +
+## V-B2 锚定/V-M0 值域），读取口 _MoveTweenMaxSteps）
 ## 飘字配色与 tips 行配色（S4-M4-3-d：入表——cfg ui_damage_*/ui_tips_* 字段
 ## 消费经 _OverlayColor 同款 color_of 读取口；UiTheme 兜底常量锚定）
 ## 战斗上下文（setup 注入）
@@ -105,6 +114,8 @@ func _UiFont(field: StringName, fallback: int) -> int:
 var _overlay_layer: Control = null
 ## 单位徽章池（unit_id -> UnitBadge）
 var _badges: Dictionary = {}
+## 徽章移动 tween 池（unit_id -> Tween——重移动前 kill 旧 tween；W3 重建清池）
+var _move_tweens: Dictionary = {}
 ## 目标确认 tips 面板（技能点选目标的属性数据小窗——懒建单例，九轮反馈）
 var _tips_panel: PanelContainer = null
 ## tips 第一行（预计伤害/治疗/技能名）
@@ -149,6 +160,8 @@ func _OnResized() -> void:
 	if is_equal_approx(old_cell, cell_size) and old_origin == origin:
 		return
 	_KillFloatingTweens()
+	for unit_id: StringName in _move_tweens.keys():
+		_KillMoveTween(unit_id)
 	for child: Node in get_children():
 		child.queue_free()
 	_cells.clear()
@@ -365,13 +378,115 @@ func refresh_all_badges() -> void:
 	for badge: UnitBadge in _badges.values():
 		badge.refresh()
 
-func move_badge(unit: BattleUnit) -> void:
-	## 徽章位置跟随单位（移动/生成后）
+func _MoveTweenMaxSteps(cfg: CoreConfig) -> int:
+	## 移动演出步数上限读取（低15：cfg.ui_battle_move_max_steps 表驱动——
+	## UiTheme.BATTLE_MOVE_MAX_STEPS 兜底；D6 语义 = tween 总时长钳制护栏）
+	## 参数 cfg：总控配置（可空）
+	## 返回：步数上限（表值非法 ≤ 0 回退兜底）
+	if cfg != null and cfg.ui_battle_move_max_steps > 0:
+		return cfg.ui_battle_move_max_steps
+	return UiTheme.BATTLE_MOVE_MAX_STEPS
+
+func move_badge(unit: BattleUnit, from_pos: Vector2i = Vector2i(-9999, -9999),
+		path_cells: Array = []) -> void:
+	## 徽章位置跟随单位（M6 D6=A：from_pos 有效时播移动演出——tween 滑动 +
+	## MOVE 动作，tween 完回落 IDLE；步长 = cfg.ui_battle_move_step_seconds，
+	## ≤ 0 瞬移直落后**立即回落 IDLE**【低6：与 tween 分支对称——cfg 置 0 不再
+	## 走步动画常驻】；低9 盲审修复：path_cells 携带 controller 寻路真实踏过
+	## 格序（unit_moved 信号扩 4 参）——拐点链逐格 tween 不再穿障碍格直插，
+	## 步数按真实路径长计（无路径数据回退曼哈顿直线兜底）；总时长 =
+	## 步长 × min(步数, cfg.ui_battle_move_max_steps)（钳制语义保留）；
+	## grid_pos 仍为位置权威——动画纯视觉不阻塞
+	## 参数 unit：单位；from_pos：移动起点格（无效哨兵 = 直落不演出）；
+	## path_cells：踏过格序（含终点不含起点；空 = 曼哈顿直线兜底）
+	## 返回：无
+	var badge: UnitBadge = _badges.get(unit.unit_id, null)
+	if badge == null:
+		return
+	var dest: Vector2 = origin + Vector2(unit.grid_pos) * cell_size
+	_KillMoveTween(unit.unit_id)
+	if from_pos == Vector2i(-9999, -9999) or from_pos == unit.grid_pos:
+		badge.position = dest
+		return
+	var step_seconds: float = UiTheme.BATTLE_MOVE_STEP_SECONDS
+	var max_steps: int = UiTheme.BATTLE_MOVE_MAX_STEPS
+	if context != null and context.cfg != null:
+		step_seconds = context.cfg.ui_battle_move_step_seconds
+		max_steps = _MoveTweenMaxSteps(context.cfg)
+	# 拐点链整理：滤起点/去重 + 保证末点 == 目的地（信号侧坏数据不把徽章
+	# 留在半途；空链退化为单段直插 = 旧直线行为）
+	var waypoints: Array[Vector2i] = []
+	for cell: Vector2i in path_cells:
+		if cell != from_pos and not waypoints.has(cell):
+			waypoints.append(cell)
+	if waypoints.is_empty() or waypoints[waypoints.size() - 1] != unit.grid_pos:
+		waypoints.append(unit.grid_pos)
+	# 计步：有路径数据按真实拐点数；无路径回退曼哈顿（旧口径）
+	var raw_steps: int = waypoints.size()
+	if path_cells.is_empty():
+		raw_steps = maxi(absi(unit.grid_pos.x - from_pos.x)
+				+ absi(unit.grid_pos.y - from_pos.y), 1)
+	var total_steps: int = mini(maxi(raw_steps, 1), max_steps)
+	if step_seconds <= 0.0:
+		# 瞬移（测试注 0 / 生产 cfg 置 0）：位置直落；动作走一遍 MOVE 再立即
+		# 回落 IDLE（低6 对称修复；攻击演出中两请求均被压制属预期优先级语义）
+		badge.position = dest
+		badge.play_action(UnitAnimState.Action.MOVE)
+		badge.play_action(UnitAnimState.Action.IDLE)
+		return
+	badge.position = origin + Vector2(from_pos) * cell_size
+	badge.play_action(UnitAnimState.Action.MOVE)
+	# 逐拐点等分时长链式 tween（总时长 = 步长 × 钳制步数——D6 语义不变）
+	var leg_seconds: float = step_seconds * float(total_steps) / float(waypoints.size())
+	var tween: Tween = create_tween()
+	for cell: Vector2i in waypoints:
+		tween.tween_property(badge, "position",
+				origin + Vector2(cell) * cell_size, leg_seconds)
+	tween.tween_callback(func() -> void:
+		if is_instance_valid(badge):
+			badge.play_action(UnitAnimState.Action.IDLE))
+	_move_tweens[unit.unit_id] = tween
+	tween.finished.connect(func() -> void: _move_tweens.erase(unit.unit_id))
+
+func _KillMoveTween(unit_id: StringName) -> void:
+	## 终止单位在途移动 tween（重移动/重建前调用）
+	## 参数 unit_id：单位 id
+	## 返回：无
+	var tween: Tween = _move_tweens.get(unit_id, null) as Tween
+	if tween != null and tween.is_valid():
+		tween.kill()
+	_move_tweens.erase(unit_id)
+
+func play_badge_action(unit: BattleUnit, action: int) -> void:
+	## 单位动作播放转发（M6：battle_screen 十信号分派消费口）
+	## 参数 unit：单位；action：UnitAnimState.Action
+	## 返回：无
+	var badge: UnitBadge = _badges.get(unit.unit_id, null)
+	if badge != null:
+		badge.play_action(action)
+
+func play_all_badges_action(action: int) -> void:
+	## 全员动作播放（M6：battle_started → 全员 IDLE）
+	## 参数 action：UnitAnimState.Action
+	## 返回：无
+	for badge: UnitBadge in _badges.values():
+		badge.play_action(action)
+
+func set_badge_flip(unit: BattleUnit, flip: bool) -> void:
+	## 单位徽章朝向翻转（M6：skill_executed 按双方 x 相位消费）
+	## 参数 unit：单位；flip：true = 水平翻转
+	## 返回：无
+	var badge: UnitBadge = _badges.get(unit.unit_id, null)
+	if badge != null:
+		badge.set_flip(flip)
+
+func flash_badge(unit: BattleUnit) -> void:
+	## 单位徽章受击白闪转发（M6：skill_executed 命中伤害路径消费）
 	## 参数 unit：单位
 	## 返回：无
 	var badge: UnitBadge = _badges.get(unit.unit_id, null)
 	if badge != null:
-		badge.position = origin + Vector2(unit.grid_pos) * cell_size
+		badge.play_hit_flash()
 
 func set_current_unit(unit: BattleUnit) -> void:
 	## 当前行动高亮（其余清亮）
@@ -393,12 +508,30 @@ func show_damage_number(cell: Vector2i, amount: int, is_crit: bool) -> void:
 	## 恒顶层（后建节点不压住目标确认小窗）
 	## 参数 cell：目标格；amount：伤害值；is_crit：暴击标记
 	## 返回：无
+	_SpawnFloatText(cell, (DAMAGE_TEXT_CRIT if is_crit else DAMAGE_TEXT_NORMAL) % amount,
+			_DamageCritColor() if is_crit else _DamageNormalColor(),
+			&"ui_font_size_large" if is_crit else &"ui_font_size_body",
+			UiTheme.FONT_LARGE if is_crit else UiTheme.FONT_BODY)
+
+func show_miss_text(cell: Vector2i) -> void:
+	## 飘字 MISS（M6 批 1：闪避=不播受击 + MISS 飘字——文案 UI_TEXTS 单源；
+	## 配色/字号取 tips 次行档与伤害数字错开）
+	## 参数 cell：目标格
+	## 返回：无
+	_SpawnFloatText(cell, String(UI_TEXTS[&"miss_text"]),
+			_TipsLine2Color(), &"ui_font_size_body", UiTheme.FONT_BODY)
+
+func _SpawnFloatText(cell: Vector2i, text: String, color: Color,
+		font_field: StringName, font_fallback: int) -> void:
+	## 飘字泛化（M6：伤害/MISS 共用）——上浮淡出后自毁；S4-11：创建后保
+	## tips 恒顶层；S4-R2-03：tween 入池（resize 重建前 kill）
+	## 参数 cell：目标格；text：文本；color：字色；font_field/font_fallback：
+	## 字号 cfg 字段与兜底档
+	## 返回：无
 	var label := Label.new()
-	label.text = (DAMAGE_TEXT_CRIT if is_crit else DAMAGE_TEXT_NORMAL) % amount
-	label.add_theme_font_size_override("font_size", _UiFont(&"ui_font_size_large", UiTheme.FONT_LARGE) \
-			if is_crit else _UiFont(&"ui_font_size_body", UiTheme.FONT_BODY))
-	label.add_theme_color_override("font_color", _DamageCritColor() if is_crit \
-			else _DamageNormalColor())
+	label.text = text
+	label.add_theme_font_size_override("font_size", _UiFont(font_field, font_fallback))
+	label.add_theme_color_override("font_color", color)
 	label.add_theme_color_override("font_outline_color",
 			_OverlayColor(&"ui_badge_outline_color", UiTheme.BADGE_OUTLINE))
 	label.add_theme_constant_override("outline_size", DAMAGE_OUTLINE_SIZE)
@@ -544,14 +677,20 @@ func _MakeCellRect(cell: Vector2i, color: Color, gap: float) -> ColorRect:
 	return rect
 
 func _BuildBadges() -> void:
-	## 单位徽章池（sprite 经 GameData.get_asset_path 解析，缓存复用）
+	## 单位徽章池（M6：六动作竖条经 SpriteResolver.anim_texture_of 解析装配；
+	## 单条竖条进程级缓存复用——逐动作解析一次）
 	## 参数：无
 	## 返回：无
 	for unit: BattleUnit in context.units:
 		var badge := UnitBadge.new()
-		var texture: Texture2D = SpriteResolver.texture_of(
-				SpriteResolver.sprite_id_of(unit, _game_data), _game_data)
-		badge.setup(unit, texture, cell_size, context.cfg)
+		var sprite_id: StringName = SpriteResolver.sprite_id_of(unit, _game_data)
+		var anim_textures: Dictionary = {}
+		for action: int in UnitAnimState.Action.size():
+			var strip: Texture2D = SpriteResolver.anim_texture_of(sprite_id,
+					action, _game_data)
+			if strip != null:
+				anim_textures[action] = strip
+		badge.setup(unit, cell_size, context.cfg, anim_textures)
 		badge.position = origin + Vector2(unit.grid_pos) * cell_size
 		add_child(badge)
 		_badges[unit.unit_id] = badge

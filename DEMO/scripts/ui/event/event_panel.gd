@@ -23,8 +23,23 @@ const ATTR_NAMES: Dictionary = {
 	&"intelligence": "智力", &"perception": "感知", &"willpower": "意志",
 	&"luck": "幸运",
 }
-## 空改派名单提示（E3-13：全员倒地可达——提示+取消路径）
+## 空改派名单提示（E3-13：全员倒地可达——提示+取消路径；test_event_panel 契约引用）
 const NO_CAST_TEXT: String = "没有能执行检定的队员。"
+
+## UI 文案单源（M6 批 2 挂账 4.2：内联 UI 中文收编——改措辞只动此处）
+const UI_TEXTS: Dictionary = {
+	&"continue_button": "继续",
+	&"battle_button": "进入战斗",
+	&"cast_title": "选择执行人",
+	&"back_button": "返回",
+	&"cast_candidate_format": "%s（%s %+d）",
+	&"option_check_format": "　%s·%s(%d)",
+	&"option_cost_format": "　耗时+%d天",
+	&"grade_crit_success": "【大成功】",
+	&"grade_success": "【成功】",
+	&"grade_failure": "【失败】",
+	&"grade_crit_failure": "【大失败】",
+}
 
 ## 总控配置（setup 注入）
 var _cfg: CoreConfig = null
@@ -103,13 +118,13 @@ func setup(cfg: CoreConfig) -> void:
 			UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 	box.add_child(_result_label)
 	_continue_button = Button.new()
-	_continue_button.text = "继续"
+	_continue_button.text = UI_TEXTS[&"continue_button"]
 	_continue_button.custom_minimum_size = Vector2(160, 48)
 	_continue_button.visible = false
 	_continue_button.pressed.connect(func() -> void: continue_pressed.emit())
 	box.add_child(_continue_button)
 	_battle_button = Button.new()
-	_battle_button.text = "进入战斗"
+	_battle_button.text = UI_TEXTS[&"battle_button"]
 	_battle_button.custom_minimum_size = Vector2(160, 48)
 	_battle_button.visible = false
 	_battle_button.pressed.connect(func() -> void: battle_pressed.emit())
@@ -222,7 +237,7 @@ func _BeginCast(entry: Dictionary, option_id: StringName) -> void:
 	_pending_check = {&"option_id": option_id, &"attr_id": attr_id}
 	var cast: Array = _cast_provider.call(attr_id) if _cast_provider.is_valid() else []
 	var title := Label.new()
-	title.text = "选择执行人"
+	title.text = UI_TEXTS[&"cast_title"]
 	title.add_theme_font_size_override("font_size",
 			UiTheme.font_of(_cfg, &"ui_font_size_small", UiTheme.FONT_SMALL))
 	_cast_box.add_child(title)
@@ -230,7 +245,7 @@ func _BeginCast(entry: Dictionary, option_id: StringName) -> void:
 		# E3-13：空改派名单（全员倒地可达）——提示 + 取消回选项视图
 		title.text = NO_CAST_TEXT
 		var cancel := Button.new()
-		cancel.text = "返回"
+		cancel.text = UI_TEXTS[&"back_button"]
 		cancel.custom_minimum_size = Vector2(160, 48)
 		cancel.pressed.connect(_OnCastCancelled)
 		_cast_box.add_child(cancel)
@@ -239,7 +254,7 @@ func _BeginCast(entry: Dictionary, option_id: StringName) -> void:
 		var candidate: Dictionary = cast[index]
 		var adv: AdventurerData = candidate[&"adv"]
 		var button := Button.new()
-		button.text = "%s（%s %+d）" % [adv.display_name,
+		button.text = UI_TEXTS[&"cast_candidate_format"] % [adv.display_name,
 				ATTR_NAMES.get(attr_id, String(attr_id)),
 				int(candidate[&"modifier"])]
 		button.custom_minimum_size = Vector2(0, 48)
@@ -252,7 +267,7 @@ func _BeginCast(entry: Dictionary, option_id: StringName) -> void:
 	# S4-04：非空名单同补「返回」钮（复用 _OnCastCancelled 现成恢复口——
 	# 误入改派不被迫选人）
 	var back_button := Button.new()
-	back_button.text = "返回"
+	back_button.text = UI_TEXTS[&"back_button"]
 	back_button.custom_minimum_size = Vector2(160, 48)
 	back_button.pressed.connect(_OnCastCancelled)
 	_cast_box.add_child(back_button)
@@ -348,11 +363,11 @@ func _OptionText(entry: Dictionary) -> String:
 	var attr_label: String = entry.get(&"attr_label", "")
 	if not attr_label.is_empty():
 		var attr_name: String = String(ATTR_NAMES.get(StringName(str(attr_label)), attr_label))
-		text += "　%s·%s(%d)" % [attr_name, entry.get(&"tier_label", ""),
+		text += UI_TEXTS[&"option_check_format"] % [attr_name, entry.get(&"tier_label", ""),
 				int(entry.get(&"tier_line", 0))]
 	var cost_days: int = int(entry.get(&"cost_days", 0))
 	if cost_days > 0:
-		text += "　耗时+%d天" % cost_days
+		text += UI_TEXTS[&"option_cost_format"] % cost_days
 	return text
 
 func _GradeText(grade: int) -> String:
@@ -361,13 +376,13 @@ func _GradeText(grade: int) -> String:
 	## 返回：标签
 	match grade:
 		CheckResult.Grade.CRIT_SUCCESS:
-			return "【大成功】"
+			return UI_TEXTS[&"grade_crit_success"]
 		CheckResult.Grade.SUCCESS:
-			return "【成功】"
+			return UI_TEXTS[&"grade_success"]
 		CheckResult.Grade.FAILURE:
-			return "【失败】"
+			return UI_TEXTS[&"grade_failure"]
 		_:
-			return "【大失败】"
+			return UI_TEXTS[&"grade_crit_failure"]
 
 func _GradeColor(grade: int) -> Color:
 	## 档位反馈色（cfg 四色表驱动）

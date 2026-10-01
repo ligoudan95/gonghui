@@ -7,4 +7,5 @@ script = ExtResource("1_fmlw7")
 id = &"tp_mine_track_yard"
 display_name = "轨道调车场"
 cell = Vector2i(11, 13)
+map_ref = &"map_m1_village_mine"
 comment = "【占位·试玩校准】tp_<区域>_<语义>：目标点（调车场勘验点）"

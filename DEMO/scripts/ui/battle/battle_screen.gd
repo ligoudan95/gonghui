@@ -33,6 +33,16 @@ const TOOLTIP_TEMPLATES: Dictionary = {
 }
 ## 普攻钮 fallback 文案（B-9：技能查无时的共享常量——tscn 占位留）
 const COMMON_ATTACK_NAME: String = "普攻"
+
+## UI 文案单源（M6 批 2 挂账 4.2：内联 UI 中文收编——改措辞只动此处）
+const UI_TEXTS: Dictionary = {
+	&"round_label_format": "回合 %d",
+	&"degraded_retreat_button": "返回公会",
+	&"cost_none": "无",
+	&"cost_mana_format": "法力 %d",
+	&"cost_stamina_format": "精力 %d",
+	&"range_self": "自身",
+}
 ## 降级返回公会失败提示（S3-06：go 失败的可见反馈——IdleLabel 通道呈现）
 const DEGRADED_RETURN_FAIL_TEXT: String = "返回公会失败（错误码 %d）——请重试。"
 ## 返回探索失败提示（S5-R3-02：回探索会话口的语境文案——该口按钮文案为
@@ -48,6 +58,9 @@ const RETREAT_CONFIRM_STATIC_TEXT: String = "确认撤退？撤退将按委托�
 var controller: BattleController = null
 ## GameData 单例引用
 var _game_data: Node = null
+## 右栏内容 min 宽基准（中4：_ready 自 tscn 值捕获——补偿后还原的零硬编码锚点）
+var _right_log_min_base: Vector2 = Vector2.ZERO
+var _right_card_min_base: Vector2 = Vector2.ZERO
 ## 当前技能选择（&"" = 移动模式）
 var _selected_skill_id: StringName = &""
 ## 技能选择模式下的范围格集
@@ -59,6 +72,8 @@ func _ready() -> void:
 	## 引擎回调：取跨场景参数 → 无参优雅降级（直开冒烟）；有参装配战斗并开战
 	## 参数：无
 	## 返回：无
+	# 中4：右栏矮窗滚动条补偿挂接（降级路径同样生效——面板存在于场景本身）
+	_SetupRightPanelScrollCompensation()
 	var scene_manager: Node = get_node("/root/SceneManager")
 	var params: Dictionary = scene_manager.take_pending_params()
 	var battle_params: BattleParams = params.get(&"battle_params", null) as BattleParams
@@ -127,6 +142,36 @@ func _ApplyFontTiers() -> void:
 	%EndTurnButton.add_theme_font_size_override("font_size", button_font)
 	%RetreatButton.add_theme_font_size_override("font_size", button_font)
 
+func _SetupRightPanelScrollCompensation() -> void:
+	## 右栏矮窗滚动条补偿挂接（中4 盲审修复：Godot 4 滚动条非 overlay——
+	## 竖滚动条出现占内容区宽，内容 min 宽 284 恒超剩余宽而 BattleLog/
+	## UnitInfoCard 右缘（含面板边框）被恒裁不可达且 horizontal_scroll_mode
+	## 禁横滚无法到达）：捕获 tscn min 宽基准 + 监听竖滚动条显隐动态补偿
+	##（可见 → 内容 min 宽让出条宽恰满可视宽；隐藏 → 还原基准。宽度增减
+	## 不影响内容高——滚动条显隐无振荡回路）
+	## 参数：无
+	## 返回：无
+	_right_log_min_base = %BattleLog.custom_minimum_size
+	_right_card_min_base = %UnitInfoCard.custom_minimum_size
+	var right_panel: ScrollContainer = %RightPanel as ScrollContainer
+	right_panel.get_v_scroll_bar().visibility_changed.connect(
+			_ApplyRightPanelScrollCompensation)
+
+func _ApplyRightPanelScrollCompensation() -> void:
+	## 右栏内容 min 宽补偿应用（中4）：竖滚动条可见 → BattleLog/UnitInfoCard
+	## min 宽 = 基准 − 条宽；隐藏 → 还原基准（常态窗口不损失宽度）
+	## 参数：无
+	## 返回：无
+	var right_panel: ScrollContainer = %RightPanel as ScrollContainer
+	var bar: VScrollBar = right_panel.get_v_scroll_bar()
+	var compensate: float = 0.0
+	if bar.is_visible_in_tree():
+		compensate = bar.size.x if bar.size.x > 0.0 else bar.get_minimum_size().x
+	%BattleLog.custom_minimum_size = Vector2(
+			maxf(0.0, _right_log_min_base.x - compensate), _right_log_min_base.y)
+	%UnitInfoCard.custom_minimum_size = Vector2(
+			maxf(0.0, _right_card_min_base.x - compensate), _right_card_min_base.y)
+
 func _StatusLookupOf() -> Callable:
 	## 状态解析闭包（信息卡消费；上下文未建时返回空解析）
 	## 参数：无
@@ -159,18 +204,27 @@ func _DisableInteractionForDegradedRun() -> void:
 	%EndTurnButton.disabled = true
 	%RetreatButton.disabled = false
 	# S4-M4-5-e：降级按钮统一「返回公会」（原「返回公会壳」——屏名不进按钮文案）
-	%RetreatButton.text = "返回公会"
+	%RetreatButton.text = UI_TEXTS[&"degraded_retreat_button"]
 	%BoardLayer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func _ConnectController() -> void:
-	## 连接控制器信号 → UI 刷新（单向数据流的信号侧）
+	## 连接控制器信号 → UI 刷新（单向数据流的信号侧）；M6 批 1：十信号扩
+	## 动作分派——battle_started 全员 IDLE / turn_started 归位 IDLE / unit_moved
+	## MOVE+tween / skill_executed 攻击姿态路由+目标受击或 MISS / round_settled
+	## DOT 承伤者 HIT / trap_triggered HIT / unit_downed 尸态锁定（D5）/
+	## battle_ended 尸体常驻不动 / status_changed 不接动作（控制状态=图标+
+	## modulate 程序化）
 	## 参数：无
 	## 返回：无
-	controller.battle_started.connect(func() -> void: %BoardLayer.refresh_all_badges())
+	controller.battle_started.connect(func() -> void:
+		%BoardLayer.refresh_all_badges()
+		%BoardLayer.play_all_badges_action(UnitAnimState.Action.IDLE)
+	)
 	controller.round_started.connect(_OnRoundStarted)
 	controller.turn_started.connect(_OnTurnStarted)
-	controller.unit_moved.connect(func(unit: BattleUnit, _from_pos: Vector2i, _to_pos: Vector2i) -> void:
-		%BoardLayer.move_badge(unit)
+	controller.unit_moved.connect(func(unit: BattleUnit, from_pos: Vector2i,
+			_to_pos: Vector2i, move_path: Array) -> void:
+		%BoardLayer.move_badge(unit, from_pos, move_path)
 		%BoardLayer.refresh_badge(unit)
 		%BoardLayer.clear_overlays()
 		%BoardLayer.RefreshDynamicMarks()
@@ -179,14 +233,20 @@ func _ConnectController() -> void:
 	controller.round_settled.connect(_OnRoundSettled)
 	controller.status_changed.connect(_OnStatusChanged)
 	controller.unit_downed.connect(func(unit: BattleUnit) -> void:
+		%BoardLayer.play_badge_action(unit, UnitAnimState.Action.DOWNED)
 		%BoardLayer.refresh_badge(unit)
 		%UnitInfoCard.show_unit(unit)
 		# S4-6：序条同回合即时灰显（此前倒地灰显只在回合初 rebuild 生效）
 		%TurnOrderBar.set_downed(unit)
 	)
-	# S4-5：陷阱触发飘字 + 徽章刷新（伤害直扣此前无 UI 反馈）
+	# S4-5：陷阱触发飘字 + 徽章刷新（伤害直扣此前无 UI 反馈）；M6：承伤 HIT
+	## 动作（致死由 unit_downed 覆盖为 DOWNED——三致倒路径统一）；低7（盲审）：
+	## 承伤 HIT 补受击白闪（与技能命中路径 HIT+白闪体验一致）
 	controller.trap_triggered.connect(func(unit: BattleUnit, damage: int) -> void:
 		%BoardLayer.show_damage_number(unit.grid_pos, damage, false)
+		if unit.alive:
+			%BoardLayer.play_badge_action(unit, UnitAnimState.Action.HIT)
+			%BoardLayer.flash_badge(unit)
 		%BoardLayer.refresh_badge(unit)
 	)
 	controller.battle_ended.connect(_OnBattleEnded)
@@ -202,17 +262,19 @@ func _OnRoundStarted(round_no: int) -> void:
 	## DOT 跳伤后徽章 HP 跨回合旧值显示盲区——完整信号方案留 D 组批）
 	## 参数 round_no：回合号
 	## 返回：无
-	%RoundLabel.text = "回合 %d" % round_no
+	%RoundLabel.text = UI_TEXTS[&"round_label_format"] % round_no
 	%TurnOrderBar.rebuild(context.turn_order)
 	%BoardLayer.refresh_all_badges()
 
 func _OnTurnStarted(unit: BattleUnit) -> void:
 	## 行动轮开始：清选择态、当前位高亮、按钮组刷新、蛊惑紫边提示；定身
-	## （ROOT——S3-07）与蛊惑同权不显示移动范围（被锁单位无移动可预览）
+	## （ROOT——S3-07）与蛊惑同权不显示移动范围（被锁单位无移动可预览）；
+	## M6：行动位归位 IDLE（上一位 MOVE/HIT 残留终结）
 	## 参数 unit：行动单位
 	## 返回：无
 	_ClearSelection()
 	%BoardLayer.set_current_unit(unit)
+	%BoardLayer.play_badge_action(unit, UnitAnimState.Action.IDLE)
 	%TurnOrderBar.set_current(unit)
 	%UnitInfoCard.show_unit(unit)
 	var control: int = context.status_manager.get_active_control(unit)
@@ -226,13 +288,18 @@ func _OnTurnStarted(unit: BattleUnit) -> void:
 
 func _OnSkillExecuted(caster: BattleUnit, result: SkillExecutor.ExecutionResult) -> void:
 	## 技能执行后：伤害飘字 + 徽章刷新 + 动态地格标记 + 按钮组按真实可用性
-	## 重刷（2026-09-24 三轮反馈：行动权耗尽后技能钮置灰、行动结束/撤退不灰）
+	## 重刷（2026-09-24 三轮反馈：行动权耗尽后技能钮置灰、行动结束/撤退不灰）；
+	## M6 批 1 动作分派：施放者按 SkillDef.attack_pose 路由 MELEE/CAST 攻击
+	## 动作（D4=A；NONE 不动）+ 按双方 x 翻面；攻击掷未命中 → 目标不播
+	## 受击 + MISS 飘字；命中且伤害 > 0 → 目标 HIT + 受击白闪
 	## 参数 caster：施放单位；result：ExecutionResult（S4-10 全量类型）
 	## 返回：无
-	if result.success and result.damage > 0:
-		var target: BattleUnit = context.find_unit(result.target_id)
-		if target != null:
-			%BoardLayer.show_damage_number(target.grid_pos, result.damage, result.crit)
+	if result.success:
+		_DispatchSkillPose(caster, result)
+		if result.damage > 0:
+			var target: BattleUnit = context.find_unit(result.target_id)
+			if target != null:
+				%BoardLayer.show_damage_number(target.grid_pos, result.damage, result.crit)
 	%BoardLayer.refresh_all_badges()
 	%BoardLayer.RefreshDynamicMarks()
 	if result.success:
@@ -242,6 +309,39 @@ func _OnSkillExecuted(caster: BattleUnit, result: SkillExecutor.ExecutionResult)
 	# 触发，刷新函数按指令窗状态分派，勿特判 side
 	_RefreshActionBarForCurrentTurn.call_deferred()
 
+func _DispatchSkillPose(caster: BattleUnit, result: SkillExecutor.ExecutionResult) -> void:
+	## 技能动作分派（M6 批 1）：施放者姿态路由 + 朝向翻转 + 目标受击/MISS。
+	## 姿态查表：trace.skill id → SkillDef.attack_pose（MELEE→MELEE_ATTACK /
+	## CAST→CAST_RANGED / NONE 不动）；目标侧：攻击掷（trace.hit_chain）未
+	## 命中 → MISS 飘字不播受击（治疗/纯状态无攻击段不飘）；命中且伤害 > 0
+	## → HIT + play_hit_flash（致死由 unit_downed 覆盖 DOWNED——优先级天然）
+	## 参数 caster：施放单位；result：执行结果
+	## 返回：无
+	var skill: SkillDef = context.skill_lookup.call(
+			result.trace.get(&"skill", &"")) as SkillDef
+	var target: BattleUnit = context.find_unit(result.target_id)
+	if skill != null and target != null:
+		# 攻击时朝目标翻面（低8 契约显式化：目标在左 → 翻转；目标在右/同列
+		#（x 相等——朝向无相位依据）→ 重置默认朝向 false，不保持上次攻击残留翻转）
+		%BoardLayer.set_badge_flip(caster, target.grid_pos.x < caster.grid_pos.x)
+	var pose: int = skill.attack_pose if skill != null else SkillDef.AttackPose.NONE
+	match pose:
+		SkillDef.AttackPose.MELEE:
+			%BoardLayer.play_badge_action(caster, UnitAnimState.Action.MELEE_ATTACK)
+		SkillDef.AttackPose.CAST:
+			%BoardLayer.play_badge_action(caster, UnitAnimState.Action.CAST_RANGED)
+		_:
+			pass
+	if target == null:
+		return
+	var has_attack_roll: bool = result.trace.has(&"hit_chain")
+	if has_attack_roll and not result.hit:
+		%BoardLayer.show_miss_text(target.grid_pos)
+		return
+	if result.hit and result.damage > 0 and target.alive:
+		%BoardLayer.play_badge_action(target, UnitAnimState.Action.HIT)
+		%BoardLayer.flash_badge(target)
+
 func _OnStatusChanged(unit: BattleUnit, _status_id: StringName) -> void:
 	## 状态变化：信息卡与徽章刷新
 	## 参数 unit：目标单位
@@ -250,7 +350,9 @@ func _OnStatusChanged(unit: BattleUnit, _status_id: StringName) -> void:
 
 func _OnRoundSettled(_round_no: int, dot_damage: Array) -> void:
 	## 回合末结算完成（盲审批 3 D-2）：DOT 跳伤飘字（承伤单位格 −N）+
-	## 徽章全刷（HP 直扣发生在回合末，此前跨回合显示旧值的盲区自此消除）
+	## 徽章全刷（HP 直扣发生在回合末，此前跨回合显示旧值的盲区自此消除）；
+	## M6：存活承伤者播 HIT（跳伤致死由 unit_downed 覆盖为 DOWNED——
+	## DOWNED 优先级吸收一切，天然统一）
 	## 参数 _round_no：回合号；dot_damage：跳伤清单（{&"unit", &"damage"}）
 	## 返回：无
 	for entry: Dictionary in dot_damage:
@@ -258,6 +360,10 @@ func _OnRoundSettled(_round_no: int, dot_damage: Array) -> void:
 		var damage: int = int(entry.get(&"damage", 0))
 		if unit != null and damage > 0:
 			%BoardLayer.show_damage_number(unit.grid_pos, damage, false)
+			if unit.alive:
+				# 低7（盲审）：承伤 HIT 补受击白闪（与技能命中路径体验一致）
+				%BoardLayer.play_badge_action(unit, UnitAnimState.Action.HIT)
+				%BoardLayer.flash_badge(unit)
 	%BoardLayer.refresh_all_badges()
 
 func _OnBattleEnded(result: BattleResult) -> void:
@@ -565,19 +671,19 @@ func _ResourceCostText(skill: SkillDef) -> String:
 	## 参数 skill：技能定义
 	## 返回：消耗描述
 	if skill.resource_type == SkillDef.ResourceKind.NONE or skill.resource_cost <= 0:
-		return "无"
+		return UI_TEXTS[&"cost_none"]
 	match skill.resource_type:
 		SkillDef.ResourceKind.MANA:
-			return "法力 %d" % skill.resource_cost
+			return UI_TEXTS[&"cost_mana_format"] % skill.resource_cost
 		_:
-			return "精力 %d" % skill.resource_cost
+			return UI_TEXTS[&"cost_stamina_format"] % skill.resource_cost
 
 func _RangeText(skill: SkillDef) -> String:
 	## 射程文本（0 = 自身）
 	## 参数 skill：技能定义
 	## 返回：射程描述
 	if skill.range <= 0:
-		return "自身"
+		return UI_TEXTS[&"range_self"]
 	return str(skill.range)
 
 func _on_attack_button_pressed() -> void:

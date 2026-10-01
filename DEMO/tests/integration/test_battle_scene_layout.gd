@@ -51,25 +51,27 @@ func test_input_nodes_and_connections_contract() -> void:
 		assert_object(battle.get_node_or_null(button_name)).is_not_null()
 
 func test_battle_log_layout_contract() -> void:
-	## 日志栏布局契约（2026-09-24 五轮反馈；六轮补尺寸断言堵盲区）：存在 +
-	## STOP（要滚动）+ 右侧锚定窄栏 + **正尺寸**（>200×200——六轮实锤 BUG：
-	## anchor_bottom 缺失致 rect 负高被钳最小值 16px，日志不可见而条目数测试
-	## 照样全绿）；顺带对 UnitInfoCard/BoardLayer 加同类正尺寸断言，防今后
-	## 任何锚点塌缩类 BUG 再漏过
+	## 右侧栏布局契约（M6 批 2 挂账 4.3 改版：UnitInfoCard+BattleLog 收进
+	## RightPanel ScrollContainer——720px 矮窗右栏整体可滚）：RightPanel 右侧
+	## 锚定 + 横向滚动禁用；BattleLog STOP（要滚动）+ 正尺寸；UnitInfoCard/
+	## BoardLayer 同类正尺寸断言防锚点塌缩类 BUG
 	var runner: GdUnitSceneRunner = scene_runner(BATTLE_SCENE)
 	var battle: Control = runner.scene() as Control
 	assert_object(battle).is_not_null()
+	var right_panel: ScrollContainer = battle.get_node("%RightPanel") as ScrollContainer
+	assert_object(right_panel).is_not_null()
+	assert_float(right_panel.anchor_left).is_equal(1.0)
+	assert_float(right_panel.anchor_right).is_equal(1.0)
+	assert_float(right_panel.offset_left).is_equal(-296.0)
+	assert_float(right_panel.offset_right).is_equal(-12.0)
+	assert_int(right_panel.horizontal_scroll_mode) \
+			.is_equal(ScrollContainer.SCROLL_MODE_DISABLED)
 	var log_panel: PanelContainer = battle.get_node("%BattleLog") as PanelContainer
 	assert_object(log_panel).is_not_null()
 	assert_int(log_panel.mouse_filter).is_equal(Control.MOUSE_FILTER_STOP)
-	assert_float(log_panel.anchor_left).is_equal(1.0)
-	assert_float(log_panel.anchor_right).is_equal(1.0)
-	assert_float(log_panel.anchor_bottom).is_equal(1.0)
-	assert_float(log_panel.offset_left).is_equal(-296.0)
-	assert_float(log_panel.offset_right).is_equal(-12.0)
 	# 正尺寸契约（headless 布局照常计算；视口无关——只断言明显大于可显示下限）
 	assert_float(log_panel.size.y).is_greater(200.0) \
-			.override_failure_message("BattleLog 高度塌缩（%s）——检查锚点 offset" % log_panel.size)
+			.override_failure_message("BattleLog 高度塌缩（%s）——检查右栏容器" % log_panel.size)
 	assert_float(log_panel.size.x).is_greater(200.0)
 	var info_card: Control = battle.get_node("%UnitInfoCard") as Control
 	assert_float(info_card.size.y).is_greater(100.0) \

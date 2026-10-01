@@ -205,6 +205,33 @@ enum Mode {
 ## D20 演出滚动时长（秒——M2 event_panel；点按跳过）
 @export var ui_d20_roll_seconds: float = 0.0
 
+# ---- M6 批 1 单位动作集演出参数（9 字段，均【占位·试玩校准】；盲审批
+# 补峰值色/步数上限两字段；----
+# 动作帧率 = UnitBadge _Process 帧推进速率（fps ≤ 0 冻结——测试注入口）；
+# 移动步长 = 战场徽章移动 tween 单步时长（≤ 0 瞬移——测试注 0 先例）；
+# 受击闪烁 = 单位徽章受击白闪时长（≤ 0 立即复位）+ 峰值色；
+# 步数上限 = 远距移动 tween 总时长钳制护栏
+## 待机动作帧率（帧/秒）
+@export var ui_anim_idle_fps: float = 0.0
+## 移动动作帧率（帧/秒）
+@export var ui_anim_move_fps: float = 0.0
+## 攻击动作帧率（帧/秒——近战/施放共用档）
+@export var ui_anim_attack_fps: float = 0.0
+## 受击动作帧率（帧/秒）
+@export var ui_anim_hit_fps: float = 0.0
+## 倒地动作帧率（帧/秒）
+@export var ui_anim_downed_fps: float = 0.0
+## 战场徽章移动演出单步时长（秒/步——D6=A：0.15s/步 tween 滑动）
+@export var ui_battle_move_step_seconds: float = 0.0
+## 徽章受击白闪时长（秒）
+@export var ui_hit_flash_seconds: float = 0.0
+## 徽章受击白闪峰值色（HDR 亮白——modulate 分量 > 1 提亮；盲审低14 入表，
+## 消费经 UiTheme.color_of——峰值色调可表驱）
+@export var ui_hit_flash_peak_color: Color = Color(0, 0, 0, 0)
+## 战场徽章移动演出步数上限（盲审低15：远距 tween 总时长钳制护栏——
+## 「总时长 = 步长 × min(路径步数, 本值)」）
+@export var ui_battle_move_max_steps: int = 0
+
 # ---- UI 徽章配色（B-1/B-2/B-3：unit_badge 全部内联色入表；默认透明 = 未回填）----
 @export var ui_badge_hp_low_color: Color = Color(0, 0, 0, 0)
 @export var ui_badge_hp_ok_color: Color = Color(0, 0, 0, 0)

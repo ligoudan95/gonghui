@@ -13,8 +13,19 @@ signal reassign_requested(serial: int)
 ## 放弃请求（serial）
 signal abandon_requested(serial: int)
 
-## UI 文案单源（M4 增补批：轻度进行中行——改措辞只动此处）
+## UI 文案单源（M4 增补批：轻度进行中行；M6 批 2 挂账 4.2：内联 UI 中文
+## 收编——改措辞只动此处）
 const UI_TEXTS: Dictionary = {
+	&"title": "挂单委托",
+	&"empty_hint": "（暂无挂单——去委托板接单）",
+	&"state_in_progress": "进行中",
+	&"state_accepted": "已接",
+	&"remain_format": "剩 %d 天",
+	&"party_empty": "未编队",
+	&"row_format": "%s｜%s｜%s｜编队：%s",
+	&"start_button": "出征",
+	&"reassign_button": "重编队",
+	&"abandon_button": "放弃",
 	&"state_light_running": "进行中（轻度）",
 	&"light_row_remain": "工期剩 %d 天",
 }
@@ -37,7 +48,7 @@ func setup(cfg: CoreConfig) -> void:
 	_cfg = cfg
 	add_theme_constant_override("separation", 6)
 	_title_label = Label.new()
-	_title_label.text = "挂单委托"
+	_title_label.text = UI_TEXTS[&"title"]
 	_title_label.add_theme_font_size_override("font_size",
 			UiTheme.font_of(cfg, &"ui_font_size_subheading", UiTheme.FONT_SUBHEADING))
 	add_child(_title_label)
@@ -45,7 +56,7 @@ func setup(cfg: CoreConfig) -> void:
 	_row_box.add_theme_constant_override("separation", 6)
 	add_child(_row_box)
 	_empty_label = Label.new()
-	_empty_label.text = "（暂无挂单——去委托板接单）"
+	_empty_label.text = UI_TEXTS[&"empty_hint"]
 	_empty_label.add_theme_font_size_override("font_size",
 			UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 	add_child(_empty_label)
@@ -68,8 +79,9 @@ func refresh(instances: Array[QuestInstance], core: GuildCore) -> void:
 		summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		# M4 增补批：LIGHT_RUNNING 轻度行——状态/剩余取工期、放弃按模板、
 		# 不出征不重编队（战斗三操作仅 ACCEPTED 态呈现）
-		var state_text: String = "进行中" if inst.state == QuestInstance.State.IN_PROGRESS else "已接"
-		var remain_text: String = "剩 %d 天" % maxi(0, inst.remaining_days(core.day))
+		var state_text: String = UI_TEXTS[&"state_in_progress"] \
+				if inst.state == QuestInstance.State.IN_PROGRESS else UI_TEXTS[&"state_accepted"]
+		var remain_text: String = UI_TEXTS[&"remain_format"] % maxi(0, inst.remaining_days(core.day))
 		if inst.state == QuestInstance.State.LIGHT_RUNNING:
 			state_text = UI_TEXTS[&"state_light_running"]
 			remain_text = String(UI_TEXTS[&"light_row_remain"]) % maxi(0, inst.work_days_left)
@@ -77,25 +89,26 @@ func refresh(instances: Array[QuestInstance], core: GuildCore) -> void:
 		for member_id: StringName in inst.party_ids:
 			var member: AdventurerData = core.find_member(member_id)
 			member_names.append(member.display_name if member != null else String(member_id))
-		var party_text: String = "、".join(member_names) if not member_names.is_empty() else "未编队"
-		summary.text = "%s｜%s｜%s｜编队：%s" % [inst.display_name(core.game_data),
+		var party_text: String = "、".join(member_names) if not member_names.is_empty() \
+				else UI_TEXTS[&"party_empty"]
+		summary.text = UI_TEXTS[&"row_format"] % [inst.display_name(core.game_data),
 				state_text, remain_text, party_text]
 		var actions := HBoxContainer.new()
 		actions.add_theme_constant_override("separation", 8)
 		row.add_child(actions)
 		var row_tpl: QuestTemplateDef = core.game_data.get_record(inst.template_id) as QuestTemplateDef
 		if inst.state == QuestInstance.State.ACCEPTED:
-			_AddRowButton(actions, "出征", "StartButton", inst.serial,
+			_AddRowButton(actions, UI_TEXTS[&"start_button"], "StartButton", inst.serial,
 					func(serial: int) -> void: start_requested.emit(serial))
-			_AddRowButton(actions, "重编队", "ReassignButton", inst.serial,
+			_AddRowButton(actions, UI_TEXTS[&"reassign_button"], "ReassignButton", inst.serial,
 					func(serial: int) -> void: reassign_requested.emit(serial))
 			if row_tpl == null or row_tpl.abandonable:
-				_AddRowButton(actions, "放弃", "AbandonButton", inst.serial,
+				_AddRowButton(actions, UI_TEXTS[&"abandon_button"], "AbandonButton", inst.serial,
 						func(serial: int) -> void: abandon_requested.emit(serial))
 		elif inst.state == QuestInstance.State.LIGHT_RUNNING:
 			# 轻度进行中：仅放弃（可弃时——工期作废立即释放，二次确认在协会屏）
 			if row_tpl == null or row_tpl.abandonable:
-				_AddRowButton(actions, "放弃", "AbandonButton", inst.serial,
+				_AddRowButton(actions, UI_TEXTS[&"abandon_button"], "AbandonButton", inst.serial,
 						func(serial: int) -> void: abandon_requested.emit(serial))
 		_rows.append(row)
 	_empty_label.visible = instances.is_empty()

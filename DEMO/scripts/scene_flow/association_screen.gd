@@ -29,6 +29,8 @@ const UI_TEXTS: Dictionary = {
 	&"autosave_failed_hint": "⚠ 最近一次自动存档写入失败——进度可能未落盘，请重试操作。",
 	## S5-R5-03：返回 go 失败提示（%d = SceneManager 错误码）
 	&"go_fail_hint_format": "页面跳转失败（错误码 %d）——请重试。",
+	## M6 批 2 挂账 4.2：顶栏资源行（%d 金 / %d 天）
+	&"gold_line_format": "%d 金｜第 %d 天",
 }
 
 ## GameData 单例引用
@@ -119,7 +121,7 @@ func RefreshAll() -> void:
 	## 参数：无
 	## 返回：无
 	var core: GuildCore = _core()
-	%GoldLabel.text = "%d 金｜第 %d 天" % [core.gold, core.day]
+	%GoldLabel.text = UI_TEXTS[&"gold_line_format"] % [core.gold, core.day]
 	_board_panel.refresh(core.board.board, _game_data, core.day)
 	_accepted_panel.refresh(core.board.accepted, core)
 	_recruit_panel.refresh(core)

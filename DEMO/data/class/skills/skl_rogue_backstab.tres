@@ -22,6 +22,7 @@ attr_weights = Dictionary[StringName, float]({
 &"luck": 0.2
 })
 damage_type = 0
+attack_pose = 1
 power_coefficient = 1.6
 effects = Array[ExtResource("1_6c2mh")]([SubResource("Resource_h6261")])
 description = "对单体造成 160% 面板的物理伤害，本次暴击率 +10%。"

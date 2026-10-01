@@ -9,4 +9,5 @@ display_name = "陷进泥里的板车"
 cell = Vector2i(10, 2)
 kind = 1
 ref_id = &"sp_village_cart"
+map_ref = &"map_m1_village_mine"
 comment = "【占位·试玩校准】evp_<区域>_<序>：交互点（村子单点）"

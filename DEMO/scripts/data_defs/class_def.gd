@@ -39,7 +39,7 @@ enum ResourceType {
 ## 内置普攻技能 id（skl_atk_ 前缀，案 10 §3；出生自带不占技能点）
 @export var base_attack_skill_id: StringName = &""
 ## 战场 sprite 资源 id（批 A H3：入表——路径经 assets 域 AssetRegistry 映射，
-## 表内不写死路径；V-A-sprite-id 校验非空且有登记）
+## 表内不写死路径；V-A-sprite-id 校验非空，登记齐套由 V-M6-anim-quad 查六动作件）
 @export var sprite_id: StringName = &""
 ## 可选倾向分支列表（TendencyDef 子资源数组）
 @export var tendencies: Array[TendencyDef] = []

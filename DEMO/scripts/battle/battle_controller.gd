@@ -32,7 +32,10 @@ signal round_started(round_no: int)
 ## 单位行动轮开始（参数 = 行动单位）
 signal turn_started(unit: BattleUnit)
 ## 单位移动完成（参数 = 单位 / 起格 / 终格）
-signal unit_moved(unit: BattleUnit, from_pos: Vector2i, to_pos: Vector2i)
+## unit_moved（低9 盲审修复：扩第 4 参 path——真实踏过格序（含终点不含
+## 起点；退化移动 = [停格]；空 = 消费方直线兜底），供徽章移动演出按寻路
+## 拐点 tween（不再直线穿障/曼哈顿计时长偏短）
+signal unit_moved(unit: BattleUnit, from_pos: Vector2i, to_pos: Vector2i, path: Array)
 ## 技能执行完成（参数 = 施放单位 / 执行结果——S4-10/S5-7 全量类型标注）
 signal skill_executed(caster: BattleUnit, result: SkillExecutor.ExecutionResult)
 ## 状态变化（参数 = 目标单位 / 状态 id）
@@ -362,7 +365,7 @@ func _move_unit(unit: BattleUnit, dest: Vector2i) -> void:
 		_FireTrapAt(unit, trap_cell)
 	elif _IsHostileTrapAt(unit, settle_dest):
 		_FireTrapAt(unit, settle_dest)
-	unit_moved.emit(unit, from_pos, settle_dest)
+	unit_moved.emit(unit, from_pos, settle_dest, stepped_cells)
 
 func _IsEnterable(cell: Vector2i) -> bool:
 	## 退化移动复检（S2-01）：格界内 + 地格可通行 + 无存活单位占位

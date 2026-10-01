@@ -21,6 +21,18 @@ const RETREAT_DOWNED_DETAIL: String = "委托按失败结算；倒地的 %d 名�
 ## 胜利追加行（功能二批 3：胜利但有倒地者——回城同样转重伤）
 const VICTORY_DOWNED_LINE: String = "%d 名队员倒地——回城将转重伤休养。"
 
+## UI 文案单源（M6 批 2 挂账 4.2：内联 UI 中文收编——改措辞只动此处）
+const UI_TEXTS: Dictionary = {
+	&"victory_title": "战斗胜利",
+	&"victory_detail": "奖励与经验将在回城结算时入账。",
+	&"defeat_title": "战败·全队重伤休养",
+	&"defeat_detail": "全队将重伤休养——天数以回城结算为准。",
+	&"retreat_title": "撤退成功·委托失败",
+	&"retreat_no_downed_detail": "委托按失败结算，队伍不会重伤。",
+	&"summary_line_format": "\n回合数：%d｜倒地：%s",
+	&"downed_none": "无",
+}
+
 ## 返回按钮按下信号（battle_screen 连接并路由场景切换）
 signal return_pressed
 
@@ -82,36 +94,36 @@ func show_result(result: BattleResult, name_lookup: Callable = Callable(),
 			UiTheme.HIGHLIGHT_GOLD)
 	match result.kind:
 		BattleResult.ResultKind.VICTORY:
-			_title_label.text = "战斗胜利"
+			_title_label.text = UI_TEXTS[&"victory_title"]
 			# B-3：金色高亮三处统一（序条/结算/徽章环共用 ui_highlight_gold_color）
 			_title_label.add_theme_color_override("font_color", victory_color)
 			# M-1：天数/奖励不在本面板硬编码——具体数值以回城结算面板为准
-			_detail_label.text = "奖励与经验将在回城结算时入账。"
+			_detail_label.text = UI_TEXTS[&"victory_detail"]
 			# 功能二批 3：胜利但有倒地者——追加转重伤提示行
 			if not ally_downed_names.is_empty():
 				_detail_label.text += "\n" + VICTORY_DOWNED_LINE % ally_downed_names.size()
 		BattleResult.ResultKind.DEFEAT:
-			_title_label.text = "战败·全队重伤休养"
+			_title_label.text = UI_TEXTS[&"defeat_title"]
 			_title_label.add_theme_color_override("font_color",
 					UiTheme.color_of(cfg, &"ui_result_defeat_color", UiTheme.RESULT_DEFEAT))
 			# M-1：休养天数随宿舍等级浮动——不在本面板硬编码，以回城结算为准
-			_detail_label.text = "全队将重伤休养——天数以回城结算为准。"
+			_detail_label.text = UI_TEXTS[&"defeat_detail"]
 		_:
-			_title_label.text = "撤退成功·委托失败"
+			_title_label.text = UI_TEXTS[&"retreat_title"]
 			_title_label.add_theme_color_override("font_color",
 					UiTheme.color_of(cfg, &"ui_result_retreat_color", UiTheme.RESULT_RETREAT))
 			# P1 拍板：撤退=委托失败但无重伤（文案与 RETREAT 单独映射口径同步）；
 			# 功能二批 3 Q-A：有倒地者分流——回城转重伤（天数以回城结算为准）
 			if ally_downed_names.is_empty():
-				_detail_label.text = "委托按失败结算，队伍不会重伤。"
+				_detail_label.text = UI_TEXTS[&"retreat_no_downed_detail"]
 			else:
 				_detail_label.text = RETREAT_DOWNED_DETAIL % ally_downed_names.size()
 	var downed_text: String = "、".join(result.downed_units.map(func(unit_id):
 		if name_lookup.is_valid():
 			return String(name_lookup.call(unit_id))
 		return String(unit_id)))
-	_detail_label.text += "\n回合数：%d｜倒地：%s" % [
-		result.rounds_used,
-		downed_text if not downed_text.is_empty() else "无",
+	_detail_label.text += UI_TEXTS[&"summary_line_format"] % [
+			result.rounds_used,
+			downed_text if not downed_text.is_empty() else UI_TEXTS[&"downed_none"],
 	]
 	visible = true

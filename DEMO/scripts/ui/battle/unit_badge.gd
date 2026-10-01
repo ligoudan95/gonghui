@@ -1,17 +1,19 @@
 ## 单位徽章（UnitBadge，Control——战场格子层子节点）
-## 职责：单个战斗单位的视觉呈现——像素小人 sprite（64×64 = 32×32 的 2× 放大、
-## Nearest 过滤保持锐利；精英 ×1.3）、头顶 HP 条 + 本系资源条（Pixel 风细条）、
-## 当前行动高亮环（5px 金边 + 呼吸脉动——2026-09-24 试玩反馈增强辨识）、
-## 血条伤害预览（预扣色带 + 「−N」闪烁数字——二轮试玩反馈）、蛊惑紫边闪烁、
-## 倒地灰度化（0.5 透明）。
-## 数据来源：M1 批 3 方案 §7.1；sprite 资产 = DEMO/assets/units/spr_*.png
-## （AssetRegistry 登记 spr_cls_*/spr_en_*，并行代理产出）。
+## 职责：单个战斗单位的视觉呈现——六动作帧动画载体（M6 批 1：竖条 PNG +
+## AtlasTexture + UnitAnimState 代码帧推进；显示 64×64 = 128 帧的 0.5 缩放、
+## 精英 ×1.3）、头顶 HP 条 + 本系资源条（Pixel 风细条）、当前行动高亮环
+## （5px 金边 + 呼吸脉动——2026-09-24 试玩反馈增强辨识）、血条伤害预览
+## （预扣色带 + 「−N」闪烁数字——二轮试玩反馈）、蛊惑紫边闪烁、受击白闪
+## （M6：ui_hit_flash_seconds）、倒地尸态（D5=A：downed 末帧锁定 + 灰度
+## 维持 + 隐藏血条/资源条/高亮环）。
+## 数据来源：M1 批 3 方案 §7.1；动作资产 = DEMO/assets/units/spr_*_<action>.png
+## （AssetRegistry 登记 54 动作键，tools/gen_unit_anim_frames.gd 占位产出）。
 ## 输入口径：本节点不消费鼠标（mouse_filter = IGNORE）——点击统一由
 ## BoardLayer gui_input 按格命中分发。
 class_name UnitBadge
 extends Control
 
-## 基准显示尺寸（32×32 sprite 的 2× 放大）
+## 基准显示尺寸（128×128 动作帧的 0.5 缩放显示）
 const BASE_SPRITE_SIZE: float = 64.0
 ## 精英放大系数
 const ELITE_SCALE: float = 1.3
@@ -57,8 +59,16 @@ func _UiFont(field: StringName, fallback: int) -> int:
 
 ## 绑定单位
 var unit: BattleUnit = null
-## sprite 纹理（null = 占位色块回退）
-var texture: Texture2D = null
+## 动作状态机（M6：帧推进与动作仲裁——测试/分派查询口）
+var anim: UnitAnimState = UnitAnimState.new()
+## 六动作竖条纹理表（UnitAnimState.Action -> Texture2D；空 = 占位色块回退）
+var _anim_textures: Dictionary = {}
+## 动作单帧显示 AtlasTexture（region 随 frame_index 重设）
+var _anim_atlas: AtlasTexture = null
+## 帧推进前帧位（变更检测——region 只在跨帧时重设）
+var _last_frame_index: int = -1
+## 受击白闪 Tween（null = 无闪烁）
+var _flash_tween: Tween = null
 ## 格子像素尺寸
 var cell_size: float = 72.0
 
@@ -98,23 +108,118 @@ func _init() -> void:
 	## 返回：无
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-func setup(badge_unit: BattleUnit, badge_texture: Texture2D, badge_cell_size: float,
-		cfg: CoreConfig = null) -> void:
+func setup(badge_unit: BattleUnit, badge_cell_size: float,
+		cfg: CoreConfig = null, anim_textures: Dictionary = {}) -> void:
 	## 装配徽章：建子节点（sprite/条/环）并按单位数据初刷；B-1：cfg 注入
-	## （配色表驱动，缺省纯兜底）
-	## 参数 badge_unit：绑定单位；badge_texture：sprite 纹理（可空）；
-	## badge_cell_size：所在格像素尺寸；cfg：总控配置（可空）
+	## （配色表驱动，缺省纯兜底）；M6：六动作竖条纹理注入（空 = 占位色块）
+	## 参数 badge_unit：绑定单位；badge_cell_size：所在格像素尺寸；
+	## cfg：总控配置（可空）；anim_textures：UnitAnimState.Action -> 竖条纹理
 	## 返回：无
 	unit = badge_unit
-	texture = badge_texture
 	cell_size = badge_cell_size
 	_cfg = cfg
+	_anim_textures = anim_textures
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	_BuildChildren()
 	refresh()
 
+func play_action(action: int) -> bool:
+	## 播放动作（M6：battle_board 转发口）——按竖条图高推导帧数请求状态机；
+	## 低12（盲审）：纹理缺失（占位色块回退态）时状态机**仍进态**——逻辑
+	## 表现生效（DOWNED 尸态锁定/is_downed_pose 查询不因缺件失效；「逻辑
+	## 进态、视觉缺省」一致性推及一切动作），无帧可驱动时告警
+	## 参数 action：UnitAnimState.Action
+	## 返回：true = 受理（状态机切换；纹理缺失时无视觉）
+	var strip: Texture2D = _anim_textures.get(action, null) as Texture2D
+	var frames: int = SpriteResolver.frame_count_of(strip)
+	if not anim.request(action as UnitAnimState.Action, frames):
+		return false
+	if strip == null:
+		push_warning("UnitBadge: 单位 '%s' 动作 %d 竖条纹理缺失——逻辑进态生效、视觉占位缺省" % [
+				unit.unit_id if unit != null else &"?", action])
+		return true
+	_last_frame_index = -1
+	_ApplyAnimFrame()
+	return true
+
+func current_action() -> int:
+	## 当前动作查询（测试契约口）
+	## 参数：无
+	## 返回：UnitAnimState.Action
+	return anim.current
+
+func is_downed_pose() -> bool:
+	## 尸态锁定查询（D5：倒地末帧锁定——测试契约口）
+	## 参数：无
+	## 返回：true = 已倒地锁定
+	return anim.is_downed_locked()
+
+func set_flip(flip: bool) -> void:
+	## 朝向翻转（M6：攻击时按施放者/目标 x 相位翻面——无朝向素材的廉价朝向）
+	## 参数 flip：true = 水平翻转
+	## 返回：无
+	if _sprite != null:
+		_sprite.flip_h = flip
+
+func play_hit_flash() -> void:
+	## 受击白闪（M6：sprite modulate 亮白 → 复位，时长 = cfg.
+	## ui_hit_flash_seconds；时长 ≤ 0 立即复位——测试注 0 口径）
+	## 参数：无
+	## 返回：无
+	if _sprite == null:
+		return
+	if _flash_tween != null:
+		_flash_tween.kill()
+	var duration: float = UiTheme.HIT_FLASH_SECONDS
+	if _cfg != null:
+		duration = _cfg.ui_hit_flash_seconds
+	# 低14（盲审）：白闪峰值色入表（cfg ui_hit_flash_peak_color——HDR 亮白
+	# modulate 分量 > 1 提亮；UiTheme.HIT_FLASH_PEAK 兜底锚定）
+	_sprite.modulate = _Color(&"ui_hit_flash_peak_color", UiTheme.HIT_FLASH_PEAK)
+	if duration <= 0.0:
+		_sprite.modulate = Color(1, 1, 1, 1)
+		return
+	_flash_tween = create_tween()
+	_flash_tween.tween_property(_sprite, "modulate", Color(1, 1, 1, 1), duration)
+
+func _AnimFpsOf(action: int) -> float:
+	## 动作帧率读取（cfg 表驱动：ui_anim_*_fps；cfg 注入即取表值——
+	## 测试注 0/高 fps 经表值直改；未注入回退 UiTheme 兜底）
+	## 参数 action：UnitAnimState.Action
+	## 返回：帧率（帧/秒）
+	if _cfg == null:
+		return UiTheme.ANIM_IDLE_FPS
+	match action:
+		UnitAnimState.Action.MOVE:
+			return _cfg.ui_anim_move_fps
+		UnitAnimState.Action.MELEE_ATTACK, UnitAnimState.Action.CAST_RANGED:
+			return _cfg.ui_anim_attack_fps
+		UnitAnimState.Action.HIT:
+			return _cfg.ui_anim_hit_fps
+		UnitAnimState.Action.DOWNED:
+			return _cfg.ui_anim_downed_fps
+		_:
+			return _cfg.ui_anim_idle_fps if _cfg != null else UiTheme.ANIM_IDLE_FPS
+
+func _ApplyAnimFrame() -> void:
+	## 当前帧落位（AtlasTexture.region 重设 + 缓存帧位）
+	## 参数：无
+	## 返回：无
+	if _anim_atlas == null:
+		return
+	var strip: Texture2D = _anim_textures.get(anim.current, null) as Texture2D
+	if strip == null:
+		return
+	if _anim_atlas.atlas != strip:
+		_anim_atlas.atlas = strip
+	var frame_size: float = float(SpriteResolver.ANIM_FRAME_SIZE)
+	_anim_atlas.region = Rect2(0.0, float(anim.frame_index) * frame_size,
+			frame_size, frame_size)
+	_last_frame_index = anim.frame_index
+
 func refresh() -> void:
-	## 刷新显示：位置跟随、HP/资源条比例、精英放大、倒地灰度
+	## 刷新显示：位置跟随、HP/资源条比例、精英放大、倒地尸态（D5=灰度维持
+	## + 隐藏血条/资源条/高亮环/蛊惑边——预览随 HP 失效路径防御清理）
 	## 参数：无
 	## 返回：无
 	if unit == null:
@@ -138,12 +243,29 @@ func refresh() -> void:
 			else unit.current_stamina
 	var res_ratio: float = clampf(float(res_cur) / float(maxi(1, res_max)), 0.0, 1.0)
 	_res_fill.size.x = _res_back.size.x * res_ratio
-	# 倒地：灰度化 + 透明 0.5；预览随 HP 失效路径防御清理
+	# 倒地：灰度维持（modulate）+ 隐藏条/环（D5=A）；预览防御清理
 	if unit.alive:
 		modulate = Color(1, 1, 1, 1)
 	else:
 		modulate = _Color(&"ui_downed_modulate_color", UiTheme.DOWNED_MODULATE)
 		clear_damage_preview()
+	_SetBarsVisible(unit.alive)
+
+func _SetBarsVisible(visible_bars: bool) -> void:
+	## 血条/资源条可见性 + 倒地态高亮环/蛊惑边清理（D5：倒地隐藏——尸态只留
+	## sprite；存活时环可见性仍由 set_current 独立管理）
+	## 参数 visible_bars：true = 显示条
+	## 返回：无
+	for bar: ColorRect in [_hp_back, _hp_fill, _res_back, _res_fill]:
+		if bar != null:
+			bar.visible = visible_bars
+	if not visible_bars:
+		for edge: ColorRect in _ring:
+			edge.visible = false
+		bewitched = false
+		for edge: ColorRect in _bewitch_ring:
+			edge.visible = false
+		_StopRingBreath()
 
 func show_damage_preview(amount: int) -> void:
 	## 血条伤害预览：当前 HP 末段显示预扣色带 + 血条上方「−N」数字，
@@ -251,9 +373,11 @@ func _SetRingAlpha(alpha: float) -> void:
 		edge.modulate.a = alpha
 
 func _process(delta: float) -> void:
-	## 蛊惑紫边闪烁（周期 0.8s 半亮半灭）
+	## 帧推进驱动（M6：UnitAnimState.advance + 跨帧重设 AtlasTexture.region；
+	## 单次动作播完自动回落 IDLE——DOWNED 例外锁末帧）+ 蛊惑紫边闪烁
 	## 参数 delta：帧间隔
 	## 返回：无
+	_AdvanceAnim(delta)
 	if not bewitched:
 		return
 	var visible_phase: bool = fmod(Time.get_ticks_msec() / 1000.0, BEWITCH_FLICK_PERIOD) \
@@ -261,17 +385,41 @@ func _process(delta: float) -> void:
 	for edge: ColorRect in _bewitch_ring:
 		edge.visible = visible_phase
 
+func _AdvanceAnim(delta: float) -> void:
+	## 动作帧推进：advance → 跨帧落位；单次动作（非 DOWNED）播完回落 IDLE
+	## （HIT/攻击类停末帧等 finish_check 的消费侧——回落即此口）
+	## 参数 delta：帧间隔
+	## 返回：无
+	if _anim_textures.is_empty() or _anim_atlas == null:
+		return
+	anim.advance(delta, _AnimFpsOf(anim.current))
+	if anim.is_once_finished() and not anim.is_downed_locked():
+		anim.request(UnitAnimState.Action.IDLE,
+				SpriteResolver.frame_count_of(
+						_anim_textures.get(UnitAnimState.Action.IDLE, null) as Texture2D))
+	if anim.frame_index != _last_frame_index:
+		_ApplyAnimFrame()
+
 func _BuildChildren() -> void:
-	## 构建子节点树：sprite（精英放大）/资源条/HP 条/高亮环/蛊惑边
+	## 构建子节点树：sprite（动作 AtlasTexture——精英放大）/资源条/HP 条/
+	## 高亮环/蛊惑边
 	## 参数：无
 	## 返回：无
 	var is_elite: bool = unit.role_tag == UnitTags.ROLE_ELITE
 	var sprite_size: float = BASE_SPRITE_SIZE * (ELITE_SCALE if is_elite else 1.0)
 	# sprite 居中（超大时按格宽钳制）
 	sprite_size = minf(sprite_size, cell_size + ELITE_CLAMP_MARGIN)
-	if texture != null:
+	var idle_strip: Texture2D = _anim_textures.get(UnitAnimState.Action.IDLE, null) as Texture2D
+	if idle_strip != null:
+		# M6：六动作帧动画载体——AtlasTexture 首帧落位（region 随帧推进重设）
 		_sprite = TextureRect.new()
-		_sprite.texture = texture
+		_anim_atlas = AtlasTexture.new()
+		_anim_atlas.atlas = idle_strip
+		var frame_size: float = float(SpriteResolver.ANIM_FRAME_SIZE)
+		_anim_atlas.region = Rect2(0.0, 0.0, frame_size, frame_size)
+		anim.frame_count = SpriteResolver.frame_count_of(idle_strip)
+		_last_frame_index = 0
+		_sprite.texture = _anim_atlas
 		_sprite.stretch_mode = TextureRect.STRETCH_SCALE
 		_sprite.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		_sprite.size = Vector2(sprite_size, sprite_size)

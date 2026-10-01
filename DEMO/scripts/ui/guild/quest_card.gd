@@ -13,8 +13,15 @@ const ATTR_NAMES: Dictionary = {
 	&"luck": "幸运",
 }
 
-## UI 文案单源（M4 增补批：轻度信息行格式串——改措辞只动此处）
+## UI 文案单源（M4 增补批：轻度信息行格式串；M6 批 2 挂账 4.2：内联 UI
+## 中文收编——改措辞只动此处）
 const UI_TEXTS: Dictionary = {
+	&"accept_button": "接单",
+	&"title_format": "%s（等级 %d）",
+	&"info_format": "剩余 %d 天｜推荐：%s｜人力 %d-%d｜区域：%s",
+	&"reward_format": "奖励：%d 金 / %d 经验 / %d 声望",
+	&"reward_none": "奖励：—",
+	&"desc_format": "%s：%s",
 	&"light_info_format": "剩余 %d 天｜派 %d-%d 人 · 工期 %d 天 · 无需出征",
 }
 
@@ -55,7 +62,7 @@ func setup(cfg: CoreConfig) -> void:
 	_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_accept_button = Button.new()
 	_accept_button.name = "AcceptButton"
-	_accept_button.text = "接单"
+	_accept_button.text = UI_TEXTS[&"accept_button"]
 	_accept_button.add_theme_font_size_override("font_size",
 			UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 	_accept_button.pressed.connect(func() -> void: accept_requested.emit(_serial))
@@ -83,7 +90,7 @@ func refresh(inst: QuestInstance, game_data: Node, day: int) -> void:
 		_reward_label.text = ""
 		_desc_label.text = ""
 		return
-	_title_label.text = "%s（等级 %d）" % [inst.display_name(game_data), tpl.level_tier]
+	_title_label.text = UI_TEXTS[&"title_format"] % [inst.display_name(game_data), tpl.level_tier]
 	var remain: int = maxi(0, inst.remaining_days(day))
 	var region: RegionDef = game_data.get_record(tpl.region_id) as RegionDef
 	var region_name: String = region.display_name if region != null else String(tpl.region_id)
@@ -96,9 +103,9 @@ func refresh(inst: QuestInstance, game_data: Node, day: int) -> void:
 		var recommend: PackedStringArray = []
 		for attr_id: StringName in tpl.recommend_attrs:
 			recommend.append(String(ATTR_NAMES.get(attr_id, String(attr_id))))
-		_info_label.text = "剩余 %d 天｜推荐：%s｜人力 %d-%d｜区域：%s" % [
+		_info_label.text = UI_TEXTS[&"info_format"] % [
 				remain, " ".join(recommend), tpl.party_min, tpl.party_max, region_name]
-	_reward_label.text = "奖励：%d 金 / %d 经验 / %d 声望" % [
+	_reward_label.text = UI_TEXTS[&"reward_format"] % [
 			tpl.reward.gold, tpl.reward.exp, tpl.reward.reputation] if tpl.reward != null \
-			else "奖励：—"
-	_desc_label.text = "%s：%s" % [tpl.issuer, tpl.description]
+			else UI_TEXTS[&"reward_none"]
+	_desc_label.text = UI_TEXTS[&"desc_format"] % [tpl.issuer, tpl.description]

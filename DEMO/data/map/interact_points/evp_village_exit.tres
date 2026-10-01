@@ -9,4 +9,5 @@ display_name = "回城出口"
 cell = Vector2i(7, 0)
 kind = 5
 trigger = 1
+map_ref = &"map_m1_village_mine"
 comment = "【占位·试玩校准】evp_<区域>_<语义>：交互点（出口——判据达成后点按交付）"

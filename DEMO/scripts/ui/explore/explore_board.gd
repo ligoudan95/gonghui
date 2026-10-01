@@ -264,14 +264,14 @@ func _BuildFogLayer() -> void:
 func _BuildIconLayers() -> void:
 	## 图标层：交互点图标（Z_CONTENT 已探索内容层——迷雾之下，DIM 态被遮罩
 	## 压暗）/ 目标点常显图标+衬底（Z_OVERLAY——迷雾之上）/ 小队图标
-	## （Z_PARTY——迷雾之上，深色描边保证可读）
+	## （Z_PARTY——迷雾之上，深色描边保证可读）；M6 批 2 挂账 4.1：按当前图
+	## （_map_def.id）过滤点位归属——多图数据不越权建图标
 	## 参数：无
 	## 返回：无
-	## S5-03 登记注：单图假设——全域遍历无 map 归属过滤，多图出现时须为
-	## InteractPointDef/TargetPointDef 增 map 归属字段并按当前图过滤
-	## 图标构建（挂 M6）
 	for record: Resource in _game_data.get_domain(&"map/interact_points"):
 		var point := record as InteractPointDef
+		if point.map_ref != _map_def.id:
+			continue
 		var icon := _MakeGlyphLabel(KIND_GLYPHS.get(point.kind, "?"))
 		icon.position = Vector2(point.cell) * float(CELL_SIZE)
 		icon.z_index = Z_CONTENT
@@ -279,6 +279,8 @@ func _BuildIconLayers() -> void:
 		_point_icons[point.id] = icon
 	for record: Resource in _game_data.get_domain(&"map/target_points"):
 		var target := record as TargetPointDef
+		if target.map_ref != _map_def.id:
+			continue
 		# 衬底先入树（同 z 按树序后画在上——衬底垫图标之下）
 		var backdrop := _MakeBackdrop()
 		backdrop.position = Vector2(target.cell) * float(CELL_SIZE) \

@@ -22,12 +22,15 @@ const TOWN_SCENE_WHITELIST: Array[StringName] = [
 ]
 
 ## UI 文案单源（M4 增补批 3：设置入口与设置面板提示——改措辞只动此处；
-## S3-R2-03：开始/继续 go 失败提示）
+## S3-R2-03：开始/继续 go 失败提示；M6 批 2 挂账 4.2：读档失败提示收编）
 const UI_TEXTS: Dictionary = {
 	&"settings_button": "设置",
 	&"settings_applied_hint": "已切换。",
 	&"settings_save_failed_hint": "写入设置失败——请重试。",
 	&"go_fail_hint_format": "进入游戏失败（错误码 %d）——请重试。",
+	&"save_corrupt_format": "存档无法读取——%s，请开新档",
+	&"save_load_failed": "存档读取失败，已禁用继续",
+	&"save_no_guild_data": "存档无经营数据（旧版存档）——请开新档",
 }
 
 ## 设置面板（M4 增补批 3——代码构建弹层）
@@ -181,13 +184,13 @@ func _on_continue_pressed() -> void:
 		# 只剩泛化「读取失败」（原因经 save_corrupt 信号缓存；低危 8：单层
 		# 括号——消三层嵌套）
 		if not _save_corrupt_reason.is_empty():
-			%HintLabel.text = "存档无法读取——%s，请开新档" % _save_corrupt_reason
+			%HintLabel.text = UI_TEXTS[&"save_corrupt_format"] % _save_corrupt_reason
 		else:
-			%HintLabel.text = "存档读取失败，已禁用继续"
+			%HintLabel.text = UI_TEXTS[&"save_load_failed"]
 		return
 	var guild_state: Node = get_node_or_null("/root/GuildState")
 	if guild_state != null and not guild_state.has_guild_data():
-		%HintLabel.text = "存档无经营数据（旧版存档）——请开新档"
+		%HintLabel.text = UI_TEXTS[&"save_no_guild_data"]
 		return
 	# S5-01：读档直进白名单化——目标 scene_id 非城内四屏（含未登记名/畸形值/
 	# 战斗·探索屏名）一律回退 GUILD_SHELL（对齐畸形存档保守处理拍板先例）

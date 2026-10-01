@@ -7,4 +7,5 @@ script = ExtResource("1_7jh7t")
 id = &"tp_mine_north_wall"
 display_name = "北壁"
 cell = Vector2i(9, 4)
+map_ref = &"map_m1_village_mine"
 comment = "【占位·试玩校准】tp_<区域>_<语义>：目标点（北壁观测点——暗门事件近旁）"

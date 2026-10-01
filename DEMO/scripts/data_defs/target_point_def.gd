@@ -14,6 +14,9 @@ extends Resource
 @export var display_name: String = ""
 ## 所在格坐标
 @export var cell: Vector2i = Vector2i.ZERO
+## 点位归属图 id（M6 批 2 挂账 4.1：map/maps 域记录 id——V-M3-map-points
+## 校验非空且可解析；explore 层查询/图标按当前图过滤）
+@export var map_ref: StringName = &""
 
 ## 设计备注（【占位·试玩校准】等标注与数据来源说明，Inspector 可编辑）
 @export var comment: String = ""

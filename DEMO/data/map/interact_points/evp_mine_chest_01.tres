@@ -11,4 +11,5 @@ kind = 2
 trigger = 1
 gold_min = 20
 gold_max = 40
+map_ref = &"map_m1_village_mine"
 comment = "【占位·试玩校准】evp_<区域>_<语义>：交互点（宝箱——金域 [20,40]）"

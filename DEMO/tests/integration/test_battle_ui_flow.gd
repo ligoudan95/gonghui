@@ -528,13 +528,20 @@ func test_batch_a_table_driven_contract() -> void:
 	board._BuildCells()
 	assert_bool((board.cell_visual(Vector2i(5, 2)) as ColorRect).color \
 			.is_equal_approx(original_fill)).is_true()
-	# ②sprite 表驱动读取链（B-18：薄壳已删——直呼 SpriteResolver 单源）：
-	# 查表 id → registry 路径 → load 纹理非空
+	# ②sprite 表驱动读取链（B-18：薄壳已删——直呼 SpriteResolver 单源；
+	# M6 批 1：静态单图键退役——改 idle 动作竖条 + 首帧 atlas 非空）：
+	# 查表 id → registry 路径 → load 竖条非空 → atlas region 128×128
 	var ally: BattleUnit = battle.context.allies[0]
 	var game_data_node: Node = get_tree().root.get_node("GameData")
-	var texture: Texture2D = SpriteResolver.texture_of(
-			SpriteResolver.sprite_id_of(ally, game_data_node), game_data_node)
+	var texture: Texture2D = SpriteResolver.anim_texture_of(
+			SpriteResolver.sprite_id_of(ally, game_data_node),
+			UnitAnimState.Action.IDLE, game_data_node)
 	assert_object(texture).is_not_null()
+	var atlas: AtlasTexture = SpriteResolver.frame_atlas_of(
+			SpriteResolver.sprite_id_of(ally, game_data_node),
+			UnitAnimState.Action.IDLE, 0, game_data_node)
+	assert_object(atlas).is_not_null()
+	assert_int(int(atlas.region.size.x)).is_equal(SpriteResolver.ANIM_FRAME_SIZE)
 	# ③UI/执行器同源同值（H1）：手造 undead 目标，UI 值 == 单源链复算
 	var smite: SkillDef = game_data.get_record(&"skl_priest_smite") as SkillDef
 	var fake_undead := BattleUnit.new()

@@ -15,7 +15,7 @@ func _MakeBadge(hp: int, max_hp: int) -> UnitBadge:
 	var badge := UnitBadge.new()
 	add_child(badge)
 	auto_free(badge)
-	badge.setup(unit, null, 72.0)
+	badge.setup(unit, 72.0)
 	return badge
 
 func test_show_activates_preview() -> void:
@@ -67,3 +67,28 @@ func test_repeated_show_replaces_preview() -> void:
 	badge.show_damage_preview(20)
 	badge.show_damage_preview(35)
 	assert_bool(badge.is_damage_preview_active()).is_true()
+
+# ---- 动作播放（M6 批 1 / 盲审低12：逻辑进态、视觉缺省一致性）----
+
+func test_play_action_without_texture_still_transitions_state() -> void:
+	## 低12：纹理缺失（无 anim_textures 装配的占位回退态）——状态机仍进态：
+	## DOWNED 进态后 is_downed_pose 为 true（逻辑尸态不因缺件失效——已死
+	## 单位不再站立带血条）；后续请求照常被倒地锁吸收
+	var badge: UnitBadge = _MakeBadge(50, 100)
+	assert_bool(badge.play_action(UnitAnimState.Action.DOWNED)).is_true()
+	assert_bool(badge.is_downed_pose()).is_true()
+	assert_int(badge.current_action()).is_equal(UnitAnimState.Action.DOWNED)
+	assert_bool(badge.play_action(UnitAnimState.Action.HIT)).is_false()
+	assert_bool(badge.play_action(UnitAnimState.Action.IDLE)).is_false()
+
+func test_play_action_without_texture_hit_priority_arbitration() -> void:
+	## 低12 推及：缺纹理下状态机优先级仲裁照常（手置帧数复现多帧 HIT
+	## 「演出中」态——MOVE/攻击类被压制、DOWNED 覆盖；缺件只影响视觉帧）
+	var badge: UnitBadge = _MakeBadge(50, 100)
+	assert_bool(badge.play_action(UnitAnimState.Action.HIT)).is_true()
+	assert_int(badge.current_action()).is_equal(UnitAnimState.Action.HIT)
+	badge.anim.frame_count = 3
+	assert_bool(badge.play_action(UnitAnimState.Action.MOVE)).is_false()
+	assert_bool(badge.play_action(UnitAnimState.Action.MELEE_ATTACK)).is_false()
+	assert_bool(badge.play_action(UnitAnimState.Action.DOWNED)).is_true()
+	assert_bool(badge.is_downed_pose()).is_true()

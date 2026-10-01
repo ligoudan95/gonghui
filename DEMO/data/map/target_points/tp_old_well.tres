@@ -7,4 +7,5 @@ script = ExtResource("1_0602v")
 id = &"tp_old_well"
 display_name = "老井暗窖"
 cell = Vector2i(5, 13)
+map_ref = &"map_m1_village_mine"
 comment = "【占位·试玩校准】tp_<语义>：目标点（老井暗窖——井道直通矿洞底层；M3 质检 M1 拍板 B：移矿洞深处；q_lost_miner_keepsake 判据）"

@@ -24,8 +24,23 @@ const ORGANIZE_PANEL_MIN_WIDTH: int = 560
 const FALLBACK_PARTY_MIN: int = 1
 const FALLBACK_PARTY_MAX: int = 4
 
-## UI 文案单源（M4 增补批：轻度弹层适配——改措辞只动此处）
+## UI 文案单源（M4 增补批：轻度弹层适配；M6 批 2 挂账 4.2：内联 UI 中文
+## 收编——改措辞只动此处）
 const UI_TEXTS: Dictionary = {
+	&"use_last_party_button": "沿用上次编队",
+	&"confirm_button": "确认编队",
+	&"cancel_button": "取消",
+	&"title_format": "编队：%s（需 %d-%d 人）",
+	&"mark_resting_format": "休养%d天",
+	&"mark_occupied": "占用中",
+	&"mark_deployed_today": "今日已出征",
+	&"member_row_format": "%s（%s Lv%d）%s%s",
+	&"recommend_part_format": "｜推荐：%s ",
+	&"recommend_attr_format": "%s%d%s",
+	&"recommend_none": "本委托无推荐属性口径。",
+	&"recommend_summary_format": "检定预览：推荐 %s（数值低于 %d 的短板属性已标 △）",
+	&"preview_over_format": "已选 %d 人——超出上限 %d，无法确认",
+	&"preview_excess_format": "超额预览：已选 %d 人（超额 %d）→ 奖励 ×%.2f ≈ %d 金 / %d 经验（声望不加）",
 	&"light_open_hint": "确认后立即开工：工期 %d 天（无需出征，占用至完成或放弃）",
 	&"light_confirm": "派出开工",
 }
@@ -83,20 +98,20 @@ func setup(cfg: CoreConfig) -> void:
 	box.add_child(buttons)
 	_last_party_button = Button.new()
 	_last_party_button.name = "UseLastPartyButton"
-	_last_party_button.text = "沿用上次编队"
+	_last_party_button.text = UI_TEXTS[&"use_last_party_button"]
 	_last_party_button.add_theme_font_size_override("font_size",
 			UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 	_last_party_button.pressed.connect(_OnUseLastPartyPressed)
 	buttons.add_child(_last_party_button)
 	_confirm_button = Button.new()
 	_confirm_button.name = "ConfirmButton"
-	_confirm_button.text = "确认编队"
+	_confirm_button.text = UI_TEXTS[&"confirm_button"]
 	_confirm_button.add_theme_font_size_override("font_size",
 			UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 	_confirm_button.pressed.connect(_OnConfirmPressed)
 	buttons.add_child(_confirm_button)
 	var cancel_button := Button.new()
-	cancel_button.text = "取消"
+	cancel_button.text = UI_TEXTS[&"cancel_button"]
 	cancel_button.add_theme_font_size_override("font_size",
 			UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 	cancel_button.pressed.connect(func() -> void: cancelled.emit())
@@ -113,7 +128,7 @@ func open(inst: QuestInstance, core: GuildCore) -> void:
 	_tpl = core.game_data.get_record(inst.template_id) as QuestTemplateDef
 	var party_min: int = _tpl.party_min if _tpl != null else FALLBACK_PARTY_MIN
 	var party_max: int = _tpl.party_max if _tpl != null else FALLBACK_PARTY_MAX
-	_title_label.text = "编队：%s（需 %d-%d 人）" % [inst.display_name(core.game_data),
+	_title_label.text = UI_TEXTS[&"title_format"] % [inst.display_name(core.game_data),
 			party_min, party_max]
 	_hint_label.text = ""
 	for check: CheckBox in _checks.values():
@@ -133,13 +148,13 @@ func open(inst: QuestInstance, core: GuildCore) -> void:
 				UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 		var marks: PackedStringArray = []
 		if member.status == AdventurerData.Status.RESTING:
-			marks.append("休养%d天" % member.rest_days)
+			marks.append(UI_TEXTS[&"mark_resting_format"] % member.rest_days)
 		if occupied.has(member.unit_id):
-			marks.append("占用中")
+			marks.append(UI_TEXTS[&"mark_occupied"])
 		if member.last_expedition_day == core.day:
-			marks.append("今日已出征")
+			marks.append(UI_TEXTS[&"mark_deployed_today"])
 		var cls: ClassDef = core.game_data.get_record(member.class_id) as ClassDef
-		check.text = "%s（%s Lv%d）%s%s" % [member.display_name,
+		check.text = UI_TEXTS[&"member_row_format"] % [member.display_name,
 				cls.display_name if cls != null else String(member.class_id),
 				member.level, _RecommendTextOf(member), "｜".join(marks)]
 		check.disabled = member.status != AdventurerData.Status.HEALTHY \
@@ -156,7 +171,7 @@ func open(inst: QuestInstance, core: GuildCore) -> void:
 		_hint_label.text = String(UI_TEXTS[&"light_open_hint"]) % _tpl.duration_days
 		_confirm_button.text = UI_TEXTS[&"light_confirm"]
 	else:
-		_confirm_button.text = "确认编队"
+		_confirm_button.text = UI_TEXTS[&"confirm_button"]
 	_UpdatePreview()
 	visible = true
 
@@ -179,9 +194,9 @@ func _RecommendTextOf(member: AdventurerData) -> String:
 	for attr_id: StringName in attrs:
 		var value: int = int(member.attrs.get(attr_id, AttrKeys.DEFAULT_ATTR_VALUE))
 		var mark: String = " △" if value < _cfg.attr_modifier_offset else ""
-		parts.append("%s%d%s" % [String(QuestCard.ATTR_NAMES.get(attr_id, attr_id)),
+		parts.append(UI_TEXTS[&"recommend_attr_format"] % [String(QuestCard.ATTR_NAMES.get(attr_id, attr_id)),
 				value, mark])
-	return "｜推荐：%s " % " ".join(parts)
+	return UI_TEXTS[&"recommend_part_format"] % " ".join(parts)
 
 func _RecommendSummary() -> String:
 	## 检定预览汇总行（推荐属性名+短板判定线说明）
@@ -189,11 +204,11 @@ func _RecommendSummary() -> String:
 	## 返回：汇总文案
 	var attrs: Array[StringName] = _RecommendAttrs()
 	if attrs.is_empty():
-		return "本委托无推荐属性口径。"
+		return UI_TEXTS[&"recommend_none"]
 	var names: PackedStringArray = []
 	for attr_id: StringName in attrs:
 		names.append(String(QuestCard.ATTR_NAMES.get(attr_id, attr_id)))
-	return "检定预览：推荐 %s（数值低于 %d 的短板属性已标 △）" % [
+	return UI_TEXTS[&"recommend_summary_format"] % [
 			"、".join(names), _cfg.attr_modifier_offset]
 
 func _UpdatePreview() -> void:
@@ -208,7 +223,7 @@ func _UpdatePreview() -> void:
 	if picked > _tpl.party_max:
 		_preview_label.add_theme_color_override("font_color",
 				UiTheme.color_of(_cfg, &"ui_result_defeat_color", UiTheme.RESULT_DEFEAT))
-		_preview_label.text = "已选 %d 人——超出上限 %d，无法确认" % [
+		_preview_label.text = UI_TEXTS[&"preview_over_format"] % [
 				picked, _tpl.party_max]
 		return
 	var excess: int = maxi(0, picked - _tpl.party_min)
@@ -217,7 +232,7 @@ func _UpdatePreview() -> void:
 	var multiplier: float = 1.0 + rate * excess
 	_preview_label.add_theme_color_override("font_color",
 			UiTheme.color_of(_cfg, &"ui_highlight_gold_color", UiTheme.HIGHLIGHT_GOLD))
-	_preview_label.text = "超额预览：已选 %d 人（超额 %d）→ 奖励 ×%.2f ≈ %d 金 / %d 经验（声望不加）" % [
+	_preview_label.text = UI_TEXTS[&"preview_excess_format"] % [
 			picked, excess, multiplier, roundi(_tpl.reward.gold * multiplier),
 			roundi(_tpl.reward.exp * multiplier)]
 

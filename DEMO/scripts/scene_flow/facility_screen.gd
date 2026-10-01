@@ -13,10 +13,23 @@ const SceneManagerScript: GDScript = preload("res://scripts/autoload/scene_manag
 const BUTTON_SIZE: Vector2 = Vector2(280, 56)
 
 ## UI 文案单源（S5-R4-02：自动存档失败警示——guild_shell/association 同款
-## 口径，改措辞只动此处；S5-R5-03：返回 go 失败提示）
+## 口径，改措辞只动此处；S5-R5-03：返回 go 失败提示；M6 批 2 挂账 4.2：
+## 内联 UI 中文收编）
 const UI_TEXTS: Dictionary = {
 	&"autosave_failed_hint": "⚠ 最近一次自动存档写入失败——进度可能未落盘，请重试操作。",
 	&"go_fail_hint_format": "页面跳转失败（错误码 %d）——请重试。",
+	&"back_button": "返回公会",
+	&"missing_title_format": "设施数据缺失（%s）",
+	&"upgrade_button": "升级",
+	&"title_format": "%s（Lv%d）",
+	&"effect_line_format": "当前效果：%s",
+	&"max_level_text": "已满级",
+	&"upgrade_cost_format": "升级（%d 金）",
+	&"upgrade_tooltip_format": "当前效果：%s\n升级后：%s\n费用：%d 金\n余额：%d 金%s",
+	&"not_affordable_suffix": "——余额不足",
+	&"effect_dorm_format": "容量 %d 人｜重伤休养 -%d 天",
+	&"effect_training_format": "板凳经验分享率 %d%%",
+	&"effect_none": "—",
 }
 
 ## 本屏设施 id（tscn 注入：fac_dormitory / fac_training_ground）
@@ -80,7 +93,7 @@ func _BuildLayout() -> void:
 	_upgrade_button.pressed.connect(_OnUpgradePressed)
 	box.add_child(_upgrade_button)
 	var back_button := Button.new()
-	back_button.text = "返回公会"
+	back_button.text = UI_TEXTS[&"back_button"]
 	back_button.custom_minimum_size = BUTTON_SIZE
 	back_button.add_theme_font_size_override("font_size",
 			UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
@@ -102,47 +115,48 @@ func Refresh() -> void:
 	## 参数：无
 	## 返回：无
 	if _fac == null:
-		_title_label.text = "设施数据缺失（%s）" % String(facility_id)
+		_title_label.text = UI_TEXTS[&"missing_title_format"] % String(facility_id)
 		_effect_label.text = ""
 		_upgrade_button.disabled = true
-		_upgrade_button.text = "升级"
+		_upgrade_button.text = UI_TEXTS[&"upgrade_button"]
 		return
 	var core: GuildCore = get_node("/root/GuildState").core
 	var guild_state: Node = get_node("/root/GuildState")
 	# D-2/Z2-12：等级读值 clamp [1, max_level]——防脏档越界
 	var level: int = clampi(int(core.facility_levels.get(_fac.id, 1)), 1, _fac.max_level)
-	_title_label.text = "%s（Lv%d）" % [_fac.display_name, level]
-	_effect_label.text = "当前效果：%s" % _EffectText(_fac.levels[level - 1])
+	_title_label.text = UI_TEXTS[&"title_format"] % [_fac.display_name, level]
+	_effect_label.text = UI_TEXTS[&"effect_line_format"] % _EffectText(_fac.levels[level - 1])
 	# S5-R4-02：FACILITY_UPGRADED 写盘失败即时警示（此前延迟到回壳才见）
 	_hint_label.text = String(UI_TEXTS[&"autosave_failed_hint"]) \
 			if guild_state.last_autosave_failed else ""
 	if level >= _fac.max_level:
 		_upgrade_button.disabled = true
-		_upgrade_button.text = "已满级"
-		_upgrade_button.tooltip_text = "当前效果：%s" % _EffectText(_fac.levels[level - 1])
+		_upgrade_button.text = UI_TEXTS[&"max_level_text"]
+		_upgrade_button.tooltip_text = UI_TEXTS[&"effect_line_format"] \
+				% _EffectText(_fac.levels[level - 1])
 		return
 	var next_row: FacilityLevelDef = _fac.levels[level]
 	# M4-7：余额不足禁用 + tooltip 显示余额（对齐招募按钮标准）
 	var affordable: bool = core.gold >= next_row.upgrade_cost
 	_upgrade_button.disabled = not affordable
-	_upgrade_button.text = "升级（%d 金）" % next_row.upgrade_cost
-	_upgrade_button.tooltip_text = "当前效果：%s\n升级后：%s\n费用：%d 金\n余额：%d 金%s" % [
+	_upgrade_button.text = UI_TEXTS[&"upgrade_cost_format"] % next_row.upgrade_cost
+	_upgrade_button.tooltip_text = UI_TEXTS[&"upgrade_tooltip_format"] % [
 			_EffectText(_fac.levels[level - 1]), _EffectText(next_row),
 			next_row.upgrade_cost, core.gold,
-			"" if affordable else "——余额不足"]
+			"" if affordable else UI_TEXTS[&"not_affordable_suffix"]]
 
 func _EffectText(row: FacilityLevelDef) -> String:
 	## 单级效果文案（按 kind 取对应字段——读表显示不得错报数值）
 	## 参数 row：等级效果行
 	## 返回：效果文本
 	if _fac == null:
-		return "—"
+		return UI_TEXTS[&"effect_none"]
 	match _fac.facility_kind:
 		FacilityDef.FacilityKind.DORMITORY:
-			return "容量 %d 人｜重伤休养 -%d 天" % [row.dorm_capacity, row.rest_days_reduction]
+			return UI_TEXTS[&"effect_dorm_format"] % [row.dorm_capacity, row.rest_days_reduction]
 		FacilityDef.FacilityKind.TRAINING:
-			return "板凳经验分享率 %d%%" % roundi(row.bench_share_rate * 100.0)
-	return "—"
+			return UI_TEXTS[&"effect_training_format"] % roundi(row.bench_share_rate * 100.0)
+	return UI_TEXTS[&"effect_none"]
 
 func _OnUpgradePressed() -> void:
 	## 升级按钮（GuildState.upgrade_facility——校验/扣款/存档/即时生效）

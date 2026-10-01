@@ -9,6 +9,16 @@ extends VBoxContainer
 ## 招募请求（index=候选下标）
 signal recruit_requested(index: int)
 
+## UI 文案单源（M6 批 2 挂账 4.2：内联 UI 中文收编——改措辞只动此处）
+const UI_TEXTS: Dictionary = {
+	&"title": "招募池",
+	&"refresh_hint": "（每日日结算整池刷新；偏向缺少的职业）",
+	&"empty_hint": "（今日候选已招空——等明日刷新）",
+	&"candidate_format": "%s（%s）｜属性总和 %d｜花费 %d 金",
+	&"recruit_button": "招募",
+	&"dorm_tooltip_format": "宿舍 %d/%d｜余额 %d 金",
+}
+
 ## 总控配置
 var _cfg: CoreConfig = null
 ## 标题行
@@ -29,12 +39,12 @@ func setup(cfg: CoreConfig) -> void:
 	_cfg = cfg
 	add_theme_constant_override("separation", 6)
 	_title_label = Label.new()
-	_title_label.text = "招募池"
+	_title_label.text = UI_TEXTS[&"title"]
 	_title_label.add_theme_font_size_override("font_size",
 			UiTheme.font_of(cfg, &"ui_font_size_subheading", UiTheme.FONT_SUBHEADING))
 	add_child(_title_label)
 	_hint_label = Label.new()
-	_hint_label.text = "（每日日结算整池刷新；偏向缺少的职业）"
+	_hint_label.text = UI_TEXTS[&"refresh_hint"]
 	_hint_label.add_theme_font_size_override("font_size",
 			UiTheme.font_of(cfg, &"ui_font_size_small", UiTheme.FONT_SMALL))
 	add_child(_hint_label)
@@ -42,7 +52,7 @@ func setup(cfg: CoreConfig) -> void:
 	_row_box.add_theme_constant_override("separation", 6)
 	add_child(_row_box)
 	_empty_label = Label.new()
-	_empty_label.text = "（今日候选已招空——等明日刷新）"
+	_empty_label.text = UI_TEXTS[&"empty_hint"]
 	_empty_label.add_theme_font_size_override("font_size",
 			UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 	add_child(_empty_label)
@@ -61,7 +71,7 @@ func refresh(core: GuildCore) -> void:
 		_row_box.add_child(row)
 		var summary: Label = Label.new()
 		var cls: ClassDef = core.game_data.get_record(candidate.class_id) as ClassDef
-		summary.text = "%s（%s）｜属性总和 %d｜花费 %d 金" % [candidate.display_name,
+		summary.text = UI_TEXTS[&"candidate_format"] % [candidate.display_name,
 				cls.display_name if cls != null else String(candidate.class_id),
 				RecruitPool.total_attrs(candidate), core.recruit_pool.cost_of(candidate)]
 		summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -70,10 +80,10 @@ func refresh(core: GuildCore) -> void:
 		row.add_child(summary)
 		var button := Button.new()
 		button.name = "RecruitButton"
-		button.text = "招募"
+		button.text = UI_TEXTS[&"recruit_button"]
 		button.disabled = core.gold < core.recruit_pool.cost_of(candidate) \
 				or core.roster.size() >= core.dorm_capacity()
-		button.tooltip_text = "宿舍 %d/%d｜余额 %d 金" % [core.roster.size(),
+		button.tooltip_text = UI_TEXTS[&"dorm_tooltip_format"] % [core.roster.size(),
 				core.dorm_capacity(), core.gold]
 		button.add_theme_font_size_override("font_size",
 				UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))

@@ -8,4 +8,5 @@ id = &"evp_mine_01"
 display_name = "塌方救援"
 cell = Vector2i(1, 6)
 ref_id = &"chain_mine_collapse"
+map_ref = &"map_m1_village_mine"
 comment = "【占位·试玩校准】evp_<区域>_<序>：交互点（链入口——塌方区）"

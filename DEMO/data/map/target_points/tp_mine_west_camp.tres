@@ -7,4 +7,5 @@ script = ExtResource("1_7i71x")
 id = &"tp_mine_west_camp"
 display_name = "西巷旧营地"
 cell = Vector2i(1, 7)
+map_ref = &"map_m1_village_mine"
 comment = "【占位·试玩校准】tp_<区域>_<语义>：目标点（西巷巡查点）"

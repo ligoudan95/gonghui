@@ -489,25 +489,26 @@ func _IsAdjacent(cell: Vector2i) -> bool:
 	return float(delta.x) * float(delta.x) + float(delta.y) * float(delta.y) <= 2.25
 
 func _PointAt(cell: Vector2i, trigger: int) -> InteractPointDef:
-	## 按格与触发方式查交互点
+	## 按格与触发方式查交互点（M6 批 2 挂账 4.1：按 _run.map_id 过滤点位
+	## 归属——map_ref 字段化后多图数据不再越权命中）
 	## 参数 cell：查询格；trigger：触发方式枚举值
 	## 返回：交互点；无则 null
-	## S5-03 登记注：单图假设——全域遍历无 map 归属过滤，多图出现时须为
-	## InteractPointDef 增 map 归属字段并按 _run.map_id 过滤查询（挂 M6）
 	for record: Resource in _game_data.get_domain(&"map/interact_points"):
 		var point := record as InteractPointDef
+		if point.map_ref != _run.map_id:
+			continue
 		if point.cell == cell and point.trigger == trigger:
 			return point
 	return null
 
 func _TargetAt(cell: Vector2i) -> TargetPointDef:
-	## 按格查目标点
+	## 按格查目标点（M6 批 2 挂账 4.1：按 _run.map_id 过滤点位归属）
 	## 参数 cell：查询格
 	## 返回：目标点；无则 null
-	## S5-03 登记注：单图假设——全域遍历无 map 归属过滤，多图出现时须为
-	## TargetPointDef 增 map 归属字段并按 _run.map_id 过滤查询（挂 M6）
 	for record: Resource in _game_data.get_domain(&"map/target_points"):
 		var target := record as TargetPointDef
+		if target.map_ref != _run.map_id:
+			continue
 		if target.cell == cell:
 			return target
 	return null
@@ -634,15 +635,16 @@ func _StepWait() -> void:
 	await get_tree().create_timer(seconds).timeout
 
 func _SecretDoorPointAt(cell: Vector2i) -> InteractPointDef:
-	## 距离内可触发的暗门交互点查询（未消耗未揭示 + 半径内——遍历取首个）
+	## 距离内可触发的暗门交互点查询（未消耗未揭示 + 半径内——遍历取首个；
+	## M6 批 2 挂账 4.1：按 _run.map_id 过滤点位归属）
 	## 参数 cell：小队当前格
 	## 返回：交互点；无则 null
-	## S5-03 登记注：单图假设——全域遍历无 map 归属过滤，多图出现时须为
-	## InteractPointDef 增 map 归属字段并按 _run.map_id 过滤查询（挂 M6）
 	var radius: int = _cfg.secret_door_trigger_radius if _cfg != null else 0
 	for record: Resource in _game_data.get_domain(&"map/interact_points"):
 		var point := record as InteractPointDef
 		if point.kind != InteractPointDef.Kind.SECRET_DOOR:
+			continue
+		if point.map_ref != _run.map_id:
 			continue
 		if _run.consumed_events.has(point.ref_id):
 			continue
@@ -837,17 +839,18 @@ func _HideEventPanel() -> void:
 
 func _ApplySecretRevealIfNeeded() -> void:
 	## 暗门揭示应用（H2：unlock_flag 已入 run 即重放——_ready 会话恢复与
-	## 事件继续双入口共用；幂等——重复应用同值覆写）
+	## 事件继续双入口共用；幂等——重复应用同值覆写；M6 批 2 挂账 4.1：按
+	## _run.map_id 过滤点位归属）
 	## 参数：无
 	## 返回：无
-	## S5-03 登记注：单图假设——全域遍历无 map 归属过滤，多图出现时须为
-	## InteractPointDef 增 map 归属字段并按 _run.map_id 过滤查询（挂 M6）
 	if _state == null:
 		return
 	var applied: bool = false
 	for record: Resource in _game_data.get_domain(&"map/interact_points"):
 		var point := record as InteractPointDef
 		if point.kind != InteractPointDef.Kind.SECRET_DOOR:
+			continue
+		if point.map_ref != _run.map_id:
 			continue
 		var single: SingleEventDef = _game_data.get_record(point.ref_id) as SingleEventDef
 		if single == null or single.success_outcome == null:

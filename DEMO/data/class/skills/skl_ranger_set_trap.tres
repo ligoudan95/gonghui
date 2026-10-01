@@ -23,4 +23,5 @@ range = 5
 power_coefficient = 0.0
 effects = Array[ExtResource("1_xdb6i")]([SubResource("Resource_fyuur")])
 description = "在目标格布置陷阱，敌方踏入时受到预结算伤害。"
+attack_pose = 2
 comment = "【占位·试玩校准】参数来源：17 案 §3.4（DEMO 技能参数表）/§3.8（敌方技能表 17-C12~C16）"

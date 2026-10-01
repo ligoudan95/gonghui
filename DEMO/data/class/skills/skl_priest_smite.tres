@@ -22,6 +22,7 @@ attr_weights = Dictionary[StringName, float]({
 &"perception": 1.0
 })
 damage_type = 1
+attack_pose = 2
 power_coefficient = 1.2
 effects = Array[ExtResource("1_xva6v")]([SubResource("Resource_u2h1f")])
 description = "对单体造成 120% 面板的法术伤害，对亡灵伤害 ×1.5。"

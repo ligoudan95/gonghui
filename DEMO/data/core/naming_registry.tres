@@ -437,69 +437,6 @@ domain = &"equip"
 display_name = "奇术师初始装备（布甲套）"
 rule_note = "eqp_init_<职业>：DEMO 初始装备（不可卸下）"
 
-[sub_resource type="Resource" id="Resource_B2S0"]
-script = ExtResource("1_xxsy3")
-resource_id = &"spr_cls_warrior"
-domain = &"assets"
-display_name = "战士小人"
-rule_note = "spr_<单位系>：战场 sprite 资源 id（assets 域 AssetRegistry 登记键；盲审批 2 A-2 纳入全库登记口径）"
-
-[sub_resource type="Resource" id="Resource_B2S1"]
-script = ExtResource("1_xxsy3")
-resource_id = &"spr_cls_rogue"
-domain = &"assets"
-display_name = "盗贼小人"
-rule_note = "spr_<单位系>：战场 sprite 资源 id（assets 域 AssetRegistry 登记键；盲审批 2 A-2 纳入全库登记口径）"
-
-[sub_resource type="Resource" id="Resource_B2S2"]
-script = ExtResource("1_xxsy3")
-resource_id = &"spr_cls_mage"
-domain = &"assets"
-display_name = "法师小人"
-rule_note = "spr_<单位系>：战场 sprite 资源 id（assets 域 AssetRegistry 登记键；盲审批 2 A-2 纳入全库登记口径）"
-
-[sub_resource type="Resource" id="Resource_B2S3"]
-script = ExtResource("1_xxsy3")
-resource_id = &"spr_cls_priest"
-domain = &"assets"
-display_name = "牧师小人"
-rule_note = "spr_<单位系>：战场 sprite 资源 id（assets 域 AssetRegistry 登记键；盲审批 2 A-2 纳入全库登记口径）"
-
-[sub_resource type="Resource" id="Resource_B2S4"]
-script = ExtResource("1_xxsy3")
-resource_id = &"spr_cls_ranger"
-domain = &"assets"
-display_name = "游侠小人"
-rule_note = "spr_<单位系>：战场 sprite 资源 id（assets 域 AssetRegistry 登记键；盲审批 2 A-2 纳入全库登记口径）"
-
-[sub_resource type="Resource" id="Resource_B2S5"]
-script = ExtResource("1_xxsy3")
-resource_id = &"spr_cls_arcanist"
-domain = &"assets"
-display_name = "奇术师小人"
-rule_note = "spr_<单位系>：战场 sprite 资源 id（assets 域 AssetRegistry 登记键；盲审批 2 A-2 纳入全库登记口径）"
-
-[sub_resource type="Resource" id="Resource_B2S6"]
-script = ExtResource("1_xxsy3")
-resource_id = &"spr_en_mutant_rat"
-domain = &"assets"
-display_name = "变异鼠小人"
-rule_note = "spr_<单位系>：战场 sprite 资源 id（assets 域 AssetRegistry 登记键；盲审批 2 A-2 纳入全库登记口径）"
-
-[sub_resource type="Resource" id="Resource_B2S7"]
-script = ExtResource("1_xxsy3")
-resource_id = &"spr_en_goblin_miner"
-domain = &"assets"
-display_name = "哥布林矿工小人"
-rule_note = "spr_<单位系>：战场 sprite 资源 id（assets 域 AssetRegistry 登记键；盲审批 2 A-2 纳入全库登记口径）"
-
-[sub_resource type="Resource" id="Resource_B2S8"]
-script = ExtResource("1_xxsy3")
-resource_id = &"spr_en_elite_boss"
-domain = &"assets"
-display_name = "矿洞祸首小人"
-rule_note = "spr_<单位系>：战场 sprite 资源 id（assets 域 AssetRegistry 登记键；盲审批 2 A-2 纳入全库登记口径）"
-
 [sub_resource type="Resource" id="Resource_B2T9"]
 script = ExtResource("1_xxsy3")
 resource_id = &"tend_warrior_a"
@@ -1102,12 +1039,12 @@ domain = &"quest/templates"
 display_name = "酒馆帮工"
 rule_note = "q_<语义>：委托模板（轻度——酒馆帮工/工期 3 天/VANISH）"
 
-[sub_resource type="Resource" id="Resource_P1S_2"]
+[sub_resource type="Resource" id="Resource_M4S_3"]
 script = ExtResource("1_xxsy3")
-resource_id = &"etile_poison_swamp"
-domain = &"map/tiles"
-display_name = "毒瘴"
-rule_note = "etile_<语义>：探索地格（功能一试玩批——毒瘴踏入效果，批次 2 建表补登）"
+resource_id = &"q_chore_messenger"
+domain = &"quest/templates"
+display_name = "城内信使"
+rule_note = "q_<语义>：委托模板（轻度——城内信使/工期 2 天/REPLACE）"
 
 [sub_resource type="Resource" id="Resource_P1S_1"]
 script = ExtResource("1_xxsy3")
@@ -1116,14 +1053,392 @@ domain = &"status/stats"
 display_name = "中毒"
 rule_note = "DEBUFF_<语义>：踏入染毒状态（功能一试玩批——TILE 踏入/CHECKIN 战斗带入双来源）"
 
-[sub_resource type="Resource" id="Resource_M4S_3"]
+[sub_resource type="Resource" id="Resource_P1S_2"]
 script = ExtResource("1_xxsy3")
-resource_id = &"q_chore_messenger"
-domain = &"quest/templates"
-display_name = "城内信使"
-rule_note = "q_<语义>：委托模板（轻度——城内信使/工期 2 天/REPLACE）"
+resource_id = &"etile_poison_swamp"
+domain = &"map/tiles"
+display_name = "毒瘴"
+rule_note = "etile_<语义>：探索地格（功能一试玩批——毒瘴踏入效果，批次 2 建表补登）"
+
+[sub_resource type="Resource" id="Resource_esl5i"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_warrior_idle"
+domain = &"assets"
+display_name = "战士·待机"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_1orby"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_warrior_move"
+domain = &"assets"
+display_name = "战士·移动"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_3egmt"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_warrior_melee_attack"
+domain = &"assets"
+display_name = "战士·近战攻击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_giycc"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_warrior_cast_ranged"
+domain = &"assets"
+display_name = "战士·施放攻击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_50j7w"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_warrior_hit"
+domain = &"assets"
+display_name = "战士·受击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_2baiq"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_warrior_downed"
+domain = &"assets"
+display_name = "战士·倒地"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_ftyet"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_rogue_idle"
+domain = &"assets"
+display_name = "盗贼·待机"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_aqi8h"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_rogue_move"
+domain = &"assets"
+display_name = "盗贼·移动"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_a0nkg"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_rogue_melee_attack"
+domain = &"assets"
+display_name = "盗贼·近战攻击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_61hnf"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_rogue_cast_ranged"
+domain = &"assets"
+display_name = "盗贼·施放攻击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_5fddt"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_rogue_hit"
+domain = &"assets"
+display_name = "盗贼·受击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_pulph"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_rogue_downed"
+domain = &"assets"
+display_name = "盗贼·倒地"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_5mgwy"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_mage_idle"
+domain = &"assets"
+display_name = "法师·待机"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_s5dil"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_mage_move"
+domain = &"assets"
+display_name = "法师·移动"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_h1j3u"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_mage_melee_attack"
+domain = &"assets"
+display_name = "法师·近战攻击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_4j1uu"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_mage_cast_ranged"
+domain = &"assets"
+display_name = "法师·施放攻击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_a1rpw"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_mage_hit"
+domain = &"assets"
+display_name = "法师·受击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_ksmsk"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_mage_downed"
+domain = &"assets"
+display_name = "法师·倒地"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_qm2wl"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_priest_idle"
+domain = &"assets"
+display_name = "牧师·待机"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_vjgme"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_priest_move"
+domain = &"assets"
+display_name = "牧师·移动"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_utlqq"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_priest_melee_attack"
+domain = &"assets"
+display_name = "牧师·近战攻击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_2u6cb"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_priest_cast_ranged"
+domain = &"assets"
+display_name = "牧师·施放攻击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_j6uh6"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_priest_hit"
+domain = &"assets"
+display_name = "牧师·受击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_xqfck"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_priest_downed"
+domain = &"assets"
+display_name = "牧师·倒地"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_ighvi"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_ranger_idle"
+domain = &"assets"
+display_name = "游侠·待机"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_2xd0m"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_ranger_move"
+domain = &"assets"
+display_name = "游侠·移动"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_lxoe8"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_ranger_melee_attack"
+domain = &"assets"
+display_name = "游侠·近战攻击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_wd1fp"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_ranger_cast_ranged"
+domain = &"assets"
+display_name = "游侠·施放攻击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_7j3ta"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_ranger_hit"
+domain = &"assets"
+display_name = "游侠·受击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_v3d21"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_ranger_downed"
+domain = &"assets"
+display_name = "游侠·倒地"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_q21nk"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_arcanist_idle"
+domain = &"assets"
+display_name = "奇术师·待机"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_rx1d4"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_arcanist_move"
+domain = &"assets"
+display_name = "奇术师·移动"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_0fqwk"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_arcanist_melee_attack"
+domain = &"assets"
+display_name = "奇术师·近战攻击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_k4al3"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_arcanist_cast_ranged"
+domain = &"assets"
+display_name = "奇术师·施放攻击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_kysxh"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_arcanist_hit"
+domain = &"assets"
+display_name = "奇术师·受击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_prfax"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_cls_arcanist_downed"
+domain = &"assets"
+display_name = "奇术师·倒地"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_vi1el"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_en_mutant_rat_idle"
+domain = &"assets"
+display_name = "变异鼠·待机"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_waw65"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_en_mutant_rat_move"
+domain = &"assets"
+display_name = "变异鼠·移动"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_lgpgu"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_en_mutant_rat_melee_attack"
+domain = &"assets"
+display_name = "变异鼠·近战攻击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_3mcxo"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_en_mutant_rat_cast_ranged"
+domain = &"assets"
+display_name = "变异鼠·施放攻击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_jkk12"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_en_mutant_rat_hit"
+domain = &"assets"
+display_name = "变异鼠·受击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_q0sv8"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_en_mutant_rat_downed"
+domain = &"assets"
+display_name = "变异鼠·倒地"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_6f35d"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_en_goblin_miner_idle"
+domain = &"assets"
+display_name = "哥布林矿工·待机"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_q75ho"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_en_goblin_miner_move"
+domain = &"assets"
+display_name = "哥布林矿工·移动"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_afs4o"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_en_goblin_miner_melee_attack"
+domain = &"assets"
+display_name = "哥布林矿工·近战攻击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_ep62o"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_en_goblin_miner_cast_ranged"
+domain = &"assets"
+display_name = "哥布林矿工·施放攻击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_nilm3"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_en_goblin_miner_hit"
+domain = &"assets"
+display_name = "哥布林矿工·受击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_dj28m"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_en_goblin_miner_downed"
+domain = &"assets"
+display_name = "哥布林矿工·倒地"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_yk7rf"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_en_elite_boss_idle"
+domain = &"assets"
+display_name = "矿洞祸首·待机"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_bn8x6"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_en_elite_boss_move"
+domain = &"assets"
+display_name = "矿洞祸首·移动"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_v83sq"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_en_elite_boss_melee_attack"
+domain = &"assets"
+display_name = "矿洞祸首·近战攻击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_oymdi"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_en_elite_boss_cast_ranged"
+domain = &"assets"
+display_name = "矿洞祸首·施放攻击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_b173o"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_en_elite_boss_hit"
+domain = &"assets"
+display_name = "矿洞祸首·受击"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
+
+[sub_resource type="Resource" id="Resource_p552g"]
+script = ExtResource("1_xxsy3")
+resource_id = &"spr_en_elite_boss_downed"
+domain = &"assets"
+display_name = "矿洞祸首·倒地"
+rule_note = "spr_<单位>_<动作>：单位六动作竖条（M6 批 1；assets 域 AssetRegistry 登记键；宽 128/高 = 帧数×128）"
 
 [resource]
 script = ExtResource("2_8hs6i")
-entries = Array[ExtResource("1_xxsy3")]([SubResource("Resource_7rp6k"), SubResource("Resource_oft80"), SubResource("Resource_n0ea3"), SubResource("Resource_8b336"), SubResource("Resource_hxk6g"), SubResource("Resource_l7131"), SubResource("Resource_8wgs3"), SubResource("Resource_ito87"), SubResource("Resource_mvlxc"), SubResource("Resource_bw3po"), SubResource("Resource_6s0uu"), SubResource("Resource_kpbtc"), SubResource("Resource_p5cqs"), SubResource("Resource_e25vx"), SubResource("Resource_inerj"), SubResource("Resource_pa4wo"), SubResource("Resource_coef1"), SubResource("Resource_dmwsm"), SubResource("Resource_h7b8d"), SubResource("Resource_pvxlm"), SubResource("Resource_8igpl"), SubResource("Resource_cwl1f"), SubResource("Resource_tomj8"), SubResource("Resource_67gfp"), SubResource("Resource_01rdt"), SubResource("Resource_p0axp"), SubResource("Resource_4uaip"), SubResource("Resource_dl7mi"), SubResource("Resource_d0vn1"), SubResource("Resource_wsgw6"), SubResource("Resource_oqqqu"), SubResource("Resource_x4q0o"), SubResource("Resource_0ucge"), SubResource("Resource_h3wwn"), SubResource("Resource_pk2js"), SubResource("Resource_cli47"), SubResource("Resource_w1hfh"), SubResource("Resource_gwor4"), SubResource("Resource_uyas2"), SubResource("Resource_3k27s"), SubResource("Resource_yry1n"), SubResource("Resource_j4c4f"), SubResource("Resource_b83j2"), SubResource("Resource_pubcw"), SubResource("Resource_ywjf5"), SubResource("Resource_fh5vw"), SubResource("Resource_u0rav"), SubResource("Resource_wk6it"), SubResource("Resource_xxsy3"), SubResource("Resource_8hs6i"), SubResource("Resource_xjr3h"), SubResource("Resource_kjgb4"), SubResource("Resource_l8020"), SubResource("Resource_hewr7"), SubResource("Resource_kqsjo"), SubResource("Resource_wxmxw"), SubResource("Resource_3xjaa"), SubResource("Resource_slrmy"), SubResource("Resource_27uxc"), SubResource("Resource_lbffk"), SubResource("Resource_6fscd"), SubResource("Resource_p2ky8"), SubResource("Resource_B2S0"), SubResource("Resource_B2S1"), SubResource("Resource_B2S2"), SubResource("Resource_B2S3"), SubResource("Resource_B2S4"), SubResource("Resource_B2S5"), SubResource("Resource_B2S6"), SubResource("Resource_B2S7"), SubResource("Resource_B2S8"), SubResource("Resource_B2T9"), SubResource("Resource_B2T10"), SubResource("Resource_B2T11"), SubResource("Resource_B2T12"), SubResource("Resource_B2T13"), SubResource("Resource_B2T14"), SubResource("Resource_B2T15"), SubResource("Resource_B2T16"), SubResource("Resource_B2T17"), SubResource("Resource_B2T18"), SubResource("Resource_B2T19"), SubResource("Resource_B2T20"), SubResource("Resource_B2X0"), SubResource("Resource_B2X1"), SubResource("Resource_2ecym"), SubResource("Resource_4r4qe"), SubResource("Resource_pe7pm"), SubResource("Resource_kvllj"), SubResource("Resource_lpihg"), SubResource("Resource_eimhm"), SubResource("Resource_btjvi"), SubResource("Resource_wjna8"), SubResource("Resource_bnusc"), SubResource("Resource_6gijb"), SubResource("Resource_jxvbu"), SubResource("Resource_bi4xl"), SubResource("Resource_yaiqf"), SubResource("Resource_oqig6"), SubResource("Resource_anpy2"), SubResource("Resource_t02th"), SubResource("Resource_4ofvs"), SubResource("Resource_s677f"), SubResource("Resource_3sklr"), SubResource("Resource_jc5g8"), SubResource("Resource_528ok"), SubResource("Resource_aru5v"), SubResource("Resource_vcik6"), SubResource("Resource_rfrhy"), SubResource("Resource_17mgl"), SubResource("Resource_sbkk8"), SubResource("Resource_ucf00"), SubResource("Resource_62ieu"), SubResource("Resource_j46ws"), SubResource("Resource_mvkr6"), SubResource("Resource_7rw8l"), SubResource("Resource_asic3"), SubResource("Resource_hhwg4"), SubResource("Resource_t12hy"), SubResource("Resource_g2rr1"), SubResource("Resource_3x6wm"), SubResource("Resource_os57f"), SubResource("Resource_4d41u"), SubResource("Resource_tkjd7"), SubResource("Resource_166x5"), SubResource("Resource_ims3k"), SubResource("Resource_hbr05"), SubResource("Resource_y1e88"), SubResource("Resource_555je"), SubResource("Resource_5d1pa"), SubResource("Resource_q4f4k"), SubResource("Resource_1j1fi"), SubResource("Resource_n67gn"), SubResource("Resource_laq4p"), SubResource("Resource_4y6xp"), SubResource("Resource_jkjmm"), SubResource("Resource_t0igy"), SubResource("Resource_6eu0y"), SubResource("Resource_bhsmv"), SubResource("Resource_533bw"), SubResource("Resource_thymv"), SubResource("Resource_56ss7"), SubResource("Resource_M4_1"), SubResource("Resource_M4_2"), SubResource("Resource_M4_3"), SubResource("Resource_M4_4"), SubResource("Resource_M4_5"), SubResource("Resource_M4_6"), SubResource("Resource_M4_7"), SubResource("Resource_M4_8"), SubResource("Resource_M4_9"), SubResource("Resource_M4_10"), SubResource("Resource_M4_11"), SubResource("Resource_M4_12"), SubResource("Resource_M4_13"), SubResource("Resource_M4S_1"), SubResource("Resource_M4S_2"), SubResource("Resource_M4S_3"), SubResource("Resource_P1S_1"), SubResource("Resource_P1S_2")])
-comment = "全库资源命名登记表（用户拍板②·2026-09-23）：每条记录资源 id/域前缀/中文名/命名规则；条目随资源增删同步维护；M1 批 1 追加战斗域 14 条；盲审批 2 A-2 追加 spr_×9 + tend_×12（含表自身与 registry 补登，共 85 条）；M4 经营层追加 13 条（fac_×2 + adv_ 种子×4 + 板刷 q_×7）；M4 增补批追加 3 条（轻度 q_chore_×3，共 158 条）"
+entries = Array[ExtResource("1_xxsy3")]([SubResource("Resource_7rp6k"), SubResource("Resource_oft80"), SubResource("Resource_n0ea3"), SubResource("Resource_8b336"), SubResource("Resource_hxk6g"), SubResource("Resource_l7131"), SubResource("Resource_8wgs3"), SubResource("Resource_ito87"), SubResource("Resource_mvlxc"), SubResource("Resource_bw3po"), SubResource("Resource_6s0uu"), SubResource("Resource_kpbtc"), SubResource("Resource_p5cqs"), SubResource("Resource_e25vx"), SubResource("Resource_inerj"), SubResource("Resource_pa4wo"), SubResource("Resource_coef1"), SubResource("Resource_dmwsm"), SubResource("Resource_h7b8d"), SubResource("Resource_pvxlm"), SubResource("Resource_8igpl"), SubResource("Resource_cwl1f"), SubResource("Resource_tomj8"), SubResource("Resource_67gfp"), SubResource("Resource_01rdt"), SubResource("Resource_p0axp"), SubResource("Resource_4uaip"), SubResource("Resource_dl7mi"), SubResource("Resource_d0vn1"), SubResource("Resource_wsgw6"), SubResource("Resource_oqqqu"), SubResource("Resource_x4q0o"), SubResource("Resource_0ucge"), SubResource("Resource_h3wwn"), SubResource("Resource_pk2js"), SubResource("Resource_cli47"), SubResource("Resource_w1hfh"), SubResource("Resource_gwor4"), SubResource("Resource_uyas2"), SubResource("Resource_3k27s"), SubResource("Resource_yry1n"), SubResource("Resource_j4c4f"), SubResource("Resource_b83j2"), SubResource("Resource_pubcw"), SubResource("Resource_ywjf5"), SubResource("Resource_fh5vw"), SubResource("Resource_u0rav"), SubResource("Resource_wk6it"), SubResource("Resource_xxsy3"), SubResource("Resource_8hs6i"), SubResource("Resource_xjr3h"), SubResource("Resource_kjgb4"), SubResource("Resource_l8020"), SubResource("Resource_hewr7"), SubResource("Resource_kqsjo"), SubResource("Resource_wxmxw"), SubResource("Resource_3xjaa"), SubResource("Resource_slrmy"), SubResource("Resource_27uxc"), SubResource("Resource_lbffk"), SubResource("Resource_6fscd"), SubResource("Resource_p2ky8"), SubResource("Resource_B2T9"), SubResource("Resource_B2T10"), SubResource("Resource_B2T11"), SubResource("Resource_B2T12"), SubResource("Resource_B2T13"), SubResource("Resource_B2T14"), SubResource("Resource_B2T15"), SubResource("Resource_B2T16"), SubResource("Resource_B2T17"), SubResource("Resource_B2T18"), SubResource("Resource_B2T19"), SubResource("Resource_B2T20"), SubResource("Resource_B2X0"), SubResource("Resource_B2X1"), SubResource("Resource_2ecym"), SubResource("Resource_4r4qe"), SubResource("Resource_pe7pm"), SubResource("Resource_kvllj"), SubResource("Resource_lpihg"), SubResource("Resource_eimhm"), SubResource("Resource_btjvi"), SubResource("Resource_wjna8"), SubResource("Resource_bnusc"), SubResource("Resource_6gijb"), SubResource("Resource_jxvbu"), SubResource("Resource_bi4xl"), SubResource("Resource_yaiqf"), SubResource("Resource_oqig6"), SubResource("Resource_anpy2"), SubResource("Resource_t02th"), SubResource("Resource_4ofvs"), SubResource("Resource_s677f"), SubResource("Resource_3sklr"), SubResource("Resource_jc5g8"), SubResource("Resource_528ok"), SubResource("Resource_aru5v"), SubResource("Resource_vcik6"), SubResource("Resource_rfrhy"), SubResource("Resource_17mgl"), SubResource("Resource_sbkk8"), SubResource("Resource_ucf00"), SubResource("Resource_62ieu"), SubResource("Resource_j46ws"), SubResource("Resource_mvkr6"), SubResource("Resource_7rw8l"), SubResource("Resource_asic3"), SubResource("Resource_hhwg4"), SubResource("Resource_t12hy"), SubResource("Resource_g2rr1"), SubResource("Resource_3x6wm"), SubResource("Resource_os57f"), SubResource("Resource_4d41u"), SubResource("Resource_tkjd7"), SubResource("Resource_166x5"), SubResource("Resource_ims3k"), SubResource("Resource_hbr05"), SubResource("Resource_y1e88"), SubResource("Resource_555je"), SubResource("Resource_5d1pa"), SubResource("Resource_q4f4k"), SubResource("Resource_1j1fi"), SubResource("Resource_n67gn"), SubResource("Resource_laq4p"), SubResource("Resource_4y6xp"), SubResource("Resource_jkjmm"), SubResource("Resource_t0igy"), SubResource("Resource_6eu0y"), SubResource("Resource_bhsmv"), SubResource("Resource_533bw"), SubResource("Resource_thymv"), SubResource("Resource_56ss7"), SubResource("Resource_M4_1"), SubResource("Resource_M4_2"), SubResource("Resource_M4_3"), SubResource("Resource_M4_4"), SubResource("Resource_M4_5"), SubResource("Resource_M4_6"), SubResource("Resource_M4_7"), SubResource("Resource_M4_8"), SubResource("Resource_M4_9"), SubResource("Resource_M4_10"), SubResource("Resource_M4_11"), SubResource("Resource_M4_12"), SubResource("Resource_M4_13"), SubResource("Resource_M4S_1"), SubResource("Resource_M4S_2"), SubResource("Resource_M4S_3"), SubResource("Resource_P1S_1"), SubResource("Resource_P1S_2"), SubResource("Resource_esl5i"), SubResource("Resource_1orby"), SubResource("Resource_3egmt"), SubResource("Resource_giycc"), SubResource("Resource_50j7w"), SubResource("Resource_2baiq"), SubResource("Resource_ftyet"), SubResource("Resource_aqi8h"), SubResource("Resource_a0nkg"), SubResource("Resource_61hnf"), SubResource("Resource_5fddt"), SubResource("Resource_pulph"), SubResource("Resource_5mgwy"), SubResource("Resource_s5dil"), SubResource("Resource_h1j3u"), SubResource("Resource_4j1uu"), SubResource("Resource_a1rpw"), SubResource("Resource_ksmsk"), SubResource("Resource_qm2wl"), SubResource("Resource_vjgme"), SubResource("Resource_utlqq"), SubResource("Resource_2u6cb"), SubResource("Resource_j6uh6"), SubResource("Resource_xqfck"), SubResource("Resource_ighvi"), SubResource("Resource_2xd0m"), SubResource("Resource_lxoe8"), SubResource("Resource_wd1fp"), SubResource("Resource_7j3ta"), SubResource("Resource_v3d21"), SubResource("Resource_q21nk"), SubResource("Resource_rx1d4"), SubResource("Resource_0fqwk"), SubResource("Resource_k4al3"), SubResource("Resource_kysxh"), SubResource("Resource_prfax"), SubResource("Resource_vi1el"), SubResource("Resource_waw65"), SubResource("Resource_lgpgu"), SubResource("Resource_3mcxo"), SubResource("Resource_jkk12"), SubResource("Resource_q0sv8"), SubResource("Resource_6f35d"), SubResource("Resource_q75ho"), SubResource("Resource_afs4o"), SubResource("Resource_ep62o"), SubResource("Resource_nilm3"), SubResource("Resource_dj28m"), SubResource("Resource_yk7rf"), SubResource("Resource_bn8x6"), SubResource("Resource_v83sq"), SubResource("Resource_oymdi"), SubResource("Resource_b173o"), SubResource("Resource_p552g")])
+comment = "全库资源命名登记表（用户拍板②·2026-09-23）：每条记录资源 id/域前缀/中文名/命名规则；条目随资源增删同步维护；M1 批 1 追加战斗域 14 条；盲审批 2 A-2 追加 spr_×9 + tend_×12（含表自身与 registry 补登，共 85 条）；M4 经营层追加 13 条（fac_×2 + adv_ 种子×4 + 板刷 q_×7）；M4 增补批追加 3 条（轻度 q_chore_×3）；M6 批 1 spr_ 条目重建为六动作竖条 ×54（旧单图 ×9 退役，共 205 条）"

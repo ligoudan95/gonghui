@@ -8,6 +8,17 @@ extends VBoxContainer
 ## 成员行点击（unit_id——批 3 详情弹层消费）
 signal member_selected(unit_id: StringName)
 
+## UI 文案单源（M6 批 2 挂账 4.2：内联 UI 中文收编——改措辞只动此处）
+const UI_TEXTS: Dictionary = {
+	&"title": "队伍总览",
+	&"status_healthy": "健康",
+	&"status_resting_format": "休养 %d 天",
+	&"mark_quest_format": "执行『%s』",
+	&"mark_deployed_today": "今日已出征",
+	&"mark_pending_tendency": "待选倾向",
+	&"row_format": "%s（%s Lv%d）｜%s",
+}
+
 ## 总控配置
 var _cfg: CoreConfig = null
 ## 标题行
@@ -24,7 +35,7 @@ func setup(cfg: CoreConfig) -> void:
 	_cfg = cfg
 	add_theme_constant_override("separation", 4)
 	_title_label = Label.new()
-	_title_label.text = "队伍总览"
+	_title_label.text = UI_TEXTS[&"title"]
 	_title_label.add_theme_font_size_override("font_size",
 			UiTheme.font_of(cfg, &"ui_font_size_subheading", UiTheme.FONT_SUBHEADING))
 	add_child(_title_label)
@@ -59,18 +70,18 @@ func refresh(members: Array[AdventurerData], board: QuestBoard, day: int,
 		button.add_theme_font_size_override("font_size",
 				UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 		var cls: ClassDef = game_data.get_record(member.class_id) as ClassDef
-		var status_text: String = "健康"
+		var status_text: String = UI_TEXTS[&"status_healthy"]
 		if member.status == AdventurerData.Status.RESTING:
-			status_text = "休养 %d 天" % member.rest_days
+			status_text = UI_TEXTS[&"status_resting_format"] % member.rest_days
 		var marks: PackedStringArray = [status_text]
 		if occupied_by.has(member.unit_id):
 			var inst: QuestInstance = occupied_by[member.unit_id]
-			marks.append("执行『%s』" % inst.display_name(game_data))
+			marks.append(UI_TEXTS[&"mark_quest_format"] % inst.display_name(game_data))
 		if member.last_expedition_day == day:
-			marks.append("今日已出征")
+			marks.append(UI_TEXTS[&"mark_deployed_today"])
 		if pending.has(String(member.unit_id)):
-			marks.append("待选倾向")
-		button.text = "%s（%s Lv%d）｜%s" % [member.display_name,
+			marks.append(UI_TEXTS[&"mark_pending_tendency"])
+		button.text = UI_TEXTS[&"row_format"] % [member.display_name,
 				cls.display_name if cls != null else String(member.class_id),
 				member.level, "｜".join(marks)]
 		var picked_id: StringName = member.unit_id

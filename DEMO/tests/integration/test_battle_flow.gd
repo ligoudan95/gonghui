@@ -481,7 +481,8 @@ func test_bewitched_unit_random_action() -> void:
 	assert_int(context.status_manager.get_active_control(warrior)) \
 			.is_equal(StatusDef.ControlKind.BEWITCH)
 	var events: Array = []
-	controller.unit_moved.connect(func(unit: BattleUnit, _from: Vector2i, _to: Vector2i) -> void:
+	controller.unit_moved.connect(func(unit: BattleUnit, _from: Vector2i, _to: Vector2i,
+			_path: Array) -> void:
 		events.append("moved:%s" % unit.unit_id))
 	controller.skill_executed.connect(func(caster, _result) -> void:
 		events.append("skill:%s" % caster.unit_id))
@@ -547,7 +548,8 @@ func test_round_end_settlement_sequence() -> void:
 	var controller := _MakeController(context)
 	var stats: Dictionary = {}
 	var enemy_events: Array = []
-	controller.unit_moved.connect(func(unit: BattleUnit, _from_pos: Vector2i, _to_pos: Vector2i) -> void:
+	controller.unit_moved.connect(func(unit: BattleUnit, _from_pos: Vector2i, _to_pos: Vector2i,
+			_path: Array) -> void:
 		if unit.side == SkillDef.SkillSide.ENEMY:
 			enemy_events.append("moved"))
 	controller.skill_executed.connect(func(caster, _result) -> void:

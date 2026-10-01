@@ -7,4 +7,5 @@ script = ExtResource("1_rurme")
 id = &"tp_mine_east_gallery"
 display_name = "东岔道矿脉"
 cell = Vector2i(13, 7)
+map_ref = &"map_m1_village_mine"
 comment = "【占位·试玩校准】tp_<区域>_<语义>：目标点（东矿脉观测点——q_vein_survey 类锚点，DEMO 由老井线消费）"

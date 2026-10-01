@@ -66,6 +66,28 @@ const EVENT_GRADE_FAILURE: Color = Color(0.9, 0.5, 0.4)
 const EVENT_GRADE_CRIT_FAILURE: Color = Color(0.8, 0.3, 0.3)
 ## D20 演出滚动时长兜底（秒——M2）
 const D20_ROLL_SECONDS: float = 0.9
+
+# ---- M6 批 1 单位动作集演出兜底（cfg ui_anim_*/ui_battle_move_step_seconds/
+# ui_hit_flash_seconds——V-B2-cfg-fallback 锚定，值 == cfg_main 表值）----
+## 待机动作帧率兜底（帧/秒）
+const ANIM_IDLE_FPS: float = 6.0
+## 移动动作帧率兜底（帧/秒）
+const ANIM_MOVE_FPS: float = 10.0
+## 攻击动作帧率兜底（帧/秒——近战/施放共用档）
+const ANIM_ATTACK_FPS: float = 8.0
+## 受击动作帧率兜底（帧/秒）
+const ANIM_HIT_FPS: float = 8.0
+## 倒地动作帧率兜底（帧/秒）
+const ANIM_DOWNED_FPS: float = 6.0
+## 战场徽章移动演出单步时长兜底（秒/步——D6=A）
+const BATTLE_MOVE_STEP_SECONDS: float = 0.15
+## 徽章受击白闪时长兜底（秒）
+const HIT_FLASH_SECONDS: float = 0.25
+## 徽章受击白闪峰值色兜底（HDR 亮白——modulate 分量 > 1 提亮；盲审低14 入表）
+const HIT_FLASH_PEAK: Color = Color(4.0, 4.0, 4.0)
+## 战场徽章移动演出步数上限兜底（低15：远距 tween 总时长钳制护栏——
+## D6 语义「总时长 = 步长 × 步数」的步数封顶，入表可调）
+const BATTLE_MOVE_MAX_STEPS: int = 6
 ## 结算战败/撤退色兜底（R3-08）
 const RESULT_DEFEAT: Color = Color(0.95, 0.4, 0.35)
 const RESULT_RETREAT: Color = Color(0.7, 0.8, 0.95)

@@ -20,6 +20,10 @@
 ## 选项级出口禁 B；V-R1 三条加严：HEAL ratio·flat 值域 / dot 类别反向断言与
 ## FIXED ≥1 / icon_id 非空即查；既有规则补漏：quest-goal region_id 全类查 /
 ## quest-template time_limit_days ≥1）。
+## + M6 批 1 新增（V-M6 三条——单位六动作齐套 anim-quad / 动作竖条几何
+## anim-geometry / 技能攻击姿态 skill-pose；V-M0-cfg-domain 扩演出参数
+## 七字段值域、V-B2-cfg-fallback 扩七字段锚定；批 2 挂账 4.1：V-M3-map-points
+## 扩 map_ref 归属 + V-M3-ref-quest-goal 扩委托与目标点同图一致）。
 ## 用法：DataValidator.run_all(game_data)——game_data 为 GameData 自动加载单例或其实例。
 class_name DataValidator
 extends RefCounted
@@ -52,6 +56,7 @@ static func _EnemyRoleTags() -> Array[StringName]:
 const NAMING_PREFIX_CHECKS: Array = [
 	{"prefix": "spr_", "check": &"asset_registry"},
 	{"prefix": "tend_", "check": &"class_tendencies"},
+	{"prefix": "bg_", "check": &"asset_registry"},
 ]
 
 ## owner 为空的技能白名单（C-6 具名化：敌方通用普攻 skl_atk_enemy_common——
@@ -222,6 +227,10 @@ static func run_all(game_data: Node) -> ValidationReport:
 	_CheckAssetReverseRegistered(report, game_data)
 	_CheckPackEliteFirst(report, game_data)
 	_CheckEnemySkillKind(report, game_data)
+	# ---- M6 批 1 新增（V-M6 组：单位六动作集——动作齐套/竖条几何/技能姿态）----
+	_CheckAnimQuad(report, game_data)
+	_CheckAnimGeometry(report, game_data)
+	_CheckSkillPose(report, game_data)
 	return report
 
 # --------------------------------------------------------------------------
@@ -291,6 +300,7 @@ static func _CheckEnumDomains(report: ValidationReport, game_data: Node) -> void
 	for record: Resource in _DomainRecords(game_data, &"class/skills"):
 		var skill := record as SkillDef
 		_CheckEnumRange(report, skill.id, "SkillDef.damage_type", skill.damage_type, SkillDef.DamageType.size() - 1)
+		_CheckEnumRange(report, skill.id, "SkillDef.attack_pose", skill.attack_pose, SkillDef.AttackPose.size() - 1)
 		_CheckEnumRange(report, skill.id, "SkillDef.target_side", skill.target_side, SkillDef.TargetSide.size() - 1)
 		_CheckEnumRange(report, skill.id, "SkillDef.target_shape", skill.target_shape, SkillDef.TargetShape.size() - 1)
 		_CheckEnumRange(report, skill.id, "SkillDef.side", skill.side, SkillDef.SkillSide.size() - 1)
@@ -841,8 +851,9 @@ static func _CheckTileVisual(report: ValidationReport, game_data: Node) -> void:
 						str(tile.mark_color), str(BattleBoard.COLOR_TRAP_MARK_FALLBACK)])
 
 static func _CheckSpriteIds(report: ValidationReport, game_data: Node) -> void:
-	## V-A-sprite-id：职业/敌人表 sprite_id 非空且在 AssetRegistry 有登记
-	## （批 A H3：sprite id 入表，路径仍走 AssetRegistry）
+	## V-A-sprite-id：职业/敌人表 sprite_id 非空（批 A H3：sprite id 入表）。
+	## M6 批 1 收窄：单图键已随静态图退役——「登记存在」断言移交 V-M6-anim-quad
+	##（六动作件 <sprite_id>_<action> 齐套查——单键直查在此口径下恒假）
 	## 参数：报告 / GameData
 	## 返回：无
 	var targets: Array = [_DomainRecords(game_data, &"class/classes"),
@@ -853,10 +864,6 @@ static func _CheckSpriteIds(report: ValidationReport, game_data: Node) -> void:
 			if String(sprite_id).is_empty():
 				report.add_error("V-A-sprite-id", record.get("id"),
 						"sprite_id 为空（批 A H3 起强制回填）")
-				continue
-			if game_data.get_asset_path(sprite_id).is_empty():
-				report.add_error("V-A-sprite-id", record.get("id"),
-						"sprite_id '%s' 未在 AssetRegistry 登记" % sprite_id)
 
 static func _CheckModKeys(report: ValidationReport, game_data: Node) -> void:
 	## V-A-mod-keys：修正键合法集校验（批 A H4）——StatusDef.modifiers 键 ∈
@@ -1144,7 +1151,8 @@ static func _CheckCfgDomains(report: ValidationReport, game_data: Node) -> void:
 	for positive_name: String in ["hp_base", "hp_con_mult", "pool_base", "pool_mult",
 			"move_base_cap", "agility_move_bonus_line", "ai_roar_ally_count_line",
 			"recruit_band_min", "recruit_band_max", "vision_radius",
-			"secret_door_trigger_radius", "crit_success_line_min", "luck_floor_z_base"]:
+			"secret_door_trigger_radius", "crit_success_line_min", "luck_floor_z_base",
+			"ui_battle_move_max_steps"]:
 		if int(cfg.get(positive_name)) <= 0:
 			report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
 					"%s ≤ 0" % positive_name)
@@ -1160,6 +1168,14 @@ static func _CheckCfgDomains(report: ValidationReport, game_data: Node) -> void:
 	if cfg.crit_mult_base < 1.0:
 		report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
 				"crit_mult_base %f < 1.0" % cfg.crit_mult_base)
+	# M6 批 1 扩展：单位动作集演出参数——五帧率 > 0、两时长 > 0（≤ 0 = 帧
+	# 冻结/瞬移，生产表值非法；测试注 0 属运行态改写不进表）
+	for anim_positive: String in ["ui_anim_idle_fps", "ui_anim_move_fps",
+			"ui_anim_attack_fps", "ui_anim_hit_fps", "ui_anim_downed_fps",
+			"ui_battle_move_step_seconds", "ui_hit_flash_seconds"]:
+		if float(cfg.get(anim_positive)) <= 0.0:
+			report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
+					"%s ≤ 0（演出参数非法）" % anim_positive)
 	for band_name: String in ["content_skill_attacks", "content_class_skills",
 			"content_enemy_skills", "content_enemy_common", "content_status",
 			"content_enemies", "content_packs", "content_maps", "content_tiles",
@@ -1249,6 +1265,8 @@ static func _CheckCfgFallbacks(report: ValidationReport, game_data: Node) -> voi
 		["crit_success_line_min", CheckRoller.CRIT_SUCCESS_LINE_MIN_FALLBACK],
 		["luck_floor_z_base", CheckRoller.LUCK_FLOOR_Z_BASE_FALLBACK],
 		["luck_floor_z_divisor", CheckRoller.LUCK_FLOOR_Z_DIVISOR_FALLBACK],
+		# M6 盲审低15：移动演出步数上限护栏入表锚定（调表须同步 UiTheme 兜底）
+		["ui_battle_move_max_steps", UiTheme.BATTLE_MOVE_MAX_STEPS],
 	]
 	for pair: Array in int_pairs:
 		var raw_int: Variant = cfg.get(pair[0])
@@ -1278,6 +1296,14 @@ static func _CheckCfgFallbacks(report: ValidationReport, game_data: Node) -> voi
 		["hit_base", DerivedStats.HIT_BASE_FALLBACK],
 		["dodge_base", DerivedStats.DODGE_BASE_FALLBACK],
 		["ui_d20_roll_seconds", UiTheme.D20_ROLL_SECONDS],
+		# M6 批 1：单位动作集演出参数七字段锚定（调表须同步 UiTheme 兜底）
+		["ui_anim_idle_fps", UiTheme.ANIM_IDLE_FPS],
+		["ui_anim_move_fps", UiTheme.ANIM_MOVE_FPS],
+		["ui_anim_attack_fps", UiTheme.ANIM_ATTACK_FPS],
+		["ui_anim_hit_fps", UiTheme.ANIM_HIT_FPS],
+		["ui_anim_downed_fps", UiTheme.ANIM_DOWNED_FPS],
+		["ui_battle_move_step_seconds", UiTheme.BATTLE_MOVE_STEP_SECONDS],
+		["ui_hit_flash_seconds", UiTheme.HIT_FLASH_SECONDS],
 	]
 	for pair: Array in float_pairs:
 		var raw_float: Variant = cfg.get(pair[0])
@@ -1292,6 +1318,8 @@ static func _CheckCfgFallbacks(report: ValidationReport, game_data: Node) -> voi
 	# UI 颜色域（表值须回填且 == UiTheme 兜底常量）
 	var color_pairs: Array = [
 		["ui_tile_fallback_color", UiTheme.TILE_FALLBACK],
+		# M6 盲审低14：受击白闪峰值色入表锚定（调表须同步 UiTheme 兜底）
+		["ui_hit_flash_peak_color", UiTheme.HIT_FLASH_PEAK],
 		["ui_result_defeat_color", UiTheme.RESULT_DEFEAT],
 		["ui_result_retreat_color", UiTheme.RESULT_RETREAT],
 		["ui_event_grade_crit_success_color", UiTheme.EVENT_GRADE_CRIT_SUCCESS],
@@ -1946,18 +1974,26 @@ static func _CheckExploreMapRegionCount(report: ValidationReport, game_data: Nod
 
 static func _CheckExploreMapPoints(report: ValidationReport, game_data: Node) -> void:
 	## V-M3-map-points：点位坐标——交互点/目标点界内 + 非障碍 + 全域坐标查重
-	## （含 start_cell——同格双语义拦截）；DEMO 单图口径：多图时点位归属字段
-	## 未定（M4 多图时点表须加 map_ref），>1 图报 warning 后跳过界内校验
+	## （含 start_cell——同格双语义拦截）；M6 批 2 挂账 4.1 扩展：map_ref 归属
+	## 字段非空且 ∈ map/maps（多图数据前置护栏——五处查询按图过滤的前置
+	## 契约）；>1 图报 warning 后跳过界内校验（坐标界内校验仍为单图口径）
 	## 参数：报告 / GameData
 	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"map/interact_points"):
+		_ReportPointMapRef(report, game_data, record.get("id"),
+				record.get("map_ref"))
+	for record: Resource in _DomainRecords(game_data, &"map/target_points"):
+		_ReportPointMapRef(report, game_data, record.get("id"),
+				record.get("map_ref"))
 	var maps: Array[Resource] = _DomainRecords(game_data, &"map/maps")
 	if maps.is_empty():
 		return
 	if maps.size() > 1:
 		# W4-02：warning 后即 return（原仅警告不返回——maps[0] 单图口径在多图
-		# 数据下越权校验他图点位坐标）
+		# 数据下越权校验他图点位坐标）；M6 批 2 起 map_ref 归属已定义，界内
+		# 坐标校验仍按 maps[0] 单图口径——多图界内校验待多图内容落地时接
 		report.add_warning("V-M3-map-points", &"<map/maps>",
-				"多图点位归属字段未定（%d 图）——跳过界内/障碍校验" % maps.size())
+				"多图界内坐标校验未接（%d 图）——跳过界内/障碍校验" % maps.size())
 		return
 	var map_def: ExploreMapDef = maps[0] as ExploreMapDef
 	var seen_cells: Dictionary = {}
@@ -1983,6 +2019,19 @@ static func in_bounds_cell(map_def: ExploreMapDef, cell: Vector2i) -> bool:
 	## 返回：true = 界内
 	return cell.x >= 0 and cell.x < map_def.size.x \
 			and cell.y >= 0 and cell.y < map_def.size.y
+
+static func _ReportPointMapRef(report: ValidationReport, game_data: Node,
+		point_id: StringName, map_ref: StringName) -> void:
+	## 点位 map_ref 归属检查（V-M3-map-points 内部口——M6 批 2 挂账 4.1：
+	## 非空且 ∈ map/maps 域；空值/悬空归属 = 探索层按图过滤后点位不可达）
+	## 参数 report/game_data/point_id/map_ref：报告 / GameData / 点位 id / 归属图 id
+	## 返回：无
+	if String(map_ref).is_empty():
+		report.add_error("V-M3-map-points", point_id, "map_ref 为空（归属图未回填）")
+		return
+	if not _InDomain(game_data, &"map/maps", map_ref):
+		report.add_error("V-M3-map-points", point_id,
+				"map_ref '%s' 不在 map/maps 域（悬空归属）" % map_ref)
 
 static func _CheckExplorePointCell(report: ValidationReport, game_data: Node,
 		map_def: ExploreMapDef, owner_id: StringName, cell: Vector2i) -> void:
@@ -2166,6 +2215,22 @@ static func _CheckExploreRefQuestGoal(report: ValidationReport, game_data: Node)
 				and not _InDomain(game_data, &"battle/enemy_packs", quest.goal_param):
 			report.add_error("V-M3-ref-quest-goal", quest.id,
 					"CLEAR 判据参数 '%s' 不在 battle/enemy_packs 域" % quest.goal_param)
+		# M6 批 2 挂账 4.1 扩展：EXPLORE 判据与目标点同图一致（委托图 ≠ 目标点
+		# 归属图 = 判据在委托图不可达——跨图判据 DEMO 无消费通路）；低17（盲审）：
+		# map_id 为空 = 根因在委托未绑图——按「map_id 为空」准确报错（不再落入
+		# 「图不一致」误导文案；空图无归属可比对）
+		if quest.goal_type == QuestTemplateDef.GoalType.EXPLORE \
+				and not String(quest.goal_param).is_empty():
+			if String(quest.map_id).is_empty():
+				report.add_error("V-M3-ref-quest-goal", quest.id,
+						"EXPLORE 委托 map_id 为空（判据目标点 '%s' 无归属图可比对——须绑定地图）" % quest.goal_param)
+			else:
+				var goal_point: TargetPointDef = game_data.get_record(
+						quest.goal_param) as TargetPointDef
+				if goal_point != null and goal_point.map_ref != quest.map_id:
+					report.add_error("V-M3-ref-quest-goal", quest.id,
+							"委托图 '%s' 与目标点 '%s' 归属图 '%s' 不一致（判据跨图不可达）" % [
+									quest.map_id, goal_point.id, goal_point.map_ref])
 		if not String(quest.map_id).is_empty() \
 				and not _InDomain(game_data, &"map/maps", quest.map_id):
 			report.add_error("V-M3-ref-quest-goal", quest.id,
@@ -2207,7 +2272,7 @@ static func _CheckExploreSecretReveal(report: ValidationReport, game_data: Node)
 		return
 	if maps.size() > 1:
 		report.add_warning("V-M3-secret-reveal", &"<map/maps>",
-				"多图点位归属字段未定（%d 图）——跳过暗门揭示界内校验" % maps.size())
+				"多图界内坐标校验未接（%d 图）——跳过暗门揭示界内校验" % maps.size())
 		return
 	var map_def: ExploreMapDef = maps[0] as ExploreMapDef
 	for record: Resource in _DomainRecords(game_data, &"map/interact_points"):
@@ -3217,6 +3282,123 @@ static func _CheckEnemySkillKind(report: ValidationReport, game_data: Node) -> v
 				and skill.target_shape != SkillDef.TargetShape.AURA_3X3:
 			report.add_warning("V-R4-enemy-skill-kind", skill.id,
 					"敌方技能非伤害型且非 AURA 型（AI 只收两类——永不被选中）")
+
+# --------------------------------------------------------------------------
+# M6 批 1 单位动作集（V-M6 组）
+# --------------------------------------------------------------------------
+
+## 动作帧数规格带（V-M6-anim-geometry 消费——帧数 ∈ [min, max]；
+## 后缀序与 SpriteResolver.ANIM_ACTIONS 一致）
+static func _AnimFrameBands() -> Dictionary:
+	## 参数：无
+	## 返回：动作后缀 -> Vector2i(min, max) 帧数带
+	return {
+		&"idle": Vector2i(2, 4),
+		&"move": Vector2i(4, 6),
+		&"melee_attack": Vector2i(2, 4),
+		&"cast_ranged": Vector2i(2, 4),
+		&"hit": Vector2i(1, 2),
+		&"downed": Vector2i(2, 3),
+	}
+
+static func _CheckAnimQuad(report: ValidationReport, game_data: Node) -> void:
+	## V-M6-anim-quad：动作齐套——ClassDef.sprite_id + EnemyDef.sprite_id 单位
+	## 清单每单位六动作件 id（<sprite_id>_<action>）须在 registry 有键且文件
+	## 存在（静态单图退役后的消费面护栏——缺件 = 徽章竖条缺帧整动作哑火）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"class/classes") \
+			+ _DomainRecords(game_data, &"battle/enemies"):
+		var sprite_id: StringName = record.get("sprite_id")
+		if String(sprite_id).is_empty():
+			continue
+		for action: StringName in SpriteResolver.ANIM_ACTIONS:
+			var asset_id: StringName = StringName(String(sprite_id) + "_" + String(action))
+			var path: String = game_data.get_asset_path(asset_id)
+			if path.is_empty():
+				report.add_error("V-M6-anim-quad", record.get("id"),
+						"动作件 '%s' 未在 AssetRegistry 登记" % asset_id)
+				continue
+			if not (FileAccess.file_exists(path) or ResourceLoader.exists(path)):
+				report.add_error("V-M6-anim-quad", record.get("id"),
+						"动作件 '%s' 文件不存在（%s）" % [asset_id, path])
+
+static func _CheckAnimGeometry(report: ValidationReport, game_data: Node) -> void:
+	## V-M6-anim-geometry：动作竖条几何——宽 == 128、高为 128 整倍数、帧数 ∈
+	## 规格带（idle[2,4]/move[4,6]/melee_attack[2,4]/cast_ranged[2,4]/hit[1,2]/
+	## downed[2,3]）；尺寸直读 PNG IHDR 字节（不经 ResourceLoader——headless
+	## 未导入工具态可校验）；低1（盲审）：规格带键集与 ANIM_ACTIONS 一致性
+	## 前置守卫（缺键时 null 赋 Vector2i 崩校验器——报错并整组跳过不崩）
+	## 参数：报告 / GameData
+	## 返回：无
+	var bands: Dictionary = _AnimFrameBands()
+	for action_name: StringName in SpriteResolver.ANIM_ACTIONS:
+		if not bands.has(action_name):
+			report.add_error("V-M6-anim-geometry", CoreConfig.CFG_MAIN_ID,
+					"动作 '%s' 缺帧数规格带（ANIM_ACTIONS ↔ _AnimFrameBands 键集不一致——逐件校验失去基准，本组跳过）" % action_name)
+			return
+	for action: StringName in SpriteResolver.ANIM_ACTIONS:
+		var band: Vector2i = bands[action]
+		for record: Resource in _DomainRecords(game_data, &"class/classes") \
+				+ _DomainRecords(game_data, &"battle/enemies"):
+			var sprite_id: StringName = record.get("sprite_id")
+			if String(sprite_id).is_empty():
+				continue
+			var asset_id: StringName = StringName(String(sprite_id) + "_" + String(action))
+			var path: String = game_data.get_asset_path(asset_id)
+			if path.is_empty():
+				continue
+			# 中6（盲审）：存在性口径与 anim-quad 统一（FileAccess or ResourceLoader
+			# 双查）——不存在即报错而非静默跳过；ResourceLoader 可见而物理文件
+			# 缺失的件经 PNG 直读自然落入「PNG 头解析失败」，不再整条逃过几何校验
+			if not (FileAccess.file_exists(path) or ResourceLoader.exists(path)):
+				report.add_error("V-M6-anim-geometry", record.get("id"),
+						"动作件 '%s' 文件不存在（%s）" % [asset_id, path])
+				continue
+			var size: Vector2i = _PngSizeOf(path)
+			if size == Vector2i.ZERO:
+				report.add_error("V-M6-anim-geometry", record.get("id"),
+						"动作件 '%s' PNG 头解析失败（%s）" % [asset_id, path])
+				continue
+			if size.x != SpriteResolver.ANIM_FRAME_SIZE or size.y % SpriteResolver.ANIM_FRAME_SIZE != 0:
+				report.add_error("V-M6-anim-geometry", record.get("id"),
+						"动作件 '%s' 尺寸 %dx%d 非法（须宽 %d 且高为其整倍数）" % [
+								asset_id, size.x, size.y, SpriteResolver.ANIM_FRAME_SIZE])
+				continue
+			var frames: int = size.y / SpriteResolver.ANIM_FRAME_SIZE
+			if frames < band.x or frames > band.y:
+				report.add_error("V-M6-anim-geometry", record.get("id"),
+						"动作件 '%s' 帧数 %d 越出规格带 [%d, %d]" % [
+								asset_id, frames, band.x, band.y])
+
+static func _PngSizeOf(path: String) -> Vector2i:
+	## PNG 尺寸直读（IHDR：宽 16-19 字节 / 高 20-23 字节大端；文件缺失/非
+	## PNG 返回 (0, 0)——不依赖导入与图像解码）
+	## 参数 path：文件路径（res://）
+	## 返回：像素尺寸
+	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return Vector2i.ZERO
+	var header: PackedByteArray = file.get_buffer(24)
+	file.close()
+	if header.size() < 24 or header[0] != 0x89 or header[1] != 0x50:
+		return Vector2i.ZERO
+	var width: int = (header[16] << 24) | (header[17] << 16) | (header[18] << 8) | header[19]
+	var height: int = (header[20] << 24) | (header[21] << 16) | (header[22] << 8) | header[23]
+	return Vector2i(width, height)
+
+static func _CheckSkillPose(report: ValidationReport, game_data: Node) -> void:
+	## V-M6-skill-pose：技能攻击姿态——attack_pose 枚举合法（枚举域在
+	## V-M0-enum 已查）；伤害型技能（damage_type != NONE）attack_pose 必须
+	## ≠ NONE（伤害技无攻击动作 = 出招哑火；纯增益/纯状态技不强制）
+	## 参数：报告 / GameData
+	## 返回：无
+	for record: Resource in _DomainRecords(game_data, &"class/skills"):
+		var skill := record as SkillDef
+		if skill.damage_type != SkillDef.DamageType.NONE \
+				and skill.attack_pose == SkillDef.AttackPose.NONE:
+			report.add_error("V-M6-skill-pose", skill.id,
+					"伤害型技能 attack_pose 为 NONE（伤害技须 MELEE/CAST 攻击动作）")
 
 
 static func _AllDomains(game_data: Node) -> Array[StringName]:

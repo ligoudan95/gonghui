@@ -772,11 +772,11 @@ func test_v_r4_asset_reverse_registered() -> void:
 	## S1-10：registry 摘一条映射 → assets 资源文件未登记报 V-R4-asset-reverse；
 	## _preview* 工具产物不报（白名单排除）
 	var registry: AssetRegistry = _game_data.get_record(&"registry") as AssetRegistry
-	var original_path: String = registry.mapping[&"spr_cls_warrior"]
-	registry.mapping.erase(&"spr_cls_warrior")
+	var original_path: String = registry.mapping[&"spr_cls_warrior_idle"]
+	registry.mapping.erase(&"spr_cls_warrior_idle")
 	var report: ValidationReport = DataValidator.run_all(_game_data)
-	registry.mapping[&"spr_cls_warrior"] = original_path
-	assert_bool(_HasError(report, "V-R4-asset-reverse", "spr_cls_warrior")) \
+	registry.mapping[&"spr_cls_warrior_idle"] = original_path
+	assert_bool(_HasError(report, "V-R4-asset-reverse", "spr_cls_warrior_idle")) \
 			.override_failure_message("assets 文件摘登记应报未登记").is_true()
 	var report_after: ValidationReport = DataValidator.run_all(_game_data)
 	assert_int(report_after.errors.size()).is_equal(0)
