@@ -17,12 +17,12 @@ func before() -> void:
 	_game_data.initialize_data()
 
 func test_domain_counts() -> void:
-	## 新三域计数：地格 6 / 地图 2 / 装备 6；全库总数 138（M0 49 + M1 14 + M2 29 + M3 29 + M4 13 + 增补批轻度 3 + 功能一批 1 染毒 1）
+	## 新三域计数：地格 6 / 地图 2 / 装备 6；全库总数 144（M0 49 + M1 14 + M2 29 + M3 29 + M4 13 + 增补批轻度 3 + 功能一批 1 染毒 1 + M6 批 3.5a 探索地格 +5）
 	assert_int(_game_data.get_domain(&"battle/tiles").size()).is_equal(6)
 	assert_int(_game_data.get_domain(&"battle/maps").size()).is_equal(2)
 	assert_int(_game_data.get_domain(&"equip").size()).is_equal(6)
 	var report: ValidationReport = DataValidator.run_all(_game_data)
-	assert_int(report.checked_count).is_equal(139)
+	assert_int(report.checked_count).is_equal(144)
 
 func test_tile_bindings() -> void:
 	## 地格绑定：草丛/高地/毒沼绑定对应状态（allowed_sources 含 TILE）；
@@ -92,9 +92,11 @@ func test_equip_values() -> void:
 		assert_str(String(equip.class_ref)).is_equal(String(expects[equip_id][2]))
 
 func test_naming_registry_extended() -> void:
-	## 命名登记表：160 条（48 + 14 + M2 28 + M3 29 + M4 13 + 功能一批 2 染毒毒瘴 2），新资源全部登记且含域前缀规则注
+	## 命名登记表：274 条（48 + 14 + M2 28 + M3 29 + M4 13 + 功能一批 2 染毒毒瘴 2），新资源全部登记且含域前缀规则注
+	##（M6 批 3 首批背景入库 +bg_guild_hall 1 条，205→206）
+	##（M6 批 3.5a：+5 etile 数据条目 + 63 资产条目（62 占位 PNG + ui_main_theme），206→274）
 	var registry: NamingRegistry = _game_data.get_record(&"naming_registry")
-	assert_int(registry.entries.size()).is_equal(205)
+	assert_int(registry.entries.size()).is_equal(274)
 	var registered: Dictionary = {}
 	for entry: NamingEntry in registry.entries:
 		registered[entry.resource_id] = entry

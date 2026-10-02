@@ -6,6 +6,8 @@
 ## 弹出；轻提示行维持现状双保险）/ 升级+倾向选择弹层（LevelupPanel——
 ## pending 队列驱动）；M0 存档演示三件与 M3 占位出征面板已随批 2 退役
 ##（存档走五时点自动存档；出征入口移驻协会屏挂单管理）。
+## 场景背景（M6 批 3）：BackgroundTexture 经 AssetRegistry 取 bg_guild_hall
+## 铺满全屏，ColorRect 纯色兜底（缺登记/缺文件安全降级）。
 ## 右栏布局口径（修复批次 5：M4 试玩验收第 1 轮 UI 反馈）：设施协会区块
 ## 置顶（EntryTitle→宿舍→训练场→协会）→「等待一天」「待选倾向」→
 ## 日结算轻提示行垂直撑满剩余空间（SideBox 子节点顺序契约见
@@ -16,6 +18,13 @@ extends Control
 
 ## SceneManager 脚本常量引用（枚举常量不可经实例属性访问，见 title_screen.gd 注）
 const SceneManagerScript: GDScript = preload("res://scripts/autoload/scene_manager.gd")
+
+## 场景背景资源 id（M6 批 3 首批入库——AssetRegistry 单源路径映射，铁律②）
+const BACKGROUND_ASSET_ID: StringName = &"bg_guild_hall"
+## 顶栏货币图标资源 id（M6 批 3.5b 组 6：icon_res_gold——金行 HBox 图标）
+const GOLD_ICON_ASSET_ID: StringName = &"icon_res_gold"
+## 顶栏货币图标边长（px——16-20px 档取 20）
+const GOLD_ICON_SIZE: float = 20.0
 
 ## UI 文案模板（逻辑层零文案——UI 层单源；S4-M4-4：本屏内联文案收编单源，
 ## 惯例对齐 quest_board_panel/explore_screen 先例）
@@ -69,28 +78,30 @@ func _ready() -> void:
 	## 返回：无
 	_game_data = get_node("/root/GameData")
 	_cfg = _game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
+	_ApplyBackgroundTexture()
 	_scene_manager().take_pending_params()
 	_roster_overview = RosterOverview.new()
 	_roster_overview.setup(_cfg)
 	_roster_overview.member_selected.connect(_OnMemberSelected)
 	%RosterHost.add_child(_roster_overview)
 	_detail_panel = MemberDetailPanel.new()
-	_detail_panel.setup(_cfg)
+	_detail_panel.setup(_cfg, _game_data)
 	_detail_panel.close_requested.connect(_OnDetailClosed)
 	_detail_panel.tendency_select_requested.connect(_OnTendencySelectRequested)
 	_detail_panel.member_changed.connect(_OnMemberChanged)
 	%DetailHost.add_child(_detail_panel)
 	_levelup_panel = LevelupPanel.new()
-	_levelup_panel.setup(_cfg)
+	_levelup_panel.setup(_cfg, _game_data)
 	_levelup_panel.close_requested.connect(_OnLevelupClosed)
 	_levelup_panel.member_changed.connect(_OnMemberChanged)
 	%LevelupHost.add_child(_levelup_panel)
 	_day_summary_panel = DaySummaryPanel.new()
-	_day_summary_panel.setup(_cfg)
+	_day_summary_panel.setup(_cfg, _game_data)
 	_day_summary_panel.closed.connect(_OnDaySummaryClosed)
 	%DaySummaryHost.add_child(_day_summary_panel)
 	_guild_state().day_settled.connect(_OnDaySettled)
 	_ApplyFontTiers()
+	_ApplyGoldIcon()
 	RefreshAll()
 
 func _ApplyFontTiers() -> void:
@@ -112,7 +123,26 @@ func _ApplyFontTiers() -> void:
 	for button: Button in [%BackButton, %WaitButton, %PendingButton, %DormitoryButton,
 			%TrainingButton, %AssociationButton]:
 		button.add_theme_font_size_override("font_size", button_font)
-	%RosterPanel.add_theme_stylebox_override("panel", UiTheme.make_dark_panel_style(_cfg))
+	%RosterPanel.add_theme_stylebox_override("panel",
+			UiTheme.make_dark_panel_style(_cfg, _game_data))
+
+func _ApplyGoldIcon() -> void:
+	## 顶栏金行图标装配（M6 批 3.5b 组 6）：icon_res_gold 贴给 GoldIcon
+	## （20px 垂直居中，HBox 内 Label 前）；缺件/缺登记降级——图标不显示
+	## （visible = false），GoldLabel 文本行现状零变化
+	## 参数：无
+	## 返回：无
+	if not AssetTex.apply_to(%GoldIcon, GOLD_ICON_ASSET_ID, _game_data):
+		%GoldIcon.visible = false
+
+func _ApplyBackgroundTexture() -> void:
+	## 场景背景接线（M6 批 3；批 3.5b 薄转发消双源）：AssetTex.apply_to 单源
+	## 装配 bg_guild_hall（KEEP_ASPECT_COVERED 保持比例裁切铺满全屏，窗口
+	## resize 恒铺满）；缺登记/加载失败返回 false——Background ColorRect 纯色
+	## 兜底底色原样可见（warning 由 AssetTex 一次性打印，不崩不刷屏）
+	## 参数：无
+	## 返回：无
+	AssetTex.apply_to(%BackgroundTexture, BACKGROUND_ASSET_ID, _game_data)
 
 func _save_manager() -> Node:
 	## 取 SaveManager 自动加载单例

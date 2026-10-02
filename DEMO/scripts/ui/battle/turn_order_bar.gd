@@ -46,6 +46,12 @@ func rebuild(units: Array) -> void:
 	## 参数 units：本回合行动序列（速度排序产物）
 	## 返回：无
 	for child: Node in get_children():
+		# S4-R3-01 同式（event_panel._Reset 先例）：先隐藏断渲染再释放
+		#（queue_free 延迟帧末——每回合 rebuild 旧条目与新条目一帧叠渲，
+		## 序条短暂双倍长度的可感知来源）
+		var entry: CanvasItem = child as CanvasItem
+		if entry != null:
+			entry.visible = false
 		child.queue_free()
 	_entries.clear()
 	_units.clear()

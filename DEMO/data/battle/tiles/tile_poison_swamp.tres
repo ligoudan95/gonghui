@@ -6,6 +6,7 @@
 script = ExtResource("1_315le")
 id = &"tile_poison_swamp"
 display_name = "毒沼"
+asset_id = &"tile_battle_poison_swamp"
 kind = 2
 status_id = &"DEBUFF_tile_poison"
 enter_status_id = &"DEBUFF_poison"

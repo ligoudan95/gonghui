@@ -6,6 +6,7 @@
 script = ExtResource("1_skkd0")
 id = &"tile_highground"
 display_name = "高地"
+asset_id = &"tile_battle_highground"
 kind = 2
 status_id = &"BUFF_tile_highground"
 fill_color = Color(0.88, 0.78, 0.3, 1)

@@ -1,7 +1,8 @@
 ## 探索层全链集成测试（M3 批 3——验收 5 条全链 + 锁全通道遍历）
 ## 覆盖：①进图→迷雾揭示→事件→必然战→判据→出口交付全链；②暗门成功揭示
 ## 捷径 / 失败可绕双分支（定种子检定——无概率窗）；③非绑定目标点灰显不可
-## 交互；④撤退（含达成后撤退仍失败）/宝箱消耗后新出征实例重置；⑤随机遭遇
+## 交互；④撤退（未达成弹窗确认）/达成后回城直走完成结算/宝箱消耗后新出征
+## 实例重置；⑤随机遭遇
 ## 上限 1（战后续走不再触发）；锁通道遍历：交付/撤退/战败/全倒地四通道
 ## 解锁断言。
 ## 环境：gdUnit 帧内真 autoload；步进演出 override 0 加速；检定/遭遇全定种子。
@@ -294,8 +295,9 @@ func test_chain3_unbound_target_dim_and_not_interactable() -> void:
 	assert_bool(screen._goal.is_done()).is_false()
 
 func test_chain4_retreat_discards_and_new_session_resets() -> void:
-	## 验收④撤退与实例重置：宝箱开箱入账消耗 → 达成后撤退仍走失败通道 →
-	## 回城解锁 → 新出征实例全重置（消耗/奖励/迷雾/格位）
+	## 验收④撤退与实例重置：宝箱开箱入账消耗 → 达成后回城直走完成结算
+	## （2026-10-01 试玩反馈修复——不再弹撤退确认）→ 回城解锁 → 新出征
+	## 实例全重置（消耗/奖励/迷雾/格位）
 	var run := _MakeQuestRun(&"q_lair_purge")
 	var screen: Control = await _OpenExplore(run)
 	# 走到北廊西端开箱 (1,4)（TAP——站在箱上点按）
@@ -307,15 +309,17 @@ func test_chain4_retreat_discards_and_new_session_resets() -> void:
 	assert_bool(run.consumed_events.has(&"evp_mine_chest_01")).is_true()
 	assert_int(int(run.rewards[&"gold"])).is_greater_equal(20)
 	assert_int(int(run.rewards[&"gold"])).is_less_equal(40)
-	# 达成后撤退仍 = 失败（通道类型判定——非达成状态）
+	# 达成后回城直走完成结算（2026-10-01 试玩反馈修复：判据达成态点撤退
+	## 按钮 = 交付——不弹撤退确认、不走失败通道；完成结算路与出口点交付同源）
 	screen._goal.setup(QuestTemplateDef.GoalType.CLEAR, &"enc_m1_lair_pack")
 	screen._goal.on_battle_victory(&"enc_m1_lair_pack")
 	run.goal_done = true
-	(screen.get_node("%RetreatConfirm") as ConfirmationDialog).confirmed.emit()
+	(screen.get_node("%RetreatButton") as Button).pressed.emit()
 	await _WaitFrames(2)
 	assert_bool(screen.get_node("%SettlementPanel").visible).is_true()
-	assert_str(screen.get_node("%SettlementTitle").text).contains("委托失败")
-	# 回城（通道②撤退解锁）→ 新出征：实例重置
+	assert_str(screen.get_node("%SettlementTitle").text).contains("委托达成")
+	assert_bool(screen.get_node("%RetreatConfirm").visible).is_false()
+	# 回城（完成交付解锁）→ 新出征：实例重置
 	(screen.get_node("%SettlementButton") as Button).pressed.emit()
 	await _WaitFrames(4)
 	assert_bool(get_tree().root.get_node("SaveManager").is_expedition_locked()).is_false()
@@ -331,6 +335,55 @@ func test_chain4_retreat_discards_and_new_session_resets() -> void:
 	assert_bool(fresh._run.goal_done).is_false()
 	# 迷雾重置：初始视野 = 出生格 (7,1) 半径 3 圆形（顶边裁剪后 23 格）
 	assert_int(fresh._run.fog.explored_count()).is_equal(23)
+
+func test_retreat_done_state_direct_success_and_pending_keeps_confirm() -> void:
+	## 2026-10-01 试玩反馈修复契约（探索委托链路）：判据未达成——点撤退
+	## 按钮弹撤退确认（历史拍板口径原样；取消「继续探索」后会话继续）；
+	## 判据达成——点撤退按钮直走完成结算（零确认弹窗，标题「委托达成」
+	## ——与出口点交付同一条完成结算路）
+	var run := _MakeQuestRun(&"q_vein_survey")
+	var screen: Control = await _OpenExplore(run)
+	# 未达成：撤退确认弹窗照旧——会话不终结
+	(screen.get_node("%RetreatButton") as Button).pressed.emit()
+	await _WaitFrames(2)
+	assert_bool(screen.get_node("%RetreatConfirm").visible).is_true()
+	assert_bool(screen.get_node("%SettlementPanel").visible).is_false()
+	# 取消（「继续探索」——真实交互先关窗再发 canceled，W2-11 口径）
+	var dialog: ConfirmationDialog = screen.get_node("%RetreatConfirm") \
+			as ConfirmationDialog
+	dialog.visible = false
+	dialog.canceled.emit()
+	await _WaitFrames(2)
+	assert_bool(screen._finished).is_false()
+	# 达成（目标点交互判据通道）：回城即交付——零弹窗直接完成结算
+	assert_bool(screen._goal.on_target_interacted(run.goal_param)).is_true()
+	run.goal_done = true
+	(screen.get_node("%RetreatButton") as Button).pressed.emit()
+	await _WaitFrames(2)
+	assert_bool(screen.get_node("%SettlementPanel").visible).is_true()
+	assert_str(screen.get_node("%SettlementTitle").text).contains("委托达成")
+	assert_bool(screen.get_node("%RetreatConfirm").visible).is_false()
+	(screen.get_node("%SettlementButton") as Button).pressed.emit()
+	await _WaitFrames(4)
+
+func test_retreat_free_explore_keeps_confirm_dialog() -> void:
+	## 完成态直走交付仅限委托会话——自由探索（无判据/无「完成」语义）点
+	## 撤退按钮维持确认弹窗，不直走完成结算（2026-10-01 修复不扩范围锚定）
+	var game_data: Node = _GameData()
+	var cfg: CoreConfig = game_data.get_record(&"cfg_main") as CoreConfig
+	var run := ExpeditionRun.new()
+	var adv: AdventurerData = AdventurerData.create_debug(&"t", &"cls_warrior", {
+			&"strength": 14, &"agility": 10, &"constitution": 14,
+			&"intelligence": 7, &"perception": 15, &"willpower": 9, &"luck": 10}, game_data)
+	run.party.append(adv)
+	run.hp[adv] = 30
+	run.start_explore(game_data.get_record(&"map_m1_village_mine") as ExploreMapDef,
+			null, cfg.vision_radius)
+	var screen: Control = await _OpenExplore(run)
+	(screen.get_node("%RetreatButton") as Button).pressed.emit()
+	await _WaitFrames(2)
+	assert_bool(screen.get_node("%RetreatConfirm").visible).is_true()
+	assert_bool(screen.get_node("%SettlementPanel").visible).is_false()
 
 func test_chain5_random_encounter_cap_once() -> void:
 	## 验收⑤随机遭遇 ≤1（机制锚——构造权重注入）：已触发 1 次后（fired=1

@@ -516,8 +516,14 @@ func test_batch_a_table_driven_contract() -> void:
 	var game_data: Node = get_tree().root.get_node("GameData")
 	var board: BattleBoard = battle.get_node("%BoardLayer") as BattleBoard
 	# ①表驱动渲染：草丛表改红 → 重建 → 渲染色 == 表值；恢复再断回原色
+	# M6 批 3.5b 组 3 适配：tile 表 asset_id 在档时地格走贴图分支（渲染由贴图
+	# 决定、fill_color 不消费）——本用例锚定「色块表驱动」语义，注入贴图
+	# 缺件走降级色块分支验证（缓存注入——autoload 进程级，用例尾清缓存还原）
 	var grass_tile: TileTypeDef = game_data.get_record(&"tile_grass") as TileTypeDef
 	var original_fill: Color = grass_tile.fill_color
+	AssetTex._cache[&"tile_battle_bush"] = null
+	AssetTex._cache[&"tile_mine_floor_01"] = null
+	AssetTex._cache[&"tile_mine_floor_02"] = null
 	grass_tile.fill_color = Color(1.0, 0.2, 0.2, 1.0)
 	board._BuildCells()
 	var cell_rect: ColorRect = board.cell_visual(Vector2i(5, 2)) as ColorRect
@@ -528,6 +534,7 @@ func test_batch_a_table_driven_contract() -> void:
 	board._BuildCells()
 	assert_bool((board.cell_visual(Vector2i(5, 2)) as ColorRect).color \
 			.is_equal_approx(original_fill)).is_true()
+	AssetTex.clear_cache()
 	# ②sprite 表驱动读取链（B-18：薄壳已删——直呼 SpriteResolver 单源；
 	# M6 批 1：静态单图键退役——改 idle 动作竖条 + 首帧 atlas 非空）：
 	# 查表 id → registry 路径 → load 竖条非空 → atlas region 128×128
@@ -889,3 +896,125 @@ func test_s4_01_board_input_gated_while_retreat_confirm_visible() -> void:
 			.override_failure_message("弹窗期点按不得跳过演出").is_false()
 	assert_bool(screen._pending_cell == screen.NO_CELL) \
 			.override_failure_message("弹窗期点按不得进两段式选择").is_true()
+
+func test_board_input_gated_after_battle_over() -> void:
+	## 终局帧板面守卫（循环盲审第二轮·低，S4-R2-02 按钮组同口径）：终局若
+	## 发生在玩家指令窗内 awaiting_command 残留 true——无守卫时同帧批内第二
+	## 输入可画路径预览/范围层残留（request_* 侧 _can_command 已挡执行，两段式
+	## 首点的展示态靠本守卫）。abort_battle 模拟终局同帧（_battle_over 置位且
+	## 不动 awaiting_command——危险组合复现），注入可达格点按后无任何 overlay
+	## 产生、不跳过演出、不进两段式选择
+	await _EnterRandomBattle()
+	var battle: Control = get_tree().root.find_child("BattleScreen", true, false)
+	assert_object(battle).is_not_null()
+	battle.controller.delay_seconds = 0.0
+	var unit: BattleUnit = await _AwaitFirstCommandWindow(battle)
+	assert_object(unit).is_not_null()
+	assert_bool(battle.controller.awaiting_command).is_true()
+	var board: BattleBoard = battle.get_node("%BoardLayer") as BattleBoard
+	# 清空覆盖层从零起算（首指令窗自带移动范围层——断言口径「无 overlay 产生」）
+	battle._ClearSelection()
+	# 模拟终局同帧：battle_over 置位 + 指令窗标记残留（abort 不清 awaiting_command）
+	battle.controller.abort_battle()
+	assert_bool(battle.controller.is_battle_over()).is_true()
+	assert_bool(battle.controller.awaiting_command) \
+			.override_failure_message("终局同帧组合前提：指令窗标记应残留 true").is_true()
+	battle.controller._delay_skip_requested = false
+	# 可达格点按（无守卫时首点走 show_path_preview 画路径层——用例失败锚点）
+	var reachable: Array[Vector2i] = battle.context.grid.find_reachable(unit, unit.move_final())
+	assert_int(reachable.size()).is_greater(0)
+	var target_cell: Vector2i = reachable[0]
+	var event := InputEventMouseButton.new()
+	event.button_index = MOUSE_BUTTON_LEFT
+	event.pressed = true
+	event.position = board.origin + (Vector2(target_cell) + Vector2(0.5, 0.5)) * board.cell_size
+	assert_vector(board.cell_from_local(event.position)).is_equal(target_cell)
+	battle._on_board_gui_input(event)
+	assert_bool(battle.controller._delay_skip_requested) \
+			.override_failure_message("终局后板面点按不得跳过演出").is_false()
+	assert_bool(battle._pending_cell == battle.NO_CELL) \
+			.override_failure_message("终局后板面点按不得进两段式选择").is_true()
+	assert_int(board._path_overlays.size()) \
+			.override_failure_message("终局后板面点按不得画路径预览").is_equal(0)
+	assert_int(board._move_overlays.size()) \
+			.override_failure_message("终局后板面点按不得重画移动范围层").is_equal(0)
+	assert_int(board._skill_overlays.size()) \
+			.override_failure_message("终局后板面点按不得画技能范围层").is_equal(0)
+
+func test_action_buttons_gated_while_retreat_confirm_visible() -> void:
+	## 循环盲审修复①：撤退确认弹窗挂起期底部四指令钮（普攻/技能A/技能B/
+	## 行动结束）泄漏点击被守卫忽略（_on_board_gui_input W2-11/S4-01 同式）
+	## ——不进技能模式画范围层、不结束行动轮；弹窗隐藏后四钮恢复正常
+	await _EnterRandomBattle()
+	var battle: Control = get_tree().root.find_child("BattleScreen", true, false) as Control
+	assert_object(battle).is_not_null()
+	battle.controller.delay_seconds = 0.0
+	var unit: BattleUnit = await _AwaitFirstCommandWindow(battle)
+	assert_object(unit).is_not_null()
+	assert_bool(battle.controller.awaiting_command).is_true()
+	# 弹窗挂起期：四钮泄漏点击均无效果（技能模式不进入、行动轮不结束）
+	(battle.get_node("%RetreatConfirm") as ConfirmationDialog).visible = true
+	(battle.get_node("%AttackButton") as Button).pressed.emit()
+	(battle.get_node("%SkillButtonA") as Button).pressed.emit()
+	(battle.get_node("%SkillButtonB") as Button).pressed.emit()
+	(battle.get_node("%EndTurnButton") as Button).pressed.emit()
+	assert_str(String(battle._selected_skill_id)) \
+			.override_failure_message("弹窗期指令钮不得进技能模式").is_empty()
+	assert_bool(battle.controller.awaiting_command) \
+			.override_failure_message("弹窗期行动结束钮不得结束行动轮").is_true()
+	# 弹窗隐藏后：普攻钮恢复进技能模式（再点取消复位）
+	(battle.get_node("%RetreatConfirm") as ConfirmationDialog).visible = false
+	(battle.get_node("%AttackButton") as Button).pressed.emit()
+	assert_str(String(battle._selected_skill_id)) \
+			.override_failure_message("弹窗关闭后普攻钮应恢复进技能模式").is_not_empty()
+	battle._ClearSelection()
+	# 行动结束钮恢复：结束行动轮后几帧内推进（current_unit 换位/敌方轮）
+	(battle.get_node("%EndTurnButton") as Button).pressed.emit()
+	var advanced: bool = false
+	var waited: int = 0
+	while not advanced and waited < MAX_WAIT_FRAMES:
+		if battle.controller.current_unit != unit or not battle.controller.awaiting_command:
+			advanced = true
+			break
+		await get_tree().process_frame
+		waited += 1
+	assert_bool(advanced) \
+			.override_failure_message("弹窗关闭后行动结束钮应恢复结束行动轮").is_true()
+	battle.controller.abort_battle()
+
+func test_board_resize_rebuild_hides_old_visuals_instantly() -> void:
+	## 重建型刷新一帧叠显契约（循环盲审修复②，S4-R3-01 同式）：窗口尺寸变化
+	## 板层全量重建——重建发起时旧格子/徽章/覆盖层立即不可见（queue_free 延迟
+	## 帧末——修复前旧视觉与新层一帧叠渲）；新格池计数正确。拍板 A 防抖后
+	## _OnResized 仅脏标记排队（帧末执行），本用例直调重建体验同步契约
+	await _EnterRandomBattle()
+	var battle: Control = get_tree().root.find_child("BattleScreen", true, false) as Control
+	assert_object(battle).is_not_null()
+	var board: BattleBoard = battle.get_node("%BoardLayer") as BattleBoard
+	# 先画一层移动范围（懒建覆盖层容器一并进重建路径）
+	var unit: BattleUnit = await _AwaitFirstCommandWindow(battle)
+	assert_object(unit).is_not_null()
+	var old_children: Array[Node] = []
+	for child: Node in board.get_children():
+		old_children.append(child)
+	# 尺寸减半触发重建（resized 信号自动排队帧末重建——拍板 A 防抖归并口；
+	## 本用例锚定重建体的同步隐藏契约，直调重建体 _ApplyResizeRebuild 即时
+	## 执行；防抖去重行为由单测 test_battle_board_resize_debounce 覆盖）
+	board.size = board.size * 0.5
+	board._ApplyResizeRebuild()
+	for old_child: Node in old_children:
+		assert_bool(old_child.is_queued_for_deletion()) \
+				.override_failure_message("旧视觉应已排队释放").is_true()
+		var old_visual: CanvasItem = old_child as CanvasItem
+		if old_visual != null:
+			assert_bool(old_visual.visible) \
+					.override_failure_message("重建发起帧旧视觉应立即隐藏（一帧叠显）").is_false()
+	# 新格池/徽章池：计数与战场一致且可见
+	var grid_size: Vector2i = battle.context.grid.size
+	assert_int(board._cells.size()).is_equal(grid_size.x * grid_size.y)
+	for cell: Vector2i in board._cells:
+		var fresh_visual: Control = board._cells[cell]
+		assert_bool(fresh_visual.visible) \
+				.override_failure_message("重建后新格子应可见").is_true()
+	assert_int(board._badges.size()).is_equal(battle.context.units.size())
+	battle.controller.abort_battle()

@@ -46,6 +46,10 @@ window/size/minimum_height=720
 
 enabled=PackedStringArray("res://addons/AsepriteWizard/plugin.cfg", "res://addons/dialogic/plugin.cfg", "res://addons/gdUnit4/plugin.cfg", "res://addons/godot_ai/plugin.cfg", "res://addons/phantom_camera/plugin.cfg")
 
+[gui]
+
+theme/custom="res://assets/ui/main_theme.tres"
+
 [input]
 
 dialogic_default_action={

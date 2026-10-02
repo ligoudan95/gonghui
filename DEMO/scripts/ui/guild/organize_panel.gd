@@ -23,6 +23,10 @@ const ORGANIZE_PANEL_MIN_WIDTH: int = 560
 ## 人力区间兜底（模板查无时的展示兜底——校验权威在 GuildCore 门面）
 const FALLBACK_PARTY_MIN: int = 1
 const FALLBACK_PARTY_MAX: int = 4
+## 行首职业图标最大宽（px——中4：64×64 裸贴图标撑爆选人行高；与其他落点
+## 16-20px 口径统一（recruit_panel CLASS_ICON_SIZE=20 同基准）；占位 UI
+## 结构参数，X3-06 豁免先例同口径）
+const CLASS_ICON_MAX_WIDTH: int = 20
 
 ## UI 文案单源（M4 增补批：轻度弹层适配；M6 批 2 挂账 4.2：内联 UI 中文
 ## 收编——改措辞只动此处）
@@ -47,6 +51,8 @@ const UI_TEXTS: Dictionary = {
 
 ## 总控配置
 var _cfg: CoreConfig = null
+## GameData（setup 注入——九宫格面板；open 时 _core.game_data 兜底图标解析）
+var _game_data: Node = null
 ## 标题（委托名+人力区间）
 var _title_label: Label = null
 ## 预览行（超额奖励倍率——勾选联动刷新）
@@ -69,14 +75,16 @@ var _core: GuildCore = null
 ## 勾选节点记录（unit_id -> CheckBox）
 var _checks: Dictionary = {}
 
-func setup(cfg: CoreConfig) -> void:
-	## 构建弹层骨架（初始隐藏）
-	## 参数 cfg：总控配置
+func setup(cfg: CoreConfig, game_data: Node = null) -> void:
+	## 构建弹层骨架（初始隐藏）；M6 批 3.5b：game_data 注入（九宫格面板；
+	## 选人行职业图标 open 时经 _core.game_data 解析——此参为面板样式服务）
+	## 参数 cfg：总控配置；game_data：GameData（可空）
 	## 返回：无
 	_cfg = cfg
+	_game_data = game_data
 	visible = false
 	z_index = POPUP_Z_INDEX
-	add_theme_stylebox_override("panel", UiTheme.make_dark_panel_style(cfg))
+	add_theme_stylebox_override("panel", UiTheme.make_dark_panel_style(cfg, game_data))
 	custom_minimum_size = Vector2(ORGANIZE_PANEL_MIN_WIDTH, 0)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 8)
@@ -157,6 +165,15 @@ func open(inst: QuestInstance, core: GuildCore) -> void:
 		check.text = UI_TEXTS[&"member_row_format"] % [member.display_name,
 				cls.display_name if cls != null else String(member.class_id),
 				member.level, _RecommendTextOf(member), "｜".join(marks)]
+		# M6 批 3.5b 组 6：行首职业图标（ClassDef.icon_id 在档 → CheckBox.icon；
+		## 缺件/查无降级 = 纯文字行现状零改）；中4：icon 钳制 20px——64 源
+		## 裸贴撑爆选人行高（expand_icon=false + icon_max_width，Button 系
+		## 主题常量 CheckBox 同承）
+		if cls != null and not String(cls.icon_id).is_empty():
+			check.icon = AssetTex.texture_of(cls.icon_id, core.game_data)
+			check.expand_icon = false
+			check.add_theme_constant_override("icon_max_width",
+					CLASS_ICON_MAX_WIDTH)
 		check.disabled = member.status != AdventurerData.Status.HEALTHY \
 				or occupied.has(member.unit_id)
 		check.button_pressed = preselect.has(member.unit_id) and not check.disabled

@@ -25,4 +25,5 @@ facility_kind = 0
 max_level = 2
 levels = Array[ExtResource("1_flv")]([SubResource("Resource_lv1"), SubResource("Resource_lv2")])
 scene_id = &"guild_dormitory"
+bg_asset_id = &"bg_dormitory"
 comment = "【占位·试玩校准】案 3 §2.2/案 17 §3.5/§3.11 #10：Lv1 容量 6·减 0；Lv2 升级 800·容量 8·休养 3→2（-1）；DEMO 豁免上限 2 级不挂公会等级"

@@ -58,8 +58,22 @@ func _ready() -> void:
 	_cfg = _game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
 	get_node("/root/SceneManager").take_pending_params()
 	_fac = _game_data.get_record(facility_id) as FacilityDef
+	_ApplyBackgroundTexture()
 	_BuildLayout()
 	Refresh()
+
+func _ApplyBackgroundTexture() -> void:
+	## 场景背景接线（M6 批 3.5b 组 1）：按 FacilityDef.bg_asset_id 表驱动取
+	## 贴图（宿舍 bg_dormitory / 训练场 bg_training_ground——两 tscn 共用本
+	## 脚本，资产 id 入表不入码，铁律①②）；AssetTex.apply_to 单源装配
+	## （KEEP_ASPECT_COVERED 铺满全屏）；bg_asset_id 空/缺件/缺登记返回
+	## false——Background ColorRect 纯色兜底原样可见
+	## 参数：无
+	## 返回：无
+	var asset_id: StringName = _fac.bg_asset_id if _fac != null else &""
+	if String(asset_id).is_empty():
+		return
+	AssetTex.apply_to(%BackgroundTexture, asset_id, _game_data)
 
 func _BuildLayout() -> void:
 	## 构建展示骨架（代码构建——EventPanel/ExploreBoard 先例）

@@ -55,7 +55,7 @@ func refresh(instances: Array[QuestInstance], game_data: Node, day: int) -> void
 	for inst: QuestInstance in instances:
 		var card := QuestCard.new()
 		_card_box.add_child(card)
-		card.setup(_cfg)
+		card.setup(_cfg, game_data)
 		card.refresh(inst, game_data, day)
 		card.accept_requested.connect(_OnCardAccept)
 		_cards.append(card)

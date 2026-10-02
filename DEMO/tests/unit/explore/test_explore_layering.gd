@@ -82,26 +82,28 @@ func test_panel_host_after_layout_and_fullscreen_centered() -> void:
 
 func test_board_fog_over_content_icons() -> void:
 	## board 内部契约①：迷雾 z(Z_FOG) 画在已探索内容图标(Z_CONTENT)之上
-	## （DIM 态半透明压暗记忆格图标——遮挡规则不再颠倒）
+	## （DIM 态半透明压暗记忆格图标——遮挡规则不再颠倒）；M6 批 3.5b：
+	## _point_icons/_cell_panels 值类型泛化 Control（贴图态 TextureRect /
+	## 降级 Label/Panel——z 契约两态同锚）
 	var screen: Control = await _OpenExploreScreen()
-	for icon: Label in screen._board._point_icons.values():
+	for icon: Control in screen._board._point_icons.values():
 		assert_int(icon.z_index).is_equal(ExploreBoard.Z_CONTENT)
 		assert_int(icon.z_index).is_less(ExploreBoard.Z_FOG)
 	for overlay: ColorRect in screen._board._fog_rects.values():
 		assert_int(overlay.z_index).is_equal(ExploreBoard.Z_FOG)
 	# 底格仍在最底
-	for panel: Panel in screen._board._cell_panels.values():
+	for panel: Control in screen._board._cell_panels.values():
 		assert_int(panel.z_index).is_equal(ExploreBoard.Z_TILE)
 		assert_int(panel.z_index).is_less(ExploreBoard.Z_FOG)
 
 func test_board_overlay_and_party_above_fog() -> void:
 	## board 内部契约②：常显目标点图标+衬底(Z_OVERLAY) 与小队图标(Z_PARTY)
 	## 在迷雾之上（拍板例外：目标点常显带衬底、视野内小队可见）——但恒低于
-	## UI 弹层 z
+	## UI 弹层 z；M6 批 3.5b：图标值类型泛化 Control（贴图/降级同锚）
 	var screen: Control = await _OpenExploreScreen()
 	assert_int(screen._board._party_icon.z_index).is_equal(ExploreBoard.Z_PARTY)
 	for tp_id: StringName in screen._board._target_icons:
-		var icon: Label = screen._board._target_icons[tp_id]
+		var icon: Control = screen._board._target_icons[tp_id]
 		var backdrop: ColorRect = screen._board._target_backdrops[tp_id]
 		assert_int(icon.z_index).is_equal(ExploreBoard.Z_OVERLAY)
 		assert_int(backdrop.z_index).is_equal(ExploreBoard.Z_OVERLAY)

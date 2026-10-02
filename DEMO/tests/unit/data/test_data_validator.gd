@@ -18,9 +18,9 @@ func before() -> void:
 	_game_data.initialize_data()
 
 func test_run_all_clean() -> void:
-	## 全库校验应零错误零警告（139 条记录 = M0 49 + M1 战斗域 14 + M2 事件 29 + M3 探索层 30 + M4 经营层 13 + M4 增补批轻度 3 + 功能一批 2 染毒毒瘴 2；计数带全部命中预期）
+	## 全库校验应零错误零警告（144 条记录 = M0 49 + M1 战斗域 14 + M2 事件 29 + M3 探索层 30 + M4 经营层 13 + M4 增补批轻度 3 + 功能一批 2 染毒毒瘴 2 + M6 批 3.5a 探索地格 +5（隐秘通道拆分 + 装饰格 ×4）；计数带全部命中预期）
 	var report: ValidationReport = DataValidator.run_all(_game_data)
-	assert_int(report.checked_count).is_equal(139)
+	assert_int(report.checked_count).is_equal(144)
 	assert_int(report.errors.size()).is_equal(0)
 	assert_int(report.warnings.size()).is_equal(0)
 	assert_bool(report.is_ok()).is_true()
@@ -801,3 +801,253 @@ func test_v_r4_pack_elite_first() -> void:
 			.override_failure_message("后置精英条目应报首位约定破坏").is_true()
 	var report_after: ValidationReport = DataValidator.run_all(_game_data)
 	assert_int(report_after.errors.size()).is_equal(0)
+
+# --------------------------------------------------------------------------
+# M6 批 3.5a 方案一 naming 校验改造（domain 驱动分支重排——U1-U7；
+# 真库注入-还原模式：注入后必须命中，还原后 run_all 零错误）
+# --------------------------------------------------------------------------
+
+func test_u1_assets_entry_with_mapping_passes() -> void:
+	## U1 正例：资产条目（tile_mine_wall 生产条目）+ mapping 在档——摘除后
+	## 报「registry 键无 naming 登记」，回填（注入）后全库零错误
+	var naming: NamingRegistry = _game_data.get_record(&"naming_registry") as NamingRegistry
+	assert_object(naming).is_not_null()
+	var target: NamingEntry = null
+	var kept: Array[NamingEntry] = []
+	for entry: NamingEntry in naming.entries:
+		if entry.resource_id == &"tile_mine_wall":
+			target = entry
+		else:
+			kept.append(entry)
+	assert_object(target).is_not_null()
+	naming.entries = kept
+	var missing_report: ValidationReport = DataValidator.run_all(_game_data)
+	naming.entries.append(target)
+	assert_bool(_HasError(missing_report, "V-B2-naming", "registry 键无 naming 登记")) \
+			.override_failure_message("摘条目后应报 registry 键无登记").is_true()
+	var report_after: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(report_after.errors.size()).is_equal(0)
+
+func test_u2_assets_entry_without_mapping_reported() -> void:
+	## U2 反例：assets 域条目未在 AssetRegistry mapping——注入临时条目必报；
+	## 还原后归零
+	var naming: NamingRegistry = _game_data.get_record(&"naming_registry") as NamingRegistry
+	var entry := NamingEntry.new()
+	entry.resource_id = &"tile_probe_unmapped"
+	entry.domain = &"assets"
+	entry.display_name = "探针条目"
+	entry.rule_note = "测试注入"
+	naming.entries.append(entry)
+	var report: ValidationReport = DataValidator.run_all(_game_data)
+	naming.entries.remove_at(naming.entries.size() - 1)
+	assert_bool(_HasError(report, "V-B2-naming", "未在 AssetRegistry mapping")) \
+			.override_failure_message("无 mapping 的资产条目应报错").is_true()
+	var report_after: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(report_after.errors.size()).is_equal(0)
+
+func test_u3_data_entry_domain_mismatch_still_caught() -> void:
+	## U3 反例：tile_normal 数据条目 domain 误改为 assets——数据身份优先
+	## （分支一），报「域错配」而非资产分支文案（撞带解除的回归锚定）
+	var naming: NamingRegistry = _game_data.get_record(&"naming_registry") as NamingRegistry
+	var target: NamingEntry = null
+	for entry: NamingEntry in naming.entries:
+		if entry.resource_id == &"tile_normal":
+			target = entry
+			break
+	assert_object(target).is_not_null()
+	var original_domain: StringName = target.domain
+	target.domain = &"assets"
+	var report: ValidationReport = DataValidator.run_all(_game_data)
+	target.domain = original_domain
+	assert_bool(_HasError(report, "V-B2-naming", "错配")) \
+			.override_failure_message("数据条目误改 assets 应报域错配").is_true()
+	var report_after: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(report_after.errors.size()).is_equal(0)
+
+func test_u4_unknown_entry_guidance_message() -> void:
+	## U4 反例：非数据记录、非 assets 域、非子资源前缀的未知条目——引导
+	## 文案「资产条目请填 domain=&'assets'」；还原后归零
+	var naming: NamingRegistry = _game_data.get_record(&"naming_registry") as NamingRegistry
+	var entry := NamingEntry.new()
+	entry.resource_id = &"bg_probe_wrong_domain"
+	entry.domain = &"core"
+	entry.display_name = "探针条目"
+	entry.rule_note = "测试注入"
+	naming.entries.append(entry)
+	var report: ValidationReport = DataValidator.run_all(_game_data)
+	naming.entries.remove_at(naming.entries.size() - 1)
+	assert_bool(_HasError(report, "V-B2-naming", "资产条目请填 domain=&'assets'")) \
+			.override_failure_message("未知条目应报引导文案").is_true()
+	var report_after: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(report_after.errors.size()).is_equal(0)
+
+func test_u5_assets_prefix_outside_legal_set() -> void:
+	## U5 反例：assets 域条目前缀不在合法集（zzbad_ 前缀 + mapping 注入
+	## 存在路径使 mapping 检查不触发——单锚前缀错误）；还原后归零
+	var naming: NamingRegistry = _game_data.get_record(&"naming_registry") as NamingRegistry
+	var registry: AssetRegistry = _game_data.get_record(&"registry") as AssetRegistry
+	var entry := NamingEntry.new()
+	entry.resource_id = &"zzbad_probe"
+	entry.domain = &"assets"
+	entry.display_name = "探针条目"
+	entry.rule_note = "测试注入"
+	naming.entries.append(entry)
+	registry.mapping[&"zzbad_probe"] = "res://assets/bg/bg_guild_hall.png"
+	var report: ValidationReport = DataValidator.run_all(_game_data)
+	naming.entries.remove_at(naming.entries.size() - 1)
+	registry.mapping.erase(&"zzbad_probe")
+	assert_bool(_HasError(report, "V-B2-naming", "不在资产前缀合法集")) \
+			.override_failure_message("前缀漂移的资产条目应报错").is_true()
+	var report_after: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(report_after.errors.size()).is_equal(0)
+
+func test_u6_registry_entry_no_false_positive() -> void:
+	## U6 回归零误报：registry 自身条目（domain=assets 的数据记录）按数据身份
+	## 走分支一——不被资产分支误报「未在 AssetRegistry mapping」（生产态
+	## run_all 零错误即为锚定）
+	var report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(report.errors.size()).is_equal(0)
+	var naming_error: bool = false
+	for entry: String in report.errors:
+		if entry.contains("registry") and entry.contains("未在 AssetRegistry mapping"):
+			naming_error = true
+	assert_bool(naming_error) \
+			.override_failure_message("registry 自身条目不应被资产分支误报").is_false()
+
+func test_u7_registry_key_without_naming_entry() -> void:
+	## U7 反例（加严③反向断言）：移除 bg_guild_hall naming 条目——registry
+	## 键仍在而登记缺失，报「registry 键无 naming 登记」；还原后归零
+	var naming: NamingRegistry = _game_data.get_record(&"naming_registry") as NamingRegistry
+	var kept: Array[NamingEntry] = []
+	var removed: NamingEntry = null
+	for entry: NamingEntry in naming.entries:
+		if entry.resource_id == &"bg_guild_hall":
+			removed = entry
+		else:
+			kept.append(entry)
+	assert_object(removed).is_not_null()
+	naming.entries = kept
+	var report: ValidationReport = DataValidator.run_all(_game_data)
+	naming.entries.append(removed)
+	assert_bool(_HasError(report, "V-B2-naming", "registry 键无 naming 登记")) \
+			.override_failure_message("registry 键缺登记应报错（加严③）").is_true()
+	var report_after: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(report_after.errors.size()).is_equal(0)
+
+# --------------------------------------------------------------------------
+# M6 批 3.5a V-M6 接线机制组（tile-asset / class-icon / fac-bg——非空即查）
+# --------------------------------------------------------------------------
+
+func test_v_m6_tile_asset_ref_guard() -> void:
+	## V-M6-tile-asset：asset_id/variants 非空即查——注入坏 id 必报；置空
+	## 合法（占位过渡态不收紧——主键 asset_id 空）；恢复后归零
+	var etile: ExploreTileDef = _game_data.get_record(&"etile_floor") as ExploreTileDef
+	assert_object(etile).is_not_null()
+	var original_asset: StringName = etile.asset_id
+	var original_variants: Array[StringName] = etile.asset_variants.duplicate()
+	etile.asset_id = &"tile_nope_unregistered"
+	var asset_report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(asset_report, "V-M6-tile-asset", "etile_floor")) \
+			.override_failure_message("坏 asset_id 应报错").is_true()
+	etile.asset_id = original_asset
+	etile.asset_variants = [&"zzbad_variant"]
+	var variant_report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(variant_report, "V-M6-tile-asset", "etile_floor")) \
+			.override_failure_message("坏 variants 项应报错").is_true()
+	etile.asset_variants = original_variants
+	var tile: TileTypeDef = _game_data.get_record(&"tile_obstacle") as TileTypeDef
+	var original_tile_asset: StringName = tile.asset_id
+	var original_tile_variants: Array[StringName] = tile.asset_variants.duplicate()
+	tile.asset_id = &""
+	tile.asset_variants = []
+	var empty_report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(empty_report.errors.size()).is_equal(0)
+	tile.asset_id = original_tile_asset
+	tile.asset_variants = original_tile_variants
+	var report_after: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(report_after.errors.size()).is_equal(0)
+
+func test_v_m6_tile_asset_empty_variant_element_reported() -> void:
+	## 顺手3：asset_variants 数组内空串元素 = 数据错误必报（带下标定位）；
+	## 与主键 asset_id 空 = 占位合法区分（正例：主键空+变体空列表零误报）；
+	## 恢复后归零
+	var etile: ExploreTileDef = _game_data.get_record(&"etile_floor") as ExploreTileDef
+	assert_object(etile).is_not_null()
+	var original_asset: StringName = etile.asset_id
+	var original_variants: Array[StringName] = etile.asset_variants.duplicate()
+	# 反例：变体位空串元素——数据错误
+	etile.asset_variants = [&""]
+	var report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(report, "V-M6-tile-asset", "为空串")) \
+			.override_failure_message("asset_variants 空串元素应报错（数组空项 ≠ 主键空占位）").is_true()
+	# 正例：主键空 + 变体空列表 = 占位合法（零误报——空项已删非空串驻留）
+	etile.asset_variants = []
+	etile.asset_id = &""
+	var empty_report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(empty_report.errors.size()).is_equal(0)
+	# 恢复归零
+	etile.asset_id = original_asset
+	etile.asset_variants = original_variants
+	var report_after: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(report_after.errors.size()).is_equal(0)
+
+func test_assets_prefix_error_message_shows_raw_id() -> void:
+	## 顺手1：无下划线 id（fontx）的前缀报错文案直接显示原 id + 合法前缀集
+	## 说明——不再构造伪前缀『fontx_』误导排障；还原后归零
+	var naming: NamingRegistry = _game_data.get_record(&"naming_registry") as NamingRegistry
+	var registry: AssetRegistry = _game_data.get_record(&"registry") as AssetRegistry
+	var entry := NamingEntry.new()
+	entry.resource_id = &"fontx"
+	entry.domain = &"assets"
+	entry.display_name = "探针条目"
+	entry.rule_note = "测试注入"
+	naming.entries.append(entry)
+	registry.mapping[&"fontx"] = "res://assets/bg/bg_guild_hall.png"
+	var report: ValidationReport = DataValidator.run_all(_game_data)
+	naming.entries.remove_at(naming.entries.size() - 1)
+	registry.mapping.erase(&"fontx")
+	var hit: String = ""
+	for err_text: String in report.errors:
+		if err_text.begins_with("V-B2-naming") and err_text.contains("fontx"):
+			hit = err_text
+			break
+	assert_bool(hit.is_empty()).override_failure_message("fontx 应触发前缀报错").is_false()
+	assert_str(hit).contains("id 'fontx'")
+	assert_bool(hit.contains("fontx_")).override_failure_message(
+			"文案不得构造伪前缀 fontx_").is_false()
+	assert_str(hit).contains("bg_")
+	var report_after: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(report_after.errors.size()).is_equal(0)
+
+func test_v_m6_class_icon_ref_guard() -> void:
+	## V-M6-class-icon：icon_id 非空即查——注入坏 id 必报；置空合法；恢复归零
+	var cls: ClassDef = _game_data.get_record(&"cls_warrior") as ClassDef
+	assert_object(cls).is_not_null()
+	var original: StringName = cls.icon_id
+	cls.icon_id = &"icon_class_nope"
+	var report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(report, "V-M6-class-icon", "cls_warrior")) \
+			.override_failure_message("坏 icon_id 应报错").is_true()
+	cls.icon_id = &""
+	var empty_report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(empty_report.errors.size()).is_equal(0)
+	cls.icon_id = original
+	var report_after: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(report_after.errors.size()).is_equal(0)
+
+func test_v_m6_fac_bg_ref_guard() -> void:
+	## V-M6-fac-bg：bg_asset_id 非空即查——注入坏 id 必报；置空合法；恢复归零
+	var fac: FacilityDef = _game_data.get_record(&"fac_dormitory") as FacilityDef
+	assert_object(fac).is_not_null()
+	var original: StringName = fac.bg_asset_id
+	fac.bg_asset_id = &"bg_nope_unregistered"
+	var report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(report, "V-M6-fac-bg", "fac_dormitory")) \
+			.override_failure_message("坏 bg_asset_id 应报错").is_true()
+	fac.bg_asset_id = &""
+	var empty_report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(empty_report.errors.size()).is_equal(0)
+	fac.bg_asset_id = original
+	var report_after: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(report_after.errors.size()).is_equal(0)
+

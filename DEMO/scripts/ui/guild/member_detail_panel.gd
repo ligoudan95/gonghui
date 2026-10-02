@@ -3,6 +3,9 @@
 ## 套装不卸换）/状态与休养/技能总览（**普攻条目 D3 口径：skl_atk_* 常驻展示
 ## 不占技能点、不入解锁列表**）/花技能点解锁档 1 技能（GrowthCore.unlock_skill）
 ## /倾向选择入口（转发 LevelupPanel）。
+## M6 批 3.5b 组 6 系统图标接线：标题行职业图标（ClassDef.icon_id）、状态行
+## 行首经验图标（icon_res_exp）、属性行 7 个图标行（ATTR_ICON_IDS——任一
+## 在档切 7 行、全缺件维持单行 join）；缺件降级 = 纯文字现状零回归。
 ## 数据来源：案 5 §2.1/§2.3/§3（属性/成长/装备槽字段）；案 10 §3（D3 普攻口径）。
 ## UI 规范：UiTheme 深底面板/字号档位；弹层 z=100 置顶（organize_panel 先例）。
 class_name MemberDetailPanel
@@ -17,6 +20,23 @@ signal member_changed(unit_id: StringName)
 
 ## 弹层 z（单源置顶——organize_panel 先例）
 const POPUP_Z_INDEX: int = 100
+
+## 七属性 id -> 图标资产 id（M6 批 3.5b 组 6：ATTR_NAMES 同位先例——UI 层
+## 有限枚举字典；任一属性贴图在档 → 属性行切 7 个 HBox 行，全缺件维持
+## 现状单行 join 零回归）
+const ATTR_ICON_IDS: Dictionary = {
+	&"strength": &"icon_attr_str",
+	&"agility": &"icon_attr_agi",
+	&"constitution": &"icon_attr_con",
+	&"intelligence": &"icon_attr_int",
+	&"perception": &"icon_attr_wis",
+	&"willpower": &"icon_attr_wil",
+	&"luck": &"icon_attr_luk",
+}
+## 经验行图标资产 id（组 6：icon_res_exp——状态行前缀图标）
+const EXP_ICON_ASSET_ID: StringName = &"icon_res_exp"
+## 属性/经验行图标边长（px）
+const ROW_ICON_SIZE: float = 20.0
 
 ## UI 文案单源（M6 批 2 挂账 4.2：内联 UI 中文收编——改措辞只动此处）
 const UI_TEXTS: Dictionary = {
@@ -45,6 +65,8 @@ const UI_TEXTS: Dictionary = {
 
 ## 总控配置
 var _cfg: CoreConfig = null
+## GameData（setup 注入——图标解析；open 时 _core.game_data 兜底）
+var _game_data: Node = null
 ## 内容容器
 var _box: VBoxContainer = null
 ## 当前展示成员
@@ -52,14 +74,16 @@ var _member: AdventurerData = null
 ## 公会核心（注入于 open——pending 悬置读数）
 var _core: GuildCore = null
 
-func setup(cfg: CoreConfig) -> void:
-	## 构建弹层骨架（初始隐藏）
-	## 参数 cfg：总控配置
+func setup(cfg: CoreConfig, game_data: Node = null) -> void:
+	## 构建弹层骨架（初始隐藏）；M6 批 3.5b：game_data 注入（九宫格面板与
+	## 职业/属性/经验图标解析；空 = 缺件降级——open 时回退 _core.game_data）
+	## 参数 cfg：总控配置；game_data：GameData（可空）
 	## 返回：无
 	_cfg = cfg
+	_game_data = game_data
 	visible = false
 	z_index = POPUP_Z_INDEX
-	add_theme_stylebox_override("panel", UiTheme.make_dark_panel_style(cfg))
+	add_theme_stylebox_override("panel", UiTheme.make_dark_panel_style(cfg, game_data))
 	_box = VBoxContainer.new()
 	_box.add_theme_constant_override("separation", 6)
 	add_child(_box)
@@ -70,6 +94,9 @@ func open(member: AdventurerData, core: GuildCore) -> void:
 	## 返回：无
 	_member = member
 	_core = core
+	# M6 批 3.5b 组 6：setup 未注入时回退 core.game_data（宿主旧调用兼容）
+	if _game_data == null:
+		_game_data = core.game_data
 	_Rebuild()
 	visible = true
 
@@ -88,9 +115,23 @@ func _Rebuild() -> void:
 	var game_data: Node = _core.game_data
 	var cls: ClassDef = game_data.get_record(_member.class_id) as ClassDef
 	var class_name_text: String = cls.display_name if cls != null else String(_member.class_id)
-	_MakeLabel("title", &"ui_font_size_subheading", UiTheme.FONT_SUBHEADING).text = \
-			UI_TEXTS[&"title_format"] % [_member.display_name, class_name_text, _member.level]
-	# 状态行（健康/休养 + 悬置倾向提示；满级成员经验段显示「已满级」——M4-8）
+	# 标题行（M6 批 3.5b 组 6：ClassDef.icon_id 在档 → 行首职业图标；
+	## 缺件降级 = 纯文字标题现状）
+	var title_row := HBoxContainer.new()
+	title_row.add_theme_constant_override("separation", 6)
+	_box.add_child(title_row)
+	var class_icon: Texture2D = _ClassIconTexture(cls)
+	if class_icon != null:
+		title_row.add_child(_MakeRowIcon(class_icon))
+	var title_label := Label.new()
+	title_label.name = "title"
+	title_label.add_theme_font_size_override("font_size",
+			UiTheme.font_of(_cfg, &"ui_font_size_subheading", UiTheme.FONT_SUBHEADING))
+	title_row.add_child(title_label)
+	title_label.text = UI_TEXTS[&"title_format"] % [_member.display_name,
+			class_name_text, _member.level]
+	# 状态行（健康/休养 + 悬置倾向提示；满级成员经验段显示「已满级」——M4-8；
+	## 组 6：icon_res_exp 在档 → 行首经验图标，缺件降级 = 纯文字现状）
 	var status_text: String = UI_TEXTS[&"status_healthy"] \
 			if _member.status == AdventurerData.Status.HEALTHY \
 			else UI_TEXTS[&"status_resting_format"] % _member.rest_days
@@ -100,15 +141,48 @@ func _Rebuild() -> void:
 	var exp_text: String = UI_TEXTS[&"exp_format"] % [_member.exp,
 			GrowthCore.exp_to_next(_member.level, _cfg)] \
 			if _member.level < _cfg.level_cap else UI_TEXTS[&"exp_capped"]
-	_MakeLabel("", &"ui_font_size_normal", UiTheme.FONT_NORMAL).text = \
-			UI_TEXTS[&"status_line_format"] % [
+	var status_row := HBoxContainer.new()
+	status_row.add_theme_constant_override("separation", 6)
+	_box.add_child(status_row)
+	var exp_icon: Texture2D = AssetTex.texture_of(EXP_ICON_ASSET_ID, _game_data)
+	if exp_icon != null:
+		status_row.add_child(_MakeRowIcon(exp_icon))
+	var status_label := Label.new()
+	status_label.add_theme_font_size_override("font_size",
+			UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
+	status_row.add_child(status_label)
+	status_label.text = UI_TEXTS[&"status_line_format"] % [
 			status_text, exp_text, _member.skill_points]
-	# 属性行（七属性中文——QuestCard.ATTR_NAMES 单源复用）
-	var attr_parts: PackedStringArray = []
+	# 属性行（组 6：任一属性贴图在档 → 7 个 HBox 行（图标 20px+文字，逐行
+	## 独立降级）；全缺件 → 现状单行 join 文本零回归）
+	var has_attr_icon: bool = false
 	for attr_id: StringName in AttrKeys.seven_attrs():
-		attr_parts.append(UI_TEXTS[&"attr_line_format"] % [String(QuestCard.ATTR_NAMES.get(attr_id, attr_id)),
-				int(_member.attrs.get(attr_id, AttrKeys.DEFAULT_ATTR_VALUE))])
-	_MakeLabel("", &"ui_font_size_normal", UiTheme.FONT_NORMAL).text = " ".join(attr_parts)
+		if AssetTex.texture_of(ATTR_ICON_IDS.get(attr_id, &"") as StringName,
+				_game_data) != null:
+			has_attr_icon = true
+			break
+	if has_attr_icon:
+		for attr_id: StringName in AttrKeys.seven_attrs():
+			var attr_row := HBoxContainer.new()
+			attr_row.add_theme_constant_override("separation", 6)
+			_box.add_child(attr_row)
+			var attr_icon: Texture2D = AssetTex.texture_of(
+					ATTR_ICON_IDS.get(attr_id, &"") as StringName, _game_data)
+			if attr_icon != null:
+				attr_row.add_child(_MakeRowIcon(attr_icon))
+			var attr_label := Label.new()
+			attr_label.add_theme_font_size_override("font_size",
+					UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
+			attr_row.add_child(attr_label)
+			attr_label.text = UI_TEXTS[&"attr_line_format"] % [
+					String(QuestCard.ATTR_NAMES.get(attr_id, attr_id)),
+					int(_member.attrs.get(attr_id, AttrKeys.DEFAULT_ATTR_VALUE))]
+	else:
+		var attr_parts: PackedStringArray = []
+		for attr_id: StringName in AttrKeys.seven_attrs():
+			attr_parts.append(UI_TEXTS[&"attr_line_format"] % [String(QuestCard.ATTR_NAMES.get(attr_id, attr_id)),
+					int(_member.attrs.get(attr_id, AttrKeys.DEFAULT_ATTR_VALUE))])
+		_MakeLabel("", &"ui_font_size_normal", UiTheme.FONT_NORMAL).text = " ".join(attr_parts)
 	# 装备槽位（字段位展示——DEMO 固定初始套装：按职业查 equip 域）
 	_MakeLabel("", &"ui_font_size_normal", UiTheme.FONT_NORMAL).text = _EquipText(game_data)
 	# 技能总览：普攻（D3 常驻不占点）+ 已解锁 + 可解锁（花点按钮）
@@ -198,6 +272,28 @@ func _EquipText(game_data: Node) -> String:
 			return UI_TEXTS[&"equip_format"] % [
 					equip.display_name, equip.weapon_bonus, equip.armor_value]
 	return UI_TEXTS[&"equip_missing"]
+
+func _ClassIconTexture(cls: ClassDef) -> Texture2D:
+	## 职业图标解析（组 6：ClassDef.icon_id → AssetTex；cls 空/icon 空/缺件
+	## 返回 null——调用方跳过图标降级纯文字）
+	## 参数 cls：职业定义
+	## 返回：职业图标贴图；无返回 null
+	if cls == null or String(cls.icon_id).is_empty():
+		return null
+	return AssetTex.texture_of(cls.icon_id, _game_data)
+
+func _MakeRowIcon(texture: Texture2D) -> TextureRect:
+	## 行首图标节点构建（组 6：20px 垂直居中——不挂树由调用方挂入）
+	## 参数 texture：已解析图标贴图
+	## 返回：TextureRect
+	var icon := TextureRect.new()
+	icon.texture = texture
+	icon.custom_minimum_size = Vector2.ONE * ROW_ICON_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return icon
 
 func _OnUnlockPressed(skill_id: StringName) -> void:
 	## 技能解锁（GrowthCore.unlock_skill——校验点数/归属/重复；成功后重建+通知）

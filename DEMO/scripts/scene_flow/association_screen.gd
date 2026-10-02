@@ -14,6 +14,10 @@ extends Control
 ## SceneManager 脚本常量引用
 const SceneManagerScript: GDScript = preload("res://scripts/autoload/scene_manager.gd")
 
+## 场景背景资源 id（M6 批 3.5b 组 1：bg_association_hall——AssetRegistry
+## 单源路径映射，铁律②）
+const BACKGROUND_ASSET_ID: StringName = &"bg_association_hall"
+
 ## UI 文案模板（逻辑层零文案——UI 层单源；S4-M4-4：本屏内联提示收编单源）
 const UI_TEXTS: Dictionary = {
 	&"start_fail_no_data": "出征装配失败——队伍或地图数据缺失。",
@@ -57,6 +61,7 @@ func _ready() -> void:
 	## 返回：无
 	_game_data = get_node("/root/GameData")
 	_cfg = _game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
+	_ApplyBackgroundTexture()
 	get_node("/root/SceneManager").take_pending_params()
 	_core().has_unseen_grants = false
 	_board_panel = QuestBoardPanel.new()
@@ -77,7 +82,7 @@ func _ready() -> void:
 	%RecruitHost.add_child(_recruit_panel)
 	_recruit_panel.recruit_requested.connect(_OnRecruitRequested)
 	_organize_panel = OrganizePanel.new()
-	_organize_panel.setup(_cfg)
+	_organize_panel.setup(_cfg, _game_data)
 	%OrganizeHost.add_child(_organize_panel)
 	_organize_panel.confirmed.connect(_OnOrganizeConfirmed)
 	_organize_panel.cancelled.connect(_OnOrganizeCancelled)
@@ -90,6 +95,14 @@ func _ready() -> void:
 	add_child(_light_abandon_confirm)
 	_ApplyFontTiers()
 	RefreshAll()
+
+func _ApplyBackgroundTexture() -> void:
+	## 场景背景接线（M6 批 3.5b 组 1）：AssetTex.apply_to 单源装配
+	## bg_association_hall（KEEP_ASPECT_COVERED 铺满全屏——guild_shell 同构）；
+	## 缺件/缺登记返回 false——Background ColorRect 纯色兜底原样可见
+	## 参数：无
+	## 返回：无
+	AssetTex.apply_to(%BackgroundTexture, BACKGROUND_ASSET_ID, _game_data)
 
 func _ApplyFontTiers() -> void:
 	## tscn 内嵌字号档位覆写（B-7 惯例）；W3-08：按钮统一 normal 档

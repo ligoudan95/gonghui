@@ -218,6 +218,45 @@ func find_path(unit: Object, from: Vector2i, to: Vector2i, move_final: int) -> A
 	path.reverse()
 	return path
 
+func distance_field_to_reach(unit: Object, target_cell: Vector2i, range: int) -> Dictionary:
+	## 全场多源 Dijkstra 距离场（EnemyAI 兜底 2.5 消费——凹形障碍绕行裁决）：
+	## 源点 = 目标格 ± 曼哈顿射程内**可站**格（通行口径同 _IsEnterable——存活
+	## 单位互为障碍照常计入；决策单位 unit 自身占位豁免——衡量「unit 让开自身
+	## 格后」到射程格集的真实移动距离，与 find_reachable 以 unit 起始格为源的
+	## 口径对齐）；边权 = 进入格的 move_cost（≥1，与 find_reachable/find_path
+	## 同度量——无向图，正反向距离一致）；预算 = 地图面积（O(格数)，每决策一次）
+	## 参数 unit：查询单位（鸭子契约；自身占位豁免）；target_cell：目标格；
+	## range：曼哈顿射程
+	## 返回：距离场字典 {Vector2i -> int}（源点距离 0；不可达格缺席；
+	## 射程格集全被占/围死时返回空字典）
+	var dist: Dictionary = {}
+	for cell: Vector2i in cells_in_range(target_cell, range):
+		if _IsEnterableExcept(cell, unit):
+			dist[cell] = 0
+	var visited: Dictionary = {}
+	while true:
+		var current: Vector2i = Vector2i.ZERO
+		var current_cost: int = -1
+		var found: bool = false
+		for pos: Vector2i in dist:
+			if visited.has(pos):
+				continue
+			if not found or dist[pos] < current_cost:
+				current = pos
+				current_cost = dist[pos]
+				found = true
+		if not found:
+			break
+		visited[current] = true
+		for neighbor: Vector2i in _Neighbors4(current):
+			if not _IsEnterableExcept(neighbor, unit):
+				continue
+			var tile: TileTypeDef = tile_at(neighbor)
+			var new_cost: int = current_cost + maxi(1, tile.move_cost)
+			if not dist.has(neighbor) or new_cost < dist[neighbor]:
+				dist[neighbor] = new_cost
+	return dist
+
 func cells_in_range(origin: Vector2i, distance: int) -> Array[Vector2i]:
 	## 射程格集：曼哈顿距离 ≤ distance 的界内格（含原点；射程/移动 = 曼哈顿度量）
 	## 参数 origin：原点坐标；distance：曼哈顿射程
@@ -322,6 +361,23 @@ func _IsEnterable(pos: Vector2i) -> bool:
 		return false
 	var occupant: Object = unit_at.get(pos, null)
 	if occupant != null and occupant.alive:
+		return false
+	return true
+
+func _IsEnterableExcept(pos: Vector2i, except_unit: Object) -> bool:
+	## 格子可进入判定（豁免版）：同 _IsEnterable 口径——界内 + 地格可通行 +
+	## 无存活单位占据；except_unit 的占位不算障碍（distance_field_to_reach
+	## 专用——距离场衡量查询单位自身到目标射程格集的移动距离，自身让开
+	## 原格后不应阻挡自己的路径，其余存活单位互为障碍照常计入）
+	## 参数 pos：坐标；except_unit：豁免占位的单位
+	## 返回：true = 可进入（距离场 Dijkstra 边合法性）
+	if not _InBounds(pos):
+		return false
+	var tile: TileTypeDef = tile_at(pos)
+	if tile == null or not tile.walkable:
+		return false
+	var occupant: Object = unit_at.get(pos, null)
+	if occupant != null and occupant.alive and occupant != except_unit:
 		return false
 	return true
 

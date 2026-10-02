@@ -15,6 +15,10 @@
 ## 幂等：基准源优先取旧静态图（32×32 ×4 最近邻放大）；静态图已退役时
 ## 回落取 <id>_idle.png 首帧（idle 帧序 0 = 无变换基准——往返恒等）。
 ## 替换：正式素材 M6 批 3/4 按动作件 id 原位替换零改表。
+## 防覆写（循环盲审第二轮·中）：目标件已存在即跳过只补缺——正式竖条被
+## 同 id 重跑覆写回占位品的缺口收口（与 gen_asset_placeholders 中1 同口径）；
+## 缺件补齐时基准若已是正式 idle 首帧，所生成占位与正式件混排可接受
+##（详见 _GenerateUnitStrips「半正式混排」注）。
 extends SceneTree
 
 ## 输出目录
@@ -143,8 +147,9 @@ func _initialize() -> void:
 		# 低2：退役删除失败（Windows 文件锁定等）不再静默——计入退出码
 		ok = _RetireStaticSprites() and ok
 	if ok:
-		print("gen_unit_anim_frames: 生成完成（%d 单位 × %d 动作 = %d 竖条 + registry/naming 同步）" % [
-				UNIT_IDS.size(), ACTIONS.size(), UNIT_IDS.size() * ACTIONS.size()])
+		print("gen_unit_anim_frames: 生成完成（落盘 %d 件、跳过已存在 %d 件 / 共 %d 竖条 + registry/naming 同步）" % [
+				UNIT_IDS.size() * ACTIONS.size() - _skip_count, _skip_count,
+				UNIT_IDS.size() * ACTIONS.size()])
 		quit(0)
 	else:
 		printerr("gen_unit_anim_frames: 存在失败项，详见上方输出")
@@ -192,12 +197,25 @@ func _FrameRegion(strip: Image, frame_index: int) -> Image:
 	## 返回：区域副本
 	return strip.get_region(Rect2i(0, frame_index * FRAME_SIZE, FRAME_SIZE, FRAME_SIZE))
 
+## 本轮已存在跳过计数（防覆写——只补缺口径的运行证据）
+var _skip_count: int = 0
+
 func _GenerateUnitStrips(unit_id: String, base: Image) -> bool:
-	## 生成单单位 6 动作竖条
+	## 生成单单位 6 动作竖条。防覆写（循环盲审第二轮·中）：目标件已存在即
+	## 跳过（FileAccess.file_exists）——正式素材同 id 原位替换（批 3/4）后
+	## 重跑本工具不覆写，占位不再吃掉正式竖条；全六件齐备（含 idle）时整体
+	## 跳过。仅当动作件缺失（部分入库中间态）才生成缺件——此时基准源若已是
+	## 正式 idle 首帧（静态图已退役），以它生成的缺失动作占位与既有正式件
+	## 混排（「半正式混排」——总比缺件好；正式件到位后按 id 原位替换零改表）
 	## 参数 unit_id：单位 sprite id；base：基准图
-	## 返回：true = 全部保存成功
+	## 返回：true = 全部保存成功或已存在跳过
 	var ok: bool = true
 	for action: Dictionary in ACTIONS:
+		var path: String = "%s/%s_%s.png" % [OUT_DIR, unit_id, action["suffix"]]
+		if FileAccess.file_exists(path):
+			_skip_count += 1
+			print("gen_unit_anim_frames: 跳过已存在 %s（只补缺——不覆写既有文件）" % path)
+			continue
 		var frames: Array = action["frames"]
 		var strip: Image = Image.create(FRAME_SIZE, frames.size() * FRAME_SIZE,
 				false, Image.FORMAT_RGBA8)
@@ -205,7 +223,6 @@ func _GenerateUnitStrips(unit_id: String, base: Image) -> bool:
 			var frame: Image = _ComposeFrame(base, frames[index])
 			strip.blend_rect(frame, Rect2i(Vector2i.ZERO,
 					Vector2i(FRAME_SIZE, FRAME_SIZE)), Vector2i(0, index * FRAME_SIZE))
-		var path: String = "%s/%s_%s.png" % [OUT_DIR, unit_id, action["suffix"]]
 		var err: Error = strip.save_png(path)
 		if err != OK:
 			printerr("gen_unit_anim_frames: 保存失败 %s（错误码 %d）" % [path, err])

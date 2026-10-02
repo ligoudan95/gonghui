@@ -23,7 +23,12 @@
 ## + M6 批 1 新增（V-M6 三条——单位六动作齐套 anim-quad / 动作竖条几何
 ## anim-geometry / 技能攻击姿态 skill-pose；V-M0-cfg-domain 扩演出参数
 ## 七字段值域、V-B2-cfg-fallback 扩七字段锚定；批 2 挂账 4.1：V-M3-map-points
-## 扩 map_ref 归属 + V-M3-ref-quest-goal 扩委托与目标点同图一致）。
+## 扩 map_ref 归属 + V-M3-ref-quest-goal 扩委托与目标点同图一致）
+## + M6 批 3.5a 新增（方案一 naming 校验改造——_CheckNamingRegistry 分支
+## 重排为 domain 驱动：数据身份优先 + assets 域资产分支（前缀合法集加严 +
+## registry 键反向断言）+ 子资源特判（NAMING_SUBRESOURCE_CHECKS 更名）；
+## V-M6 接线机制组三条——tile-asset 地格纹理 / class-icon 职业图标 /
+## fac-bg 设施背景（非空即查，空 = 占位合法不收紧））。
 ## 用法：DataValidator.run_all(game_data)——game_data 为 GameData 自动加载单例或其实例。
 class_name DataValidator
 extends RefCounted
@@ -51,12 +56,19 @@ static func _EnemyRoleTags() -> Array[StringName]:
 	## 返回：合法职能标记全集
 	return UnitTags.role_tags()
 
-## naming 前缀校验注册表（C-6：spr_/tend_ 等前缀特改数据驱动——
-## 前缀 -> 附加校验类别（AssetRegistry 映射 / 职业倾向存在性））
-const NAMING_PREFIX_CHECKS: Array = [
-	{"prefix": "spr_", "check": &"asset_registry"},
+## 子资源域特判注册表——宿主域内嵌子资源 id 非顶层记录（C-6：前缀特改
+## 数据驱动——前缀 -> 附加校验类别（职业倾向存在性））；M6 批 3.5a 起资产
+## 前缀条目（spr_/bg_ 等）统一走 assets 域分支（_CheckNamingRegistry 重排），
+## 本表仅余子资源域特判
+const NAMING_SUBRESOURCE_CHECKS: Array = [
 	{"prefix": "tend_", "check": &"class_tendencies"},
-	{"prefix": "bg_", "check": &"asset_registry"},
+]
+
+## 资产 id 前缀合法集（方案一加严②——M6 批 3.5a：domain==&"assets" 的
+## naming 条目 resource_id 前缀必须命中；前缀漂移 = 命名规范破坏；
+## tile_ 数据 6 条按数据身份走分支一不受此限——撞带解除）
+const ASSET_ID_PREFIXES: Array[StringName] = [
+	&"bg_", &"tile_", &"icon_", &"ui_", &"fx_", &"spr_",
 ]
 
 ## owner 为空的技能白名单（C-6 具名化：敌方通用普攻 skl_atk_enemy_common——
@@ -231,6 +243,11 @@ static func run_all(game_data: Node) -> ValidationReport:
 	_CheckAnimQuad(report, game_data)
 	_CheckAnimGeometry(report, game_data)
 	_CheckSkillPose(report, game_data)
+	# ---- M6 批 3.5a 新增（V-M6 接线机制组：tile 资产 / 职业图标 / 设施背景——
+	## 数据字段机制落位后的非空即查护栏；空 = 占位合法不收紧（3.5b 接线前过渡态）----
+	_CheckTileAssetRef(report, game_data)
+	_CheckClassIconRef(report, game_data)
+	_CheckFacilityBgRef(report, game_data)
 	return report
 
 # --------------------------------------------------------------------------
@@ -912,10 +929,15 @@ static func _CheckEquipClassRef(report: ValidationReport, game_data: Node) -> vo
 					"职业有 %d 条初始装备引用（至多一条）" % int(class_ref_counts[class_id]))
 
 static func _CheckNamingRegistry(report: ValidationReport, game_data: Node) -> void:
-	## V-B2-naming（A-2）：登记表双向比对——①全库顶层资源 id 必须有登记条目
-	## 且 domain 与实际所在域一致；②条目查重；③spr_ 条目须在 AssetRegistry
-	## mapping；④tend_ 条目须存在于某职业表 tendencies；⑤其余前缀条目须为
-	## 已知顶层 id（多登记拦截）
+	## V-B2-naming（A-2 + M6 批 3.5a 方案一改造·domain 驱动分支重排）：
+	## ①条目查重（前置不变）；②数据比对分支——id ∈ 全库顶层记录 → 域一致 +
+	## 名称漂移（tile_ 数据 6 条按数据身份走——资产前缀撞带解除；registry/
+	## naming_registry 自身条目在此保护）；③资产分支——domain==&"assets" 且
+	## 非数据记录 → AssetRegistry.mapping 存在（加严②前缀 ∈ ASSET_ID_PREFIXES）；
+	## ④子资源特判分支（tend_——NAMING_SUBRESOURCE_CHECKS 驱动）；⑤其余报
+	## 「登记了不存在的资源（资产条目请填 domain=&'assets'）」；⑥反向断言——
+	## registry 每键须有 assets 域条目（方案一加严③「registry 键无 naming
+	## 登记」）+ 全库顶层 id 须有登记（漏登记，原有）
 	## 参数：报告 / GameData
 	## 返回：无
 	var registry: NamingRegistry = game_data.get_record(&"naming_registry") as NamingRegistry
@@ -936,41 +958,18 @@ static func _CheckNamingRegistry(report: ValidationReport, game_data: Node) -> v
 		for record_id: StringName in game_data.get_domain_ids(domain):
 			id_domains[record_id] = domain
 	var registered: Dictionary = {}
+	var assets_registered: Dictionary = {}
 	for entry: NamingEntry in registry.entries:
 		if registered.has(entry.resource_id):
 			report.add_error("V-B2-naming", entry.resource_id, "登记条目重复")
 			continue
 		registered[entry.resource_id] = true
+		if entry.domain == &"assets":
+			assets_registered[entry.resource_id] = true
 		var rid: String = String(entry.resource_id)
-		# C-6：前缀特判改注册表驱动（前缀 -> 校验类别；新增前缀类别只加一行）
-		var prefix_rule: Dictionary = {}
-		for rule: Dictionary in NAMING_PREFIX_CHECKS:
-			if rid.begins_with(String(rule["prefix"])):
-				prefix_rule = rule
-				break
-		if not prefix_rule.is_empty():
-			var check_kind: StringName = prefix_rule["check"]
-			if check_kind == &"asset_registry":
-				if asset_registry == null or not asset_registry.mapping.has(entry.resource_id):
-					report.add_error("V-B2-naming", entry.resource_id,
-							"%s 登记未在 AssetRegistry mapping 中" % prefix_rule["prefix"])
-			elif check_kind == &"class_tendencies":
-				if not tend_ids.has(entry.resource_id):
-					report.add_error("V-B2-naming", entry.resource_id,
-							"%s 登记不存在于任何职业表 tendencies" % prefix_rule["prefix"])
-				else:
-					var tend_def: TendencyDef = tend_defs[entry.resource_id] as TendencyDef
-					# S1-R5-02：倾向实名空串报错（内嵌子资源无 V-M0 兜底——
-					## 第 4 轮 naming 空串跳过在此子资源域是死口）
-					if String(tend_def.display_name).is_empty():
-						report.add_error("V-B2-naming", entry.resource_id,
-								"倾向 display_name 为空（子资源无 V-M0 兜底）")
-					else:
-						# S1-R3-02②：登记名以倾向实名开头（宽松——兼容后缀注记
-						## 风格；占位名「职业 倾向 X」与 UI 已呈现的实名漂移拦截）
-						_ReportNamingNameDrift(report, entry.resource_id, entry.display_name,
-								tend_def.display_name)
-		elif id_domains.has(entry.resource_id):
+		var subresource_rule: Dictionary = _SubresourceRuleOf(rid)
+		if id_domains.has(entry.resource_id):
+			# 分支一（数据比对）：数据身份优先——域一致 + 名称漂移（原口径不变）
 			if id_domains[entry.resource_id] != entry.domain:
 				report.add_error("V-B2-naming", entry.resource_id,
 						"登记域 '%s' 与实际所在域 '%s' 错配" % [
@@ -983,12 +982,68 @@ static func _CheckNamingRegistry(report: ValidationReport, game_data: Node) -> v
 					and not String(named_record.display_name).is_empty():
 				_ReportNamingNameDrift(report, entry.resource_id, entry.display_name,
 						String(named_record.display_name))
+		elif entry.domain == &"assets":
+			# 分支二（资产条目）：mapping 存在性 + 前缀合法集（方案一加严②）
+			if asset_registry == null or not asset_registry.mapping.has(entry.resource_id):
+				report.add_error("V-B2-naming", entry.resource_id,
+						"assets 域条目未在 AssetRegistry mapping 中")
+			if not _HasAssetIdPrefix(entry.resource_id):
+				report.add_error("V-B2-naming", entry.resource_id,
+						"assets 域条目 id '%s' 前缀不在资产前缀合法集 %s（前缀 = 首个下划线前的段 + '_'，如 bg_<语义>/icon_<语义>；无下划线 id 无前缀可用）" % [
+							rid, str(ASSET_ID_PREFIXES),
+						])
+		elif not subresource_rule.is_empty():
+			# 分支三（子资源特判）：C-6 注册表驱动（现仅 tend_）
+			var check_kind: StringName = subresource_rule["check"]
+			if check_kind == &"class_tendencies":
+				if not tend_ids.has(entry.resource_id):
+					report.add_error("V-B2-naming", entry.resource_id,
+							"%s 登记不存在于任何职业表 tendencies" % subresource_rule["prefix"])
+				else:
+					var tend_def: TendencyDef = tend_defs[entry.resource_id] as TendencyDef
+					# S1-R5-02：倾向实名空串报错（内嵌子资源无 V-M0 兜底——
+					## 第 4 轮 naming 空串跳过在此子资源域是死口）
+					if String(tend_def.display_name).is_empty():
+						report.add_error("V-B2-naming", entry.resource_id,
+								"倾向 display_name 为空（子资源无 V-M0 兜底）")
+					else:
+						# S1-R3-02②：登记名以倾向实名开头（宽松——兼容后缀注记
+						## 风格；占位名「职业 倾向 X」与 UI 已呈现的实名漂移拦截）
+						_ReportNamingNameDrift(report, entry.resource_id, entry.display_name,
+								tend_def.display_name)
 		else:
+			# 分支四：非数据记录、非资产域、非子资源——未知条目（引导文案二分：
+			## 空或非 assets 的 domain 均落此，文案引导资产条目正确填法）
 			report.add_error("V-B2-naming", entry.resource_id,
-					"登记了不存在的资源（多登记/未知 id）")
+					"登记了不存在的资源（资产条目请填 domain=&'assets'；多登记/未知 id）")
+	# 方案一加严③：registry 反向断言——每键须有 assets 域 naming 条目
+	if asset_registry != null:
+		for asset_id: StringName in asset_registry.mapping:
+			if not assets_registered.has(asset_id):
+				report.add_error("V-B2-naming", asset_id,
+						"registry 键无 naming 登记（assets 域条目缺失）")
 	for record_id: StringName in id_domains:
 		if not registered.has(record_id):
 			report.add_error("V-B2-naming", record_id, "资源未登记命名表（漏登记）")
+
+static func _HasAssetIdPrefix(asset_id: StringName) -> bool:
+	## 资产 id 前缀合法集判定（方案一加严②内部口——ASSET_ID_PREFIXES 前缀命中）
+	## 参数 asset_id：资产 id
+	## 返回：true = 前缀命中合法集
+	for prefix: StringName in ASSET_ID_PREFIXES:
+		if String(asset_id).begins_with(String(prefix)):
+			return true
+	return false
+
+static func _SubresourceRuleOf(record_id: String) -> Dictionary:
+	## 子资源前缀规则查找（C-6 注册表驱动内部口——NAMING_SUBRESOURCE_CHECKS
+	## 前缀命中；无命中返回空字典）
+	## 参数 record_id：条目资源 id 字符串
+	## 返回：命中规则字典；未命中返回 {}
+	for rule: Dictionary in NAMING_SUBRESOURCE_CHECKS:
+		if record_id.begins_with(String(rule["prefix"])):
+			return rule
+	return {}
 
 static func _ReportNamingNameDrift(report: ValidationReport, entry_id: StringName,
 		entry_name: String, record_name: String) -> void:
@@ -3399,6 +3454,74 @@ static func _CheckSkillPose(report: ValidationReport, game_data: Node) -> void:
 				and skill.attack_pose == SkillDef.AttackPose.NONE:
 			report.add_error("V-M6-skill-pose", skill.id,
 					"伤害型技能 attack_pose 为 NONE（伤害技须 MELEE/CAST 攻击动作）")
+
+# --------------------------------------------------------------------------
+# M6 批 3.5a 接线机制组（V-M6 tile-asset / class-icon / fac-bg——非空即查）
+# --------------------------------------------------------------------------
+
+static func _CheckTileAssetRef(report: ValidationReport, game_data: Node) -> void:
+	## V-M6-tile-asset（批 3.5a B 级登记）：探索/战棋地格纹理引用——asset_id 与
+	## asset_variants 各项非空时须在 AssetRegistry 有键且前缀 ∈ 合法集
+	## （_HasAssetIdPrefix）；主键 asset_id 空 = 占位合法不收紧（3.5b 接线前
+	## 的过渡态，空 asset_id 回退程序色块渲染路径不受影响）；
+	## asset_variants 数组内空串元素 = 数据错误直接报（顺手3——数组空项与
+	## 主键空占位语义不同：变体位要么有效 id 要么删除该项）
+	## 参数：报告 / GameData
+	## 返回：无
+	var registry: AssetRegistry = game_data.get_record(&"registry") as AssetRegistry
+	var tile_domains: Array[StringName] = [&"battle/tiles", &"map/tiles"]
+	for domain: StringName in tile_domains:
+		for record: Resource in _DomainRecords(game_data, domain):
+			var refs: Array[StringName] = [record.get("asset_id")]
+			var variants: Array = record.get("asset_variants")
+			for variant_id: StringName in variants:
+				refs.append(variant_id)
+			for ref_index: int in refs.size():
+				var ref_id: StringName = refs[ref_index]
+				if String(ref_id).is_empty():
+					# refs[0] = 主键 asset_id：空 = 占位合法跳过；其余 = 变体位
+					## 空串元素（asset_variants[ref_index-1]）——数据错误报出
+					if ref_index > 0:
+						report.add_error("V-M6-tile-asset", record.get("id"),
+								"asset_variants[%d] 为空串（数组内空项是数据错误——变体位须有效 id 或删除该项；主键 asset_id 空 = 占位合法）" % (ref_index - 1))
+					continue
+				if registry == null or not registry.mapping.has(ref_id):
+					report.add_error("V-M6-tile-asset", record.get("id"),
+							"纹理引用 '%s' 未在 AssetRegistry 登记" % ref_id)
+				elif not _HasAssetIdPrefix(ref_id):
+					report.add_error("V-M6-tile-asset", record.get("id"),
+							"纹理引用 '%s' 前缀不在资产前缀合法集 %s" % [
+									ref_id, str(ASSET_ID_PREFIXES)])
+
+static func _CheckClassIconRef(report: ValidationReport, game_data: Node) -> void:
+	## V-M6-class-icon（批 3.5a B 级登记）：职业图标引用——ClassDef.icon_id
+	## 非空时须在 AssetRegistry 有键；空 = 占位合法不收紧（3.5b 图标接线前
+	## 过渡态，空值回退现状字形/色块渲染）
+	## 参数：报告 / GameData
+	## 返回：无
+	var registry: AssetRegistry = game_data.get_record(&"registry") as AssetRegistry
+	for record: Resource in _DomainRecords(game_data, &"class/classes"):
+		var cls := record as ClassDef
+		if String(cls.icon_id).is_empty():
+			continue
+		if registry == null or not registry.mapping.has(cls.icon_id):
+			report.add_error("V-M6-class-icon", cls.id,
+					"icon_id '%s' 未在 AssetRegistry 登记" % cls.icon_id)
+
+static func _CheckFacilityBgRef(report: ValidationReport, game_data: Node) -> void:
+	## V-M6-fac-bg（批 3.5a B 级登记）：设施背景引用——FacilityDef.bg_asset_id
+	## 非空时须在 AssetRegistry 有键；空 = 占位合法不收紧（3.5b 背景接线前
+	## 过渡态，空值回退现状纯色底）
+	## 参数：报告 / GameData
+	## 返回：无
+	var registry: AssetRegistry = game_data.get_record(&"registry") as AssetRegistry
+	for record: Resource in _DomainRecords(game_data, &"guild/facilities"):
+		var fac := record as FacilityDef
+		if String(fac.bg_asset_id).is_empty():
+			continue
+		if registry == null or not registry.mapping.has(fac.bg_asset_id):
+			report.add_error("V-M6-fac-bg", fac.id,
+					"bg_asset_id '%s' 未在 AssetRegistry 登记" % fac.bg_asset_id)
 
 
 static func _AllDomains(game_data: Node) -> Array[StringName]:

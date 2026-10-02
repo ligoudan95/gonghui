@@ -10,6 +10,8 @@
 ## 六动作齐套）。
 ## 数据来源：批 A H3 表驱动口径（ClassDef/EnemyDef.sprite_id 入表；
 ## 查无回退空 id 走占位色块/空白头像）。
+## M6 批 3.5a：texture_of 改薄转发 AssetTex（缓存收口单份——全资产 id 纹理
+## 解析统一走 AssetTex 进程级缓存；单位链路行为不变）。
 ## 纯逻辑约束：不触 autoload 节点树——game_data 经参数注入（调用方持有引用）。
 class_name SpriteResolver
 extends RefCounted
@@ -29,10 +31,6 @@ const ANIM_ACTIONS: Array[StringName] = [
 	&"downed",
 ]
 
-## sprite 纹理进程级缓存（sprite id -> Texture2D；null = 已知缺登记——
-## 缓存穿透防止每帧重复查 registry）
-static var _texture_cache: Dictionary = {}
-
 ## 单帧 AtlasTexture 进程级缓存（"<动作件 id>#<帧下标>" -> AtlasTexture）
 static var _atlas_cache: Dictionary = {}
 
@@ -50,26 +48,20 @@ static func sprite_id_of(unit: BattleUnit, game_data: Node) -> StringName:
 	return enemy.sprite_id if enemy != null else &""
 
 static func texture_of(sprite_id: StringName, game_data: Node) -> Texture2D:
-	## sprite id → 纹理：缓存命中直取；否则经 game_data.get_asset_path
-	## （AssetRegistry 路径映射）load；空 id/缺登记回退 null（占位色块）
+	## sprite id → 纹理：薄转发 AssetTex.texture_of（M6 批 3.5a 缓存收口单份
+	## ——全资产 id 纹理解析统一走 AssetTex 进程级缓存；单位链路行为不变：
+	## 空 id/缺登记回退 null 占位色块）
 	## 参数 sprite_id：资源 id；game_data：GameData（registry 取路径）
 	## 返回：Texture2D；未登记返回 null
-	if _texture_cache.has(sprite_id):
-		return _texture_cache[sprite_id]
-	var texture: Texture2D = null
-	if game_data != null and not String(sprite_id).is_empty():
-		var path: String = game_data.get_asset_path(sprite_id)
-		if not path.is_empty():
-			texture = load(path) as Texture2D
-	_texture_cache[sprite_id] = texture
-	return texture
+	return AssetTex.texture_of(sprite_id, game_data)
 
 static func clear_cache() -> void:
-	## 清空纹理与单帧 atlas 缓存（测试隔离口——表热重载后防止旧纹理驻留）
+	## 清空纹理与单帧 atlas 缓存（测试隔离口——表热重载后防止旧纹理驻留；
+	## 纹理缓存已收口 AssetTex，此处两口同清：_atlas_cache 本地 + AssetTex 池）
 	## 参数：无
 	## 返回：无
-	_texture_cache = {}
 	_atlas_cache = {}
+	AssetTex.clear_cache()
 
 static func anim_id_of(sprite_id: StringName, action: int) -> StringName:
 	## 单位 sprite id + 动作 → 动作件资源 id（<sprite_id>_<action>）

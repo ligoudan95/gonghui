@@ -232,3 +232,57 @@ func test_w18_line_of_sight_clear_direct_cases() -> void:
 	# 相邻直线无中间格 → 遮挡集不涉及时恒通
 	opaque_cells[Vector2i(9, 9)] = true
 	assert_bool(BattleGrid.line_of_sight_clear(Vector2i(0, 0), Vector2i(1, 0), probe)).is_true()
+
+func test_distance_field_routes_around_obstacles() -> void:
+	## 全场距离场（EnemyAI 兜底 2.5 单源）：源 = 目标格 ± 射程内可站格，
+	## 边权 = move_cost——凹形障碍下数值 = 真实绕行步数（非曼哈顿贪心）；
+	## 障碍格缺席。布置：目标 T@(3,6)、查询敌 E@(3,1)——E 直南路被
+	## (3,3) 障碍截断，东绕 (4,2)(4,3)(4,4)(3,4) 至源 (3,5)
+	var target := _MakeUnit(0, Vector2i(3, 6))
+	var enemy := _MakeUnit(1, Vector2i(3, 1))
+	var field: Dictionary = _grid.distance_field_to_reach(enemy,
+			target.grid_pos, 1)
+	# 源点（可站射程格）距离 0
+	assert_int(field.get(Vector2i(3, 5), -1)).is_equal(0)
+	# 草丛格 (3,4) 邻源 → 1（move_cost 全 1）
+	assert_int(field.get(Vector2i(3, 4), -1)).is_equal(1)
+	# E 格 = 东绕全程 6 步（(3,1)→(3,2)→(4,2)→(4,3)→(4,4)→(3,4)→(3,5)）
+	assert_int(field.get(Vector2i(3, 1), -1)).is_equal(6)
+	# 障碍格缺席（不可通行不入距离场）
+	assert_bool(field.has(Vector2i(3, 3))).is_false()
+	assert_bool(field.has(Vector2i(2, 2))).is_false()
+
+func test_distance_field_self_exempt_other_units_block() -> void:
+	## 距离场占位口径：查询单位自身占位豁免（衡量「让开自身格」的真实
+	## 移动距离——与 find_reachable 以查询者起始格为源同理）；其余存活
+	## 单位照常互为障碍。布置：目标 T@(3,2)、墙单位 W@(3,4)、查询 E@(3,6)
+	var target := _MakeUnit(0, Vector2i(3, 2))
+	var wall := _MakeUnit(1, Vector2i(3, 4))
+	var enemy := _MakeUnit(1, Vector2i(3, 6))
+	# E 视角：W 是障碍（(3,4) 缺席）→ 东绕 (4,6)(4,5)(4,4)(4,3) 至源 (4,2) = 5
+	var field: Dictionary = _grid.distance_field_to_reach(enemy,
+			target.grid_pos, 1)
+	assert_int(field.get(Vector2i(3, 6), -1)).is_equal(5)
+	assert_bool(field.has(Vector2i(3, 4))).is_false()
+	# 目标格自身被 T 占（E 查询不豁免 T）→ 缺席（只能进射程格不可叠目标）
+	assert_bool(field.has(Vector2i(3, 2))).is_false()
+	# W 视角：自身豁免 → W 格有值（(3,4)→(4,4)→(4,3)→源(4,2) = 3）
+	# ——若不豁免，W 自身格不可入（被占）而缺席
+	var wall_field: Dictionary = _grid.distance_field_to_reach(wall,
+			target.grid_pos, 1)
+	assert_int(wall_field.get(Vector2i(3, 4), -1)).is_equal(3)
+
+func test_distance_field_empty_when_target_fully_walled() -> void:
+	## 距离场空集口径：目标射程格集全被占/围死（无任何可站源点）→ 空距离场
+	## （消费方兜底 2.5 据此落真待机——真无路语义）。布置：T@(3,6) 四邻
+	## (3,5)(2,6)(4,6)(3,7) 全被占
+	var target := _MakeUnit(0, Vector2i(3, 6))
+	_MakeUnit(0, Vector2i(3, 5))
+	_MakeUnit(1, Vector2i(2, 6))
+	_MakeUnit(1, Vector2i(4, 6))
+	_MakeUnit(1, Vector2i(3, 7))
+	var enemy := _MakeUnit(1, Vector2i(3, 1))
+	var field: Dictionary = _grid.distance_field_to_reach(enemy,
+			target.grid_pos, 1)
+	assert_bool(field.is_empty()).override_failure_message(
+			"射程格集全被占应产出空距离场").is_true()

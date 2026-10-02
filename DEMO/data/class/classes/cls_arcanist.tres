@@ -37,4 +37,5 @@ move_range = 4
 base_attack_skill_id = &"skl_atk_arcanist"
 tendencies = Array[ExtResource("2_qb12q")]([SubResource("Resource_erym4"), SubResource("Resource_phshn")])
 sprite_id = &"spr_cls_arcanist"
+icon_id = &"icon_class_arcanist"
 comment = "【占位·试玩校准】属性区间/资源换算/生命系数/移动来源：17 案 §3.1/§3.2（17-C2/17-C8）+ 案 10 §2.1/§2.4"

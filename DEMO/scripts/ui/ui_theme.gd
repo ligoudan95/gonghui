@@ -5,8 +5,16 @@
 ## ②color_of/font_of 读取口（表值优先、兜底回退，消费点一行替换）
 ## ③共享构建（B-4 深底面板样式 / B-19 四边框条）与 B-20 百分比换算。
 ## 纯逻辑约束：不触 autoload——cfg 经参数注入（可空 = 纯兜底模式）。
+## M6 批 3.5b：make_dark_panel_style 扩 game_data 参——深底面板九宫格单源
+## 切换（ui_panel_ninepatch 在档 → StyleBoxTexture 四边 24px 边距；缺件
+## 回退 StyleBoxFlat 占位——缺件态视觉零回归）。
 class_name UiTheme
 extends RefCounted
+
+## 深底面板九宫格贴图资产 id（M6 批 3.5b 组 7——AssetRegistry 单源路径映射）
+const PANEL_NINEPATCH_ASSET_ID: StringName = &"ui_panel_ninepatch"
+## 九宫格贴图态四边纹理边距（px——StyleBoxTexture texture_margin）
+const PANEL_NINEPATCH_MARGIN: float = 24.0
 
 # ---- 徽章（B-1：unit_badge 内联色兜底）----
 const BADGE_HP_LOW: Color = Color(0.9, 0.25, 0.2)
@@ -148,11 +156,24 @@ static func font_of(cfg: CoreConfig, field: StringName, fallback: int) -> int:
 		return raw
 	return fallback
 
-static func make_dark_panel_style(cfg: CoreConfig = null) -> StyleBoxFlat:
+static func make_dark_panel_style(cfg: CoreConfig = null,
+		game_data: Node = null) -> StyleBox:
 	## 深底面板样式单源（B-4：battle_board tips 与 battle_log 共用——
-	## 原 alpha 0.92/0.86 漂移统一为 0.9）：圆角 6 + 内边距 8
-	## 参数 cfg：总控配置（可空——ui_panel_dark_color 表驱动）
-	## 返回：StyleBoxFlat（调用方 add_theme_stylebox_override("panel", ...)）
+	## 原 alpha 0.92/0.86 漂移统一为 0.9）：占位态圆角 6 + 内边距 8；
+	## M6 批 3.5b 组 7：game_data 注入且 ui_panel_ninepatch 在档 →
+	## StyleBoxTexture（四边 24px 纹理边距）——九宫格单源切换，缺件/
+	## 未注入回退 StyleBoxFlat 占位（缺件态视觉零回归）
+	## 参数 cfg：总控配置（可空——ui_panel_dark_color 表驱动）；
+	## game_data：GameData（可空——AssetTex 解析九宫格纹理）
+	## 返回：StyleBox（贴图态 StyleBoxTexture / 占位态 StyleBoxFlat——
+	## 调用方 add_theme_stylebox_override("panel", ...)）
+	var texture: Texture2D = AssetTex.texture_of(PANEL_NINEPATCH_ASSET_ID,
+			game_data) if game_data != null else null
+	if texture != null:
+		var tex_style := StyleBoxTexture.new()
+		tex_style.texture = texture
+		tex_style.set_texture_margin_all(PANEL_NINEPATCH_MARGIN)
+		return tex_style
 	var style := StyleBoxFlat.new()
 	style.bg_color = color_of(cfg, &"ui_panel_dark_color", PANEL_DARK)
 	style.set_corner_radius_all(6)

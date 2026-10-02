@@ -132,8 +132,8 @@ func test_frame_atlas_of_sub_frame_height_returns_null_with_warning() -> void:
 	var tiny: ImageTexture = ImageTexture.create_from_image(Image.create(
 			SpriteResolver.ANIM_FRAME_SIZE, 127, false, Image.FORMAT_RGBA8))
 	# 经注入路径消费（直塞缓存模拟 registry 解析结果——frame_atlas_of 内部
-	# 走 anim_texture_of；此处用 texture_of 缓存注入法：清缓存后置入假条）
-	SpriteResolver._texture_cache[&"spr_fake_tiny_idle"] = tiny
+	# 走 anim_texture_of；M6 批 3.5a 起纹理缓存收口 AssetTex：清缓存后置入假条）
+	AssetTex._cache[&"spr_fake_tiny_idle"] = tiny
 	assert_object(SpriteResolver.frame_atlas_of(&"spr_fake_tiny",
 			UnitAnimState.Action.IDLE, 0, _game_data)).is_null()
 	SpriteResolver.clear_cache()

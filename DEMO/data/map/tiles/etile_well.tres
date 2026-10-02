@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ExploreTileDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/data_defs/explore_tile_def.gd" id="1_dwell"]
+
+[resource]
+script = ExtResource("1_dwell")
+id = &"etile_well"
+display_name = "水井"
+walkable = false
+asset_id = &"tile_village_well"
+fill_color = Color(0.13, 0.13, 0.15, 1)
+accent_color = Color(0.05, 0.05, 0.06, 1)
+style = 2
+comment = "【占位·试玩校准】etile_<语义>：探索地格（村子段装饰障碍——M6 批 3.5a 装饰格机制落地；Style 同 wall 的 BLOCK 障碍，寻路绕行；障碍格天然不途经 = 不触发毒沼等踏入效果）"

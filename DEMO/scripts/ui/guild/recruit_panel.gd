@@ -9,6 +9,9 @@ extends VBoxContainer
 ## 招募请求（index=候选下标）
 signal recruit_requested(index: int)
 
+## 候选行职业图标边长（px——M6 批 3.5b 组 6）
+const CLASS_ICON_SIZE: float = 20.0
+
 ## UI 文案单源（M6 批 2 挂账 4.2：内联 UI 中文收编——改措辞只动此处）
 const UI_TEXTS: Dictionary = {
 	&"title": "招募池",
@@ -62,6 +65,9 @@ func refresh(core: GuildCore) -> void:
 	## 参数 core：公会核心（候选与花费口径）
 	## 返回：无
 	for row: HBoxContainer in _rows:
+		# S4-R3-01 同式（event_panel._Reset 先例）：旧行先隐藏断输入/渲染再
+		# 释放（queue_free 延迟帧末——旧行与新行一帧叠渲）
+		row.visible = false
 		row.queue_free()
 	_rows.clear()
 	for index: int in core.recruit_pool.candidates.size():
@@ -69,8 +75,21 @@ func refresh(core: GuildCore) -> void:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 8)
 		_row_box.add_child(row)
-		var summary: Label = Label.new()
+		# M6 批 3.5b 组 6：行首职业图标（ClassDef.icon_id 在档 → 20px 居中
+		## TextureRect；缺件/查无降级 = 纯文字行现状零改）
 		var cls: ClassDef = core.game_data.get_record(candidate.class_id) as ClassDef
+		if cls != null and not String(cls.icon_id).is_empty():
+			var class_icon: Texture2D = AssetTex.texture_of(cls.icon_id, core.game_data)
+			if class_icon != null:
+				var icon := TextureRect.new()
+				icon.texture = class_icon
+				icon.custom_minimum_size = Vector2.ONE * CLASS_ICON_SIZE
+				icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+				icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+				icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+				icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				row.add_child(icon)
+		var summary: Label = Label.new()
 		summary.text = UI_TEXTS[&"candidate_format"] % [candidate.display_name,
 				cls.display_name if cls != null else String(candidate.class_id),
 				RecruitPool.total_attrs(candidate), core.recruit_pool.cost_of(candidate)]

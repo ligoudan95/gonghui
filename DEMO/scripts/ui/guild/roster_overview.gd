@@ -19,6 +19,11 @@ const UI_TEXTS: Dictionary = {
 	&"row_format": "%s（%s Lv%d）｜%s",
 }
 
+## 行首职业图标最大宽（px——中4：64×64 裸贴图标撑爆行高的钳制；与其他
+## 落点 16-20px 口径统一（recruit_panel CLASS_ICON_SIZE=20 同基准），行高
+## 回归 ~38px；占位 UI 结构参数，X3-06 豁免先例同口径）
+const CLASS_ICON_MAX_WIDTH: int = 20
+
 ## 总控配置
 var _cfg: CoreConfig = null
 ## 标题行
@@ -51,6 +56,9 @@ func refresh(members: Array[AdventurerData], board: QuestBoard, day: int,
 	## game_data：GameData（职业名解析）；pending：core.pending_tendency_levels
 	## 返回：无
 	for button: Button in _row_buttons:
+		# S4-R3-01 同式（event_panel._Reset 先例）：旧行先隐藏断输入/渲染再
+		# 释放（queue_free 延迟帧末——旧行与新行一帧叠渲）
+		button.visible = false
 		button.queue_free()
 	_row_buttons.clear()
 	var occupied_by: Dictionary = {}
@@ -84,6 +92,14 @@ func refresh(members: Array[AdventurerData], board: QuestBoard, day: int,
 		button.text = UI_TEXTS[&"row_format"] % [member.display_name,
 				cls.display_name if cls != null else String(member.class_id),
 				member.level, "｜".join(marks)]
+		# M6 批 3.5b 组 6：行首职业图标（ClassDef.icon_id 在档 → Button.icon；
+		## 缺件/查无降级 = 纯文字行现状零改）；中4：icon 钳制 20px——64 源
+		## 裸贴撑爆行高（~64px→~38px 回归，expand_icon=false + icon_max_width）
+		if cls != null and not String(cls.icon_id).is_empty():
+			button.icon = AssetTex.texture_of(cls.icon_id, game_data)
+			button.expand_icon = false
+			button.add_theme_constant_override("icon_max_width",
+					CLASS_ICON_MAX_WIDTH)
 		var picked_id: StringName = member.unit_id
 		button.pressed.connect(func() -> void: member_selected.emit(picked_id))
 		_row_box.add_child(button)

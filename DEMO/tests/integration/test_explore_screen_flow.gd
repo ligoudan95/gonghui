@@ -63,6 +63,16 @@ func _GameData() -> Node:
 	## 返回：GameData 节点
 	return get_tree().root.get_node("GameData")
 
+func _FogShown(board: ExploreBoard, cell: Vector2i) -> bool:
+	## 格迷雾遮蔽在屏可见性（中2 两路泛化：贴图态父 ColorRect 隐藏、纯色态
+	## 父显示——遮蔽在屏 = 贴图/纯色两路任一可见）
+	## 参数 board：探索板；cell：格坐标
+	## 返回：true = 该格迷雾遮蔽在屏
+	var shown: bool = board._fog_rects[cell].visible
+	if board._fog_textures.has(cell):
+		shown = shown or (board._fog_textures[cell] as TextureRect).visible
+	return shown
+
 func _MakeQuestRun(quest_id: StringName) -> ExpeditionRun:
 	## 构建单人有委托运行态（q_lost_miner_keepsake / q_lair_purge）
 	## 参数 quest_id：委托模板 id
@@ -117,9 +127,10 @@ func test_explore_screen_renders_fog_and_targets() -> void:
 	await _WaitFrames(2)
 	# 出征锁生效
 	assert_bool(get_tree().root.get_node("SaveManager").is_expedition_locked()).is_true()
-	# 村子段（全亮行）：迷雾遮罩隐藏；矿洞未探格：遮罩可见（浓雾）
-	assert_bool(screen._board._fog_rects[Vector2i(0, 0)].visible).is_false()
-	assert_bool(screen._board._fog_rects[Vector2i(7, 10)].visible).is_true()
+	# 村子段（全亮行）：迷雾遮蔽隐藏；矿洞未探格：浓雾遮蔽可见（中2 后遮蔽
+	## 两路泛化——贴图态父纯色隐藏、纯色态父显示，遮蔽在屏 = 两路任一可见）
+	assert_bool(_FogShown(screen._board, Vector2i(0, 0))).is_false()
+	assert_bool(_FogShown(screen._board, Vector2i(7, 10))).is_true()
 	# 小队图标落出生格
 	assert_bool(screen._board._party_icon.position == Vector2(7, 1) * float(ExploreBoard.CELL_SIZE)).is_true()
 	# 目标点：绑定 tp_old_well 高亮金 / 其余 5 灰显
@@ -151,9 +162,9 @@ func test_fog_wall_occlusion_renders() -> void:
 	run.party_pos = Vector2i(7, 7)
 	run.fog.on_moved(Vector2i(7, 7))
 	screen._RefreshBoard()
-	assert_bool(screen._board._fog_rects[Vector2i(5, 9)].visible).is_true() \
+	assert_bool(_FogShown(screen._board, Vector2i(5, 9))).is_true() \
 			.override_failure_message("墙后格 (5,9) 应保持浓雾（被 (6,8) 遮挡）")
-	assert_bool(screen._board._fog_rects[Vector2i(5, 7)].visible).is_false() \
+	assert_bool(_FogShown(screen._board, Vector2i(5, 7))).is_false() \
 			.override_failure_message("无遮挡格 (5,7) 应当前视野 LIT（遮罩隐藏）")
 
 func test_move_by_cell_press() -> void:

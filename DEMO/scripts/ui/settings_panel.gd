@@ -42,15 +42,16 @@ var _size_option: OptionButton = null
 ## 提示行
 var _hint_label: Label = null
 
-func setup(cfg: CoreConfig) -> void:
-	## 构建面板骨架（初始隐藏）
-	## 参数 cfg：总控配置
+func setup(cfg: CoreConfig, game_data: Node = null) -> void:
+	## 构建面板骨架（初始隐藏）；M6 批 3.5b：game_data 注入（九宫格面板贴图
+	## 态；空 = 缺件降级 StyleBoxFlat）
+	## 参数 cfg：总控配置；game_data：GameData（可空）
 	## 返回：无
 	_cfg = cfg
 	name = "SettingsPanel"
 	visible = false
 	z_index = POPUP_Z_INDEX
-	add_theme_stylebox_override("panel", UiTheme.make_dark_panel_style(cfg))
+	add_theme_stylebox_override("panel", UiTheme.make_dark_panel_style(cfg, game_data))
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
 	add_child(box)

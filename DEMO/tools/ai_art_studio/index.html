@@ -1,0 +1,2414 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 生图工作台 · 冒险者工会美术素材</title>
+<style>
+/* ============ 基础与配色（深色游戏美术工作台调性） ============ */
+:root {
+  --bg: #14161c;
+  --bg-deep: #0f1116;
+  --panel: #1c1f27;
+  --panel-2: #22262f;
+  --border: #2a2e3a;
+  --border-strong: #3a3f4e;
+  --text: #d8dce4;
+  --text-dim: #8b91a0;
+  --text-faint: #5c6270;
+  --accent: #e8a33d;
+  --accent-dim: #a9782c;
+  --accent-bg: rgba(232, 163, 61, 0.12);
+  --blue: #4a90d9;
+  --green: #5aa66a;
+  --red: #d9534f;
+  --red-bg: rgba(217, 83, 79, 0.14);
+  --left-w: 280px;
+  --right-w: 300px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+button {
+  font-family: inherit;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+button:hover { border-color: var(--accent-dim); color: var(--accent); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+input, select, textarea {
+  font-family: inherit;
+  background: var(--bg-deep);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent-dim); }
+input:disabled, select:disabled { opacity: 0.4; cursor: not-allowed; }
+::placeholder { color: var(--text-faint); }
+
+/* ============ 顶部设置栏 ============ */
+#app-header {
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+#header-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+}
+#header-bar .app-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+#header-bar .app-sub { color: var(--text-faint); font-size: 11px; white-space: nowrap; }
+#header-bar .spacer { flex: 1; }
+#progress-badge {
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 3px 12px;
+  white-space: nowrap;
+}
+#progress-badge b { color: var(--green); font-size: 13px; }
+#toggle-settings {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+#settings-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px 18px;
+  padding: 12px 14px 14px;
+  border-top: 1px dashed var(--border);
+  background: var(--bg-deep);
+}
+#settings-panel.collapsed { display: none; }
+.setting-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.setting-field > label { font-size: 11px; color: var(--text-dim); }
+.setting-field .inline-row { display: flex; gap: 6px; align-items: center; }
+.setting-field .inline-row input { flex: 1; min-width: 0; }
+#api-key-input { font-family: Consolas, monospace; letter-spacing: 0.5px; }
+.field-hint { font-size: 10px; color: var(--text-faint); line-height: 1.4; }
+.field-hint .mapped { color: var(--green); }
+#proxy-ok-badge { font-size: 12px; line-height: 1.5; }
+#proxy-ok-badge.proxy-ok { color: var(--green); }
+#proxy-ok-badge.proxy-wait { color: var(--text-faint); }
+#proxy-field .inline-row { align-items: center; }
+#proxy-help summary { cursor: pointer; color: var(--accent); font-size: 12px; user-select: none; }
+#proxy-help[open] summary { margin-bottom: 3px; }
+#proxy-help .field-hint { line-height: 1.7; }
+#provider-select { font-weight: 600; }
+#provider-select option[value="gemini"] { color: var(--accent); }
+#provider-select option[value="openai"] { color: var(--green); }
+#settings-summary {
+  padding: 6px 14px;
+  font-size: 11px;
+  color: var(--text-faint);
+  border-top: 1px dashed var(--border);
+  background: var(--bg-deep);
+  display: none;
+}
+#settings-summary.visible { display: block; }
+
+/* ============ 三栏主布局 ============ */
+#main-row { flex: 1; display: flex; min-height: 0; }
+.column { background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
+#left-col { width: var(--left-w); flex: none; border-right: 1px solid var(--border); }
+#right-col { width: var(--right-w); flex: none; border-left: 1px solid var(--border); }
+#center-col { flex: 1; min-width: 0; background: var(--bg); }
+.col-resizer {
+  width: 5px;
+  flex: none;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 5;
+}
+.col-resizer:hover, .col-resizer.dragging { background: var(--accent-dim); }
+
+/* ============ 左栏·素材清单 ============ */
+#list-toolbar {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+#list-toolbar .row1 { display: flex; gap: 6px; }
+#search-input { flex: 1; min-width: 0; }
+#list-toolbar .row2 { display: flex; gap: 6px; }
+#list-toolbar .row2 select { flex: 1; min-width: 0; }
+#asset-list { flex: 1; overflow-y: auto; padding: 4px 0 30px; }
+.group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  z-index: 2;
+}
+.group-head .g-name { font-weight: 600; color: var(--accent); letter-spacing: 0.5px; }
+.group-head .g-prio {
+  font-size: 10px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-radius: 3px;
+  padding: 1px 6px;
+}
+.group-head .g-anchor-tag {
+  font-size: 10px;
+  background: rgba(74, 144, 217, 0.15);
+  color: var(--blue);
+  border-radius: 3px;
+  padding: 1px 6px;
+}
+.group-head .g-cnt { margin-left: auto; font-size: 11px; color: var(--text-faint); }
+.asset-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 12px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+}
+.asset-row:hover { background: var(--panel-2); }
+.asset-row.selected { background: var(--accent-bg); border-left-color: var(--accent); }
+.asset-row.done { border-left-color: var(--red); background: var(--red-bg); }
+.asset-row.done.selected { background: rgba(217, 83, 79, 0.22); border-left-color: var(--red); }
+.asset-row .row-main { flex: 1; min-width: 0; }
+.asset-row .row-name { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.asset-row.done .row-name { color: #e8908d; }
+.asset-row .row-id {
+  font-size: 10px;
+  color: var(--text-faint);
+  font-family: Consolas, monospace;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.asset-row .row-side { display: flex; align-items: center; gap: 5px; flex: none; }
+.asset-row .gen-count { font-size: 10px; color: var(--green); font-family: Consolas, monospace; }
+.asset-row .done-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+  flex: none;
+}
+#list-empty { padding: 30px 16px; color: var(--text-faint); text-align: center; display: none; }
+
+/* ============ 中栏·提示词与生成 ============ */
+#center-col { padding: 0; }
+#editor-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-faint);
+  font-size: 14px;
+  letter-spacing: 2px;
+}
+#editor-wrap { display: none; flex-direction: column; flex: 1; min-height: 0; }
+#editor-wrap.visible { display: flex; }
+#item-header {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  flex: none;
+}
+#item-header .ih-line1 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+#item-header .ih-name { font-size: 16px; font-weight: 600; color: var(--accent); }
+#item-header .ih-id { font-size: 12px; font-family: Consolas, monospace; color: var(--text-dim); }
+#item-header .ih-tags { display: flex; gap: 6px; }
+#item-header .tag {
+  font-size: 10px;
+  padding: 1px 7px;
+  border-radius: 3px;
+  background: var(--panel-2);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+#item-header .tag.prio { color: var(--accent); border-color: var(--accent-dim); }
+#item-header .tag.anchor-tag { color: var(--blue); border-color: var(--blue); }
+#item-header .ih-spec { margin-top: 6px; font-size: 11px; color: var(--text-dim); line-height: 1.5; }
+#item-header details { margin-top: 6px; font-size: 11px; color: var(--text-dim); }
+#item-header details summary { cursor: pointer; color: var(--blue); user-select: none; }
+#item-header details .post-body {
+  margin-top: 4px;
+  padding: 6px 8px;
+  background: var(--bg-deep);
+  border-radius: 4px;
+  line-height: 1.6;
+}
+#prompt-section { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
+#prompt-label-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+#prompt-label-row .plabel { font-size: 12px; color: var(--text-dim); font-weight: 600; }
+#prompt-lang-state { font-size: 11px; color: var(--text-faint); }
+#prompt-label-row .spacer { flex: 1; }
+#prompt-textarea {
+  flex: 1;
+  min-height: 120px;
+  resize: none;
+  line-height: 1.6;
+  font-size: 13px;
+  padding: 10px;
+}
+#negative-box {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+  flex: none;
+}
+#negative-box summary {
+  padding: 6px 10px;
+  cursor: pointer;
+  color: var(--text-dim);
+  font-size: 11px;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#negative-box summary::before { content: "▸"; color: var(--text-faint); }
+#negative-box[open] summary::before { content: "▾"; }
+#negative-box .neg-body {
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  max-height: 110px;
+  overflow-y: auto;
+}
+#negative-box .neg-body + .neg-body { border-top: 1px dashed var(--border); }
+#attach-negative-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--text-dim);
+  border-top: 1px dashed var(--border);
+}
+#attach-negative-row input { accent-color: var(--accent); }
+#generate-bar {
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+#generate-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+#generate-btn {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #1a1408;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 8px 30px;
+  letter-spacing: 2px;
+}
+#generate-btn:hover { background: #f0b455; color: #1a1408; }
+#generate-btn:disabled { background: var(--panel-2); color: var(--text-faint); border-color: var(--border-strong); }
+#generate-hint { font-size: 11px; color: var(--text-faint); }
+#error-box {
+  display: none;
+  background: rgba(217, 83, 79, 0.08);
+  border: 1px solid var(--red);
+  border-radius: 4px;
+  padding: 8px 10px;
+  max-height: 180px;
+  overflow: auto;
+}
+#error-box.visible { display: block; }
+#error-box pre {
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 11px;
+  color: #e8908d;
+  font-family: Consolas, monospace;
+  line-height: 1.5;
+}
+
+/* ============ 右栏·生成结果 ============ */
+#right-col { background: var(--panel); }
+#thumb-toolbar {
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+#thumb-toolbar .tlabel { font-size: 12px; color: var(--text-dim); font-weight: 600; }
+#thumb-toolbar .spacer { flex: 1; }
+#thumb-filter { font-size: 11px; }
+#thumb-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  align-content: start;
+}
+#thumb-empty {
+  grid-column: 1 / -1;
+  padding: 30px 10px;
+  color: var(--text-faint);
+  text-align: center;
+  font-size: 11px;
+  line-height: 2;
+}
+.thumb-card {
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+  position: relative;
+  user-select: none;
+}
+.thumb-card:hover { border-color: var(--border-strong); }
+.thumb-card.mark-star { border-color: var(--accent); box-shadow: 0 0 6px rgba(232, 163, 61, 0.35); }
+.thumb-card.mark-red { border-color: var(--red); box-shadow: 0 0 6px rgba(217, 83, 79, 0.35); }
+.thumb-card.mark-blue { border-color: var(--blue); box-shadow: 0 0 6px rgba(74, 144, 217, 0.35); }
+.thumb-card.mark-green { border-color: var(--green); box-shadow: 0 0 6px rgba(90, 166, 106, 0.35); }
+.thumb-img-wrap { width: 100%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; background: #191c23; cursor: zoom-in; }
+.thumb-img-wrap img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.thumb-meta { padding: 4px 6px 5px; border-top: 1px solid var(--border); }
+.thumb-id {
+  display: block;
+  font-size: 9px;
+  font-family: Consolas, monospace;
+  color: var(--text-dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.thumb-time { font-size: 9px; color: var(--text-faint); }
+.mark-btn {
+  position: absolute;
+  top: 4px; right: 4px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: rgba(15, 17, 22, 0.78);
+  border: 1px solid var(--border-strong);
+  color: var(--text-faint);
+  font-size: 12px;
+  line-height: 1;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mark-btn:hover { color: var(--accent); }
+.mark-btn.star { color: var(--accent); border-color: var(--accent); }
+.mark-btn.red { color: var(--red); border-color: var(--red); }
+.mark-btn.blue { color: var(--blue); border-color: var(--blue); }
+.mark-btn.green { color: var(--green); border-color: var(--green); }
+.mark-btn .dot { width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+
+/* ============ 任务卡（多并发生成：占位 / 错误卡） ============ */
+.task-card .task-img-wrap {
+  width: 100%;
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px;
+  background: #191c23;
+  text-align: center;
+  min-width: 0;
+}
+.task-spinner {
+  width: 26px; height: 26px;
+  flex: none;
+  border: 3px solid var(--border-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: task-spin 0.9s linear infinite;
+}
+.task-card.status-queued .task-spinner { border-top-color: var(--text-faint); animation-duration: 2.2s; }
+@keyframes task-spin { to { transform: rotate(360deg); } }
+.task-card .task-info { min-width: 0; max-width: 100%; }
+.task-card .task-name {
+  font-size: 11px; color: var(--text);
+  max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.task-card .task-id { font-size: 9px; color: var(--text-faint); font-family: Consolas, monospace; }
+.task-card .task-state { font-size: 10px; margin-top: 2px; }
+.task-card.status-running .task-state { color: var(--accent); }
+.task-card.status-queued .task-state { color: var(--text-dim); }
+.task-cancel-btn {
+  position: absolute;
+  top: 4px; right: 4px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: rgba(15, 17, 22, 0.78);
+  border: 1px solid var(--border-strong);
+  color: var(--text-faint);
+  font-size: 13px;
+  line-height: 1;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.task-cancel-btn:hover { color: var(--red); border-color: var(--red); }
+.task-card.status-failed { border-color: var(--red); box-shadow: 0 0 6px rgba(217, 83, 79, 0.35); }
+.task-err-wrap { padding: 10px 8px 26px; cursor: pointer; }
+.task-err-head { font-size: 11px; color: #e8908d; font-weight: 600; margin-bottom: 5px; }
+.task-err-sum {
+  font-size: 10px; color: var(--text-dim); line-height: 1.5;
+  word-break: break-all;
+  max-height: 132px;
+  overflow: hidden;
+}
+.task-err-meta { margin-top: 6px; font-size: 9px; color: var(--text-faint); font-family: Consolas, monospace; }
+.task-retry-btn { position: absolute; bottom: 4px; right: 30px; font-size: 10px; padding: 2px 8px; }
+.task-del-btn {
+  position: absolute;
+  bottom: 4px; right: 4px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: rgba(15, 17, 22, 0.78);
+  border: 1px solid var(--border-strong);
+  color: var(--text-faint);
+  font-size: 13px;
+  line-height: 1;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.task-del-btn:hover { color: var(--red); border-color: var(--red); }
+#task-stats { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+#task-stats b { color: var(--accent); font-weight: 600; }
+#cancel-all-btn { display: none; }
+#cancel-all-btn:hover { color: var(--red); border-color: var(--red); }
+#gen-status { font-size: 11px; color: var(--accent); white-space: nowrap; }
+#gen-note { font-size: 11px; color: var(--green); }
+
+/* ============ 右键菜单浮层 ============ */
+#ctx-menu {
+  position: fixed;
+  z-index: 300;
+  background: var(--panel-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  display: none;
+  min-width: 150px;
+  padding: 4px;
+}
+#ctx-menu.visible { display: block; }
+#ctx-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 3px;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+#ctx-menu button:hover { background: var(--accent-bg); color: var(--accent); }
+#ctx-menu .ctx-title {
+  font-size: 10px;
+  color: var(--text-faint);
+  padding: 4px 12px 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+  font-family: Consolas, monospace;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ============ 大图模态 ============ */
+#img-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  background: rgba(8, 9, 12, 0.92);
+  display: none;
+}
+#img-modal.visible { display: block; }
+#modal-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: grab;
+}
+#modal-viewport.dragging { cursor: grabbing; }
+#modal-img {
+  position: absolute;
+  left: 50%; top: 50%;
+  transform-origin: center;
+  will-change: transform;
+  image-rendering: auto;
+}
+#modal-info-bar {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  background: rgba(15, 17, 22, 0.92);
+  border-top: 1px solid var(--border);
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+#modal-info-bar .m-id { font-family: Consolas, monospace; color: var(--accent); }
+#modal-info-bar .spacer { flex: 1; }
+#modal-close-btn {
+  position: absolute;
+  top: 14px; right: 16px;
+  font-size: 16px;
+  padding: 4px 12px;
+  background: rgba(15, 17, 22, 0.85);
+}
+#modal-tip {
+  position: absolute;
+  top: 16px; left: 16px;
+  font-size: 11px;
+  color: var(--text-faint);
+  background: rgba(15, 17, 22, 0.7);
+  padding: 4px 10px;
+  border-radius: 4px;
+}
+
+/* ============ 本地存储写失败 toast（K4：一次性非阻塞提示） ============ */
+#ls-warn-toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 500;
+  max-width: 320px;
+  background: rgba(15, 17, 22, 0.95);
+  border: 1px solid var(--red);
+  border-radius: 5px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  padding: 10px 14px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #e8908d;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.3s, transform 0.3s;
+  pointer-events: none;
+}
+#ls-warn-toast.visible { opacity: 1; transform: translateY(0); }
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+</style>
+</head>
+<body>
+
+<!-- ============ 顶部：标题 + 设置栏 ============ -->
+<header id="app-header">
+  <div id="header-bar">
+    <span class="app-title">AI 生图工作台</span>
+    <span class="app-sub">冒险者工会 · 116 件美术素材 + 9 张单位锚图 · Gemini / GPT 双通道</span>
+    <span class="spacer"></span>
+    <span id="progress-badge">已生成 <b id="progress-num">0</b> / <span id="progress-total">125</span></span>
+    <button id="toggle-settings" title="折叠 / 展开设置栏">设置 ▾</button>
+  </div>
+  <div id="settings-panel">
+    <div class="setting-field">
+      <label for="provider-select">提供商（Key 与端点分存，切换不丢）</label>
+      <select id="provider-select">
+        <option value="gemini">Gemini（官方 REST）</option>
+        <option value="openai">GPT · OpenAI 兼容</option>
+      </select>
+    </div>
+    <div class="setting-field">
+      <label for="api-key-input" id="api-key-label">Gemini API Key（存本机 localStorage，不上传任何第三方）</label>
+      <div class="inline-row">
+        <input type="password" id="api-key-input" placeholder="粘贴对应提供商的 API Key" autocomplete="off">
+        <button id="key-visibility-btn" title="显示 / 隐藏">显</button>
+        <button id="key-clear-btn" title="清除 Key">清</button>
+      </div>
+      <div class="field-hint" id="api-key-hint"></div>
+    </div>
+    <div class="setting-field">
+      <label for="base-url-input" id="base-url-label">Base URL（官方或中转站地址）</label>
+      <input type="text" id="base-url-input" placeholder="https://generativelanguage.googleapis.com">
+      <div class="field-hint" id="base-url-hint"></div>
+    </div>
+    <div class="setting-field">
+      <label for="auth-select" id="auth-label">鉴权方式（仅 Gemini 通道 · 决定 Key 怎么传给端点）</label>
+      <select id="auth-select">
+        <option value="query">Google 原生（?key= url 参数 · 官方 API 用）</option>
+        <option value="bearer">Bearer 头（Authorization 携带 Key · 中转站用）</option>
+      </select>
+      <div class="field-hint" id="auth-hint"></div>
+    </div>
+    <div class="setting-field">
+      <label for="model-input" id="model-label">模型版本（可直接输入自定义型号）</label>
+      <input type="text" id="model-input" list="model-list" placeholder="gemini-2.5-flash-image">
+      <datalist id="model-list"></datalist>
+    </div>
+    <div class="setting-field">
+      <label for="aspect-select">长宽比例（选素材时按规格自动推荐）</label>
+      <select id="aspect-select">
+        <option value="1:1">1:1（方形）</option>
+        <option value="2:3">2:3（竖版）</option>
+        <option value="3:2">3:2（横版）</option>
+        <option value="3:4">3:4（竖版）</option>
+        <option value="4:3">4:3（横版）</option>
+        <option value="4:5">4:5（竖版）</option>
+        <option value="5:4">5:4（横版）</option>
+        <option value="9:16">9:16（竖屏）</option>
+        <option value="16:9" selected>16:9（横屏）</option>
+        <option value="21:9">21:9（超宽）</option>
+      </select>
+      <div class="field-hint" id="aspect-hint"></div>
+    </div>
+    <div class="setting-field">
+      <label for="size-select" id="size-label">分辨率 imageSize（仅 Gemini 适用）</label>
+      <select id="size-select">
+        <option value="">默认（不传该字段）</option>
+        <option value="1K">1K</option>
+        <option value="2K">2K</option>
+        <option value="4K">4K</option>
+      </select>
+      <div class="field-hint" id="size-hint"></div>
+    </div>
+    <div class="setting-field">
+      <label for="concurrency-select">并发生成数（同时进行的生成请求数）</label>
+      <select id="concurrency-select">
+        <option value="1">1（串行 · 等同旧版）</option>
+        <option value="2">2（默认 · 保守）</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
+      </select>
+      <div class="field-hint">排队上限 20 个等待任务；并发过高可能触发站点限流（遇 429/503 请降并发）。修改立即生效（排队中的任务按新上限调度）。</div>
+    </div>
+    <div class="setting-field" id="proxy-field">
+      <label>本地代理（解决 API 站点浏览器 CORS 限制）</label>
+      <div class="inline-row">
+        <span id="proxy-ok-badge" class="proxy-wait">正在探测本地代理…</span>
+        <button id="proxy-refresh-btn" title="立即重新探测本地代理（127.0.0.1:8765）">重探</button>
+      </div>
+      <details id="proxy-help" style="display:none">
+        <summary>未连接本地代理（点此查看说明）</summary>
+        <div class="field-hint">
+          daseinai.xyz 等站点不返回跨域头（CORS），浏览器页面直接请求会被拦截（报 Failed to fetch）。<br>
+          启动方法：双击本工具目录的「启动工作台.cmd」，或在本目录命令行运行 python server.py。<br>
+          启动后本页自动切换为代理模式（本页每 30 秒自动重探，也可点「重探」立即生效）。<br>
+          代理仅监听本机 127.0.0.1，只转发你主动发起的生成请求。
+        </div>
+      </details>
+    </div>
+  </div>
+  <div id="settings-summary"></div>
+</header>
+
+<!-- ============ 三栏主体 ============ -->
+<div id="main-row">
+
+  <!-- 左栏：素材清单 -->
+  <aside id="left-col" class="column">
+    <div id="list-toolbar">
+      <div class="row1">
+        <input type="text" id="search-input" placeholder="搜索中文名 / 英文 id…">
+      </div>
+      <div class="row2">
+        <select id="group-filter">
+          <option value="">全部分组</option>
+        </select>
+        <select id="status-filter">
+          <option value="">全部状态</option>
+          <option value="todo">未生成</option>
+          <option value="done">已生成</option>
+        </select>
+      </div>
+    </div>
+    <div id="asset-list"></div>
+    <div id="list-empty">没有匹配的素材</div>
+  </aside>
+
+  <div class="col-resizer" id="left-resizer" title="拖动调整左栏宽度"></div>
+
+  <!-- 中栏：提示词与生成 -->
+  <main id="center-col" class="column">
+    <div id="editor-empty">← 从左侧清单选择素材（单击载入 · 双击切换「已生成」红标）</div>
+    <div id="editor-wrap">
+      <div id="item-header">
+        <div class="ih-line1">
+          <span class="ih-name" id="ih-name">—</span>
+          <span class="ih-id" id="ih-id">—</span>
+          <span class="ih-tags" id="ih-tags"></span>
+        </div>
+        <div class="ih-spec" id="ih-spec">—</div>
+        <details id="ih-post">
+          <summary>出图后处理要点</summary>
+          <div class="post-body" id="ih-post-body">—</div>
+        </details>
+      </div>
+      <div id="prompt-section">
+        <div id="prompt-label-row">
+          <span class="plabel">正向提示词</span>
+          <span id="prompt-lang-state">当前：中文参考版（可编辑）</span>
+          <span class="spacer"></span>
+          <button id="lang-toggle-btn" title="中文 ⇄ 英文切换（已编辑时会请求确认）">切换英文</button>
+          <button id="prompt-restore-btn" title="恢复为该件原始提示词">还原</button>
+        </div>
+        <textarea id="prompt-textarea" spellcheck="false" placeholder="点击左侧素材自动填入提示词，可自由编辑"></textarea>
+        <details id="negative-box">
+          <summary>负面提示词（中文参考 · 只读）<span id="neg-summary-hint"></span></summary>
+          <div class="neg-body" id="neg-body-cn">—</div>
+          <div class="neg-body" id="neg-body-en">—</div>
+          <label id="attach-negative-row" for="attach-negative-check">
+            <input type="checkbox" id="attach-negative-check">
+            附加负面规避说明——生成时把负面词转成自然语言规避句附在提示词尾（两家 API 均无独立负面字段）
+          </label>
+        </details>
+      </div>
+      <div id="generate-bar">
+        <div id="generate-row">
+          <button id="generate-btn">生 成</button>
+          <span id="gen-status"></span>
+          <span id="gen-note"></span>
+          <span id="generate-hint">Ctrl+Enter 快捷生成</span>
+        </div>
+        <div id="error-box"><pre id="error-pre"></pre></div>
+      </div>
+    </div>
+  </main>
+
+  <div class="col-resizer" id="right-resizer" title="拖动调整右栏宽度"></div>
+
+  <!-- 右栏：生成结果 -->
+  <aside id="right-col" class="column">
+    <div id="thumb-toolbar">
+      <span class="tlabel">生成结果</span>
+      <span id="task-stats"></span>
+      <span class="spacer"></span>
+      <button id="cancel-all-btn" title="中止全部生成中的请求并清空排队">全部取消</button>
+      <select id="thumb-filter">
+        <option value="">全部图片</option>
+        <option value="marked">只看已标记</option>
+      </select>
+      <button id="clear-session-btn" title="清空本次会话的全部图片（标记记录保留）">清空</button>
+    </div>
+    <div id="thumb-grid"></div>
+  </aside>
+</div>
+
+<!-- 右键菜单浮层 -->
+<div id="ctx-menu">
+  <div class="ctx-title" id="ctx-title"></div>
+  <button data-act="download">下载 PNG（按资源 id 命名）</button>
+  <button data-act="open-tab">在新标签页打开图片</button>
+  <button data-act="mark">标记 / 取消标记</button>
+  <button data-act="delete">删除这张图</button>
+</div>
+
+<!-- 大图模态 -->
+<div id="img-modal">
+  <div id="modal-viewport">
+    <img id="modal-img" alt="生成图大图预览">
+  </div>
+  <div id="modal-tip">滚轮缩放 · 拖拽平移 · 双击复位 · Esc 关闭</div>
+  <button id="modal-close-btn">✕ 关闭</button>
+  <div id="modal-info-bar">
+    <span class="m-id" id="modal-id"></span>
+    <span id="modal-meta"></span>
+    <span class="spacer"></span>
+    <button id="modal-download-btn">下载 PNG</button>
+  </div>
+</div>
+
+<script src="assets_data.js"></script>
+<script>
+"use strict";
+/* ============================================================
+ * AI 生图工作台（本地单页工具 · 零依赖零构建）
+ * 双提供商：Gemini（官方 REST）/ GPT（OpenAI 兼容 images API）
+ * 数据：assets_data.js（由 extract_prompts.py 从提示词全集生成）
+ * 行为红线：不写 cookie；仅与用户配置的生成端点通信；
+ *          生成图片仅存本次会话内存（刷新即失，下载落盘为准）
+ * ============================================================ */
+
+/* ---------- 常量与状态 ---------- */
+const LS_SETTINGS = "gas_settings";
+const LS_DONE = "gas_done";            // { 资源id: true } 已生成红标
+const LS_MARKS = "gas_marks";          // { 图片uid: mark } 标记（星/红/蓝/绿）
+const LS_KEY_GEMINI = "gas_apikey_gemini";
+const LS_KEY_OPENAI = "gas_apikey_openai";
+const LS_KEY_LEGACY = "gas_apikey";    // v1 单 Key 存储 → 迁移至 gemini 槽
+
+const PROVIDERS = ["gemini", "openai"];
+const PROVIDER_LABEL = { gemini: "Gemini", openai: "GPT·OpenAI 兼容" };
+const MODEL_PRESETS = {
+  gemini: [
+    { value: "gemini-2.5-flash-image", label: "官方 · Nano Banana" },
+    { value: "gemini-3.1-pro-image", label: "Pro 图像" },
+    { value: "gemini-2.0-flash-exp-image", label: "实验版" },
+    { value: "nano-banana-2", label: "grsai Gemini 端点 · Bearer 鉴权 · 十档比例 2026-10-02 实测" },
+    { value: "nano-banana-2-4k-cl", label: "grsai Gemini 端点 · 余额不足未验" }
+  ],
+  openai: [
+    { value: "gpt-image-2.5", label: "最新 · 2026-10-02 实测可用" },
+    { value: "nano-banana-2", label: "grsai OpenAI 端点实测可用 2026-10-02 · 响应为 URL 形态" },
+    { value: "nano-banana-2-4k-cl", label: "grsai OpenAI 端点 · 余额不足未验" },
+    { value: "gpt-image-1", label: "实测上游渠道异常" },
+    { value: "gpt-image-1.5", label: "实测上游渠道异常" },
+    { value: "gpt-image-2.5-flare", label: "2.5 系变体" },
+    { value: "gpt-image-2.5-sunburst", label: "2.5 系变体" },
+    { value: "dall-e-3", label: "DALL·E 3（daseinai 站内无 · size 映射 1792 系）" }
+  ]
+};
+const DEFAULT_BASES = {
+  gemini: "https://generativelanguage.googleapis.com",
+  openai: "https://api.openai.com"
+};
+/* 本地代理（server.py / 启动工作台.cmd）：解决 daseinai 等站点浏览器 CORS 阻断 */
+const PROXY_BASE = "http://127.0.0.1:8765";
+const ASPECT_RATIOS = { "1:1": 1, "2:3": 2 / 3, "3:2": 1.5, "3:4": 0.75, "4:3": 4 / 3,
+                        "4:5": 0.8, "5:4": 1.25, "9:16": 9 / 16, "16:9": 16 / 9, "21:9": 21 / 9 };
+const MARK_CYCLE = ["", "star", "red", "blue", "green"];
+/* B8 修复：mime 拼进 data URL / blob 前过白名单，畸形值一律按 image/png 兜底（防 HTML 注入与裂图） */
+const MIME_WHITELIST = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+
+const DATA = window.ASSETS_DATA;
+const ITEMS = DATA ? DATA.items : [];          // 116 正式件 + 9 锚图
+const ITEM_MAP = new Map(ITEMS.map(it => [it.id, it]));
+let currentId = null;                           // 当前选中素材 id
+let promptLang = "cn";                          // 当前提示词框语言
+let images = [];                                // 会话内时间线（kind="image" 已完成图 / kind="task" 排队·生成·失败的任务卡）
+let uidSeed = 1;                                // 会话内自增序号，仅作 uid 尾段去重（B1：uid 主体含 id+时间戳，刷新不重号）
+let taskSeq = 0;                                // 任务自增 id（任务卡 data-task 锚点）
+const TASK_QUEUE_LIMIT = 20;                    // 排队上限：等待中的任务数（生成中的不计入）
+const activeTasks = new Map();                  // taskId → 任务条目（生成中）
+const taskControllers = new Map();              // taskId → AbortController（每任务独立取消器）
+let taskQueue = [];                             // 等待中的任务（FIFO，调度器按并发上限逐个启动）
+let proxyUp = false;                            // 本地代理可用状态（页面加载探测 + 30s 重探 + 手动重探）
+
+/* ---------- DOM 快捷引用 ---------- */
+const $ = (sel) => document.querySelector(sel);
+
+/* ---------- localStorage 读写（容错：隐私模式 / file:// 禁用时静默降级） ---------- */
+function lsGetJSON(key, fallback) {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch (e) { return fallback; }
+}
+/* K4 修复：localStorage 写失败不再静默——页角一次性非阻塞 toast（去重防刷屏，仅首次弹出） */
+let storageWarnShown = false;
+function warnStorageFailure() {
+  if (storageWarnShown) { return; }
+  storageWarnShown = true;
+  const toast = document.createElement("div");
+  toast.id = "ls-warn-toast";
+  toast.textContent = "本地存储写入失败，进度不会保存（隐私模式 / 存储空间被禁用或写满）。";
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add("visible"));
+  setTimeout(() => {
+    toast.classList.remove("visible");
+    setTimeout(() => toast.remove(), 400);
+  }, 6000);
+}
+function lsSetJSON(key, obj) {
+  try { window.localStorage.setItem(key, JSON.stringify(obj)); }
+  catch (e) { warnStorageFailure(); }
+}
+function lsGetString(key, fallback) {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw === null ? fallback : raw;
+  } catch (e) { return fallback; }
+}
+function lsRemove(key) {
+  try { window.localStorage.removeItem(key); } catch (e) { /* 静默 */ }
+}
+
+let doneMap = lsGetJSON(LS_DONE, {});
+let markMap = lsGetJSON(LS_MARKS, {});
+/* B1 修复：旧版图片 uid 是刷新重计的纯数字序号，跨会话会错挂到新图上——
+ * 新版 uid 为 "资源id_时间戳_序号" 持久唯一键，与旧键不兼容；检测到旧格式（纯数字键）直接清空 */
+if (!markMap || typeof markMap !== "object" || Array.isArray(markMap) ||
+    Object.keys(markMap).some(k => /^\d+$/.test(k))) {
+  markMap = {};
+  lsSetJSON(LS_MARKS, markMap);
+}
+
+/* v1 单 Key → 按提供商分 Key 迁移（一次性，切回来不丢） */
+function migrateApiKeys() {
+  const legacy = lsGetString(LS_KEY_LEGACY, "");
+  if (legacy && !lsGetString(LS_KEY_GEMINI, "")) {
+    try { window.localStorage.setItem(LS_KEY_GEMINI, legacy); } catch (e) { warnStorageFailure(); }
+  }
+  if (legacy) { lsRemove(LS_KEY_LEGACY); }
+}
+function apiKeySlot() { return settings.provider === "openai" ? LS_KEY_OPENAI : LS_KEY_GEMINI; }
+function getApiKey() { return lsGetString(apiKeySlot(), "").trim(); }
+function setApiKey(value) {
+  try { window.localStorage.setItem(apiKeySlot(), value.trim()); } catch (e) { warnStorageFailure(); }
+}
+
+/* ---------- 工具函数 ---------- */
+function esc(str) {
+  return String(str == null ? "" : str)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function fmtTime(ts) {
+  const d = new Date(ts);
+  const p = (n) => String(n).padStart(2, "0");
+  return (d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
+}
+/* B8 修复：mime 归一化——白名单内小写直用，其余（含畸形/注入串）一律按 image/png */
+function safeMime(mime) {
+  const m = String(mime == null ? "" : mime).toLowerCase().trim();
+  return MIME_WHITELIST.includes(m) ? m : "image/png";
+}
+function isDone(id) { return doneMap[id] === true; }
+function setDone(id, on) {
+  if (on) { doneMap[id] = true; } else { delete doneMap[id]; }
+  lsSetJSON(LS_DONE, doneMap);
+  renderList();
+  updateProgress();
+}
+function getMark(uid) { return markMap[String(uid)] || ""; }
+function setMark(uid, mark) {
+  if (mark) { markMap[String(uid)] = mark; } else { delete markMap[String(uid)]; }
+  lsSetJSON(LS_MARKS, markMap);
+}
+function countGen(itemId) { return images.filter(im => im.kind === "image" && im.item.id === itemId).length; }
+
+/* 从目标规格推导最接近的 aspectRatio 枚举值 */
+function recommendAspect(item) {
+  if (item.is_anchor) { return "2:3"; }                       // 锚图=单帧全身立绘
+  const match = (item.spec || "").match(/(\d+)\s*[×xX]\s*(\d+)/);
+  if (!match) { return "1:1"; }
+  const ratio = parseInt(match[1], 10) / parseInt(match[2], 10);
+  let best = "1:1", bestDiff = Infinity;
+  for (const [name, val] of Object.entries(ASPECT_RATIOS)) {
+    const diff = Math.abs(Math.log2(ratio / val));
+    if (diff < bestDiff) { bestDiff = diff; best = name; }
+  }
+  return best;
+}
+
+/* OpenAI 兼容：比例 → size 就近映射（dall-e-3 用 1792 系） */
+function isDallE3(model) { return /dall[-_]?e[-_]?3/i.test(model || ""); }
+function openaiSizeFor(aspect, model) {
+  const val = ASPECT_RATIOS[aspect] || 1;
+  const dalle3 = isDallE3(model);
+  if (Math.abs(val - 1) < 0.001) { return "1024x1024"; }
+  if (val > 1) { return dalle3 ? "1792x1024" : "1536x1024"; }
+  return dalle3 ? "1024x1792" : "1024x1536";
+}
+
+/* Base URL 容错归一：剥尾部斜杠与结尾 /v1（用户常填成 https://站/v1，
+ * 工具拼 {base}/v1/images/generations 会变双 v1）。只影响拼接，不改用户存储值 */
+function normalizeBaseUrl(raw) {
+  let s = String(raw == null ? "" : raw).trim();
+  while (s.endsWith("/")) { s = s.slice(0, -1); }
+  let strippedV1 = false;
+  if (s.toLowerCase().endsWith("/v1")) { s = s.slice(0, -3); strippedV1 = true; }
+  while (s.endsWith("/")) { s = s.slice(0, -1); }   // 剥 /v1 后可能残留尾斜杠（如 //v1//）
+  return { url: s, strippedV1: strippedV1 };
+}
+function normalizedBase() {
+  const p = settings.provider;
+  return normalizeBaseUrl(prov().baseUrl || DEFAULT_BASES[p]);
+}
+
+/* ============================================================
+ * 设置（v2：按提供商分存 baseUrl / model / key / 分辨率）
+ * ============================================================ */
+function defaultSettings() {
+  return {
+    provider: "gemini",
+    gemini: { baseUrl: DEFAULT_BASES.gemini, model: "gemini-2.5-flash-image", size: "", auth: "query" },
+    openai: { baseUrl: DEFAULT_BASES.openai, model: "gpt-image-2.5" },
+    aspect: "16:9",
+    concurrency: 2,
+    attachNegative: false,
+    collapsed: false,
+    leftW: 280,
+    rightW: 300
+  };
+}
+/* 并发数归一：仅收 1-5 整数，其余（缺失/越界/畸形）回默认 2 */
+function clampConcurrency(v) {
+  const n = parseInt(v, 10);
+  return (n >= 1 && n <= 5) ? n : 2;
+}
+function concurrencyLimit() { return clampConcurrency(settings.concurrency); }
+/* 兼容 v1 单层结构 → v2 分槽结构（老用户升级不丢配置） */
+function migrateSettings(raw) {
+  const def = defaultSettings();
+  if (!raw || typeof raw !== "object") { return def; }
+  if (raw.provider && raw.gemini && raw.openai) {
+    // v2：逐槽补默认，防字段缺失
+    raw.gemini = Object.assign({}, def.gemini, raw.gemini);
+    if (raw.gemini.auth !== "bearer") { raw.gemini.auth = "query"; }   // 鉴权方式归一：非 bearer 一律按官方默认
+    raw.openai = Object.assign({}, def.openai, raw.openai);
+    raw.aspect = raw.aspect || def.aspect;
+    raw.concurrency = clampConcurrency(raw.concurrency);
+    raw.attachNegative = !!raw.attachNegative;
+    raw.collapsed = !!raw.collapsed;
+    raw.leftW = raw.leftW || def.leftW;
+    raw.rightW = raw.rightW || def.rightW;
+    if (!PROVIDERS.includes(raw.provider)) { raw.provider = "gemini"; }
+    return raw;
+  }
+  // v1 → v2
+  return {
+    provider: "gemini",
+    gemini: { baseUrl: raw.baseUrl || def.gemini.baseUrl, model: raw.model || def.gemini.model, size: raw.size || "", auth: "query" },
+    openai: Object.assign({}, def.openai),
+    aspect: raw.aspect || def.aspect,
+    concurrency: def.concurrency,
+    attachNegative: !!raw.attachNegative,
+    collapsed: !!raw.collapsed,
+    leftW: raw.leftW || def.leftW,
+    rightW: raw.rightW || def.rightW
+  };
+}
+let settings = migrateSettings(lsGetJSON(LS_SETTINGS, null));
+function saveSettings() { lsSetJSON(LS_SETTINGS, settings); }
+function prov() { return settings[settings.provider]; }
+
+/* Base URL 归一提示行：仅当实际剥掉了尾部 /v1 时显示（尾斜杠静默剥除，不提示） */
+function updateBaseUrlHint() {
+  const norm = normalizedBase();
+  $("#base-url-hint").textContent = norm.strippedV1 ? "已自动去除尾部 /v1（工具自动拼接）" : "";
+}
+
+/* 按当前提供商刷新设置栏 UI（Key / BaseURL / 模型 / 分辨率 / 提示行） */
+function applyProviderUI() {
+  const p = settings.provider;
+  $("#provider-select").value = p;
+  $("#api-key-input").value = getApiKey();
+  $("#api-key-label").textContent = PROVIDER_LABEL[p] + " API Key（存本机 localStorage，不上传任何第三方）";
+  $("#api-key-input").placeholder = p === "openai" ? "粘贴 OpenAI 兼容端点的 API Key（sk-…）" : "粘贴 Gemini API Key";
+  $("#base-url-input").value = prov().baseUrl || DEFAULT_BASES[p];
+  $("#model-input").value = prov().model;
+  $("#model-input").placeholder = p === "openai" ? "gpt-image-2.5" : "gemini-2.5-flash-image";
+  updateBaseUrlHint();
+  refreshModelList();
+  refreshProviderControls();
+}
+function refreshModelList() {
+  const list = $("#model-list");
+  list.innerHTML = "";
+  MODEL_PRESETS[settings.provider].forEach(m => {
+    const opt = document.createElement("option");
+    opt.value = m.value;
+    opt.textContent = m.label;
+    list.appendChild(opt);
+  });
+}
+/* OpenAI 模式：分辨率与鉴权方式下拉禁用（比例→size 自动映射并明示 / 鉴权恒为 Bearer）；Gemini 模式恢复 */
+function refreshProviderControls() {
+  const isGemini = settings.provider === "gemini";
+  const sizeSel = $("#size-select");
+  sizeSel.disabled = !isGemini;
+  sizeSel.value = isGemini ? (settings.gemini.size || "") : "";
+  $("#size-label").textContent = isGemini
+    ? "分辨率 imageSize（部分模型不支持时选「默认」）"
+    : "分辨率 imageSize（仅 Gemini 适用 · OpenAI 由比例自动映射）";
+  $("#size-hint").textContent = isGemini
+    ? (settings.gemini.size ? "将传 imageConfig.imageSize = " + settings.gemini.size : "「默认」= 不传 imageSize 字段")
+    : "OpenAI 端点不使用该参数，已自动按比例映射 size（见上方提示）";
+  const authSel = $("#auth-select");
+  authSel.disabled = !isGemini;
+  authSel.value = isGemini ? (settings.gemini.auth || "query") : "query";
+  $("#auth-label").textContent = isGemini
+    ? "鉴权方式（仅 Gemini 通道 · 决定 Key 怎么传给端点）"
+    : "鉴权方式（仅 Gemini 适用 · OpenAI 恒为 Bearer 头）";
+  $("#auth-hint").textContent = isGemini
+    ? (settings.gemini.auth === "bearer"
+        ? "Key 经 Authorization: Bearer 头携带，不进 URL（grsai 等中转站）"
+        : "Key 经 url ?key= 参数携带（Google 官方 API）")
+    : "OpenAI 兼容端点固定用 Authorization: Bearer 头，无需切换";
+  updateApiKeyHint();
+  updateAspectHint();
+}
+/* 比例提示行：Gemini 直出所选比例；OpenAI 明示映射后的实际 size */
+function updateAspectHint() {
+  const hint = $("#aspect-hint");
+  if (settings.provider === "gemini") {
+    hint.innerHTML = "Gemini：出图比例 <span class='mapped'>" + esc(settings.aspect) + "</span> 直接生效";
+  } else {
+    const size = openaiSizeFor(settings.aspect, prov().model);
+    hint.innerHTML = "当前比例 " + esc(settings.aspect) + " 将映射为 size = <span class='mapped'>" + esc(size) + "</span>";
+  }
+}
+function updateApiKeyHint() {
+  const p = settings.provider;
+  const how = p === "openai"
+    ? "OpenAI 兼容端点用 Authorization: Bearer 头携带 Key"
+    : (settings.gemini.auth === "bearer"
+        ? "当前鉴权方式 Bearer 头：Key 经 Authorization 头携带，不进 URL"
+        : "Gemini 官方端点用 url query 参数携带 Key");
+  $("#api-key-hint").textContent = how + (getApiKey() ? "（已填）" : "（未填）");
+}
+
+function applySettingsToUI() {
+  $("#aspect-select").value = settings.aspect || "16:9";
+  $("#concurrency-select").value = String(concurrencyLimit());
+  $("#attach-negative-check").checked = !!settings.attachNegative;
+  document.documentElement.style.setProperty("--left-w", (settings.leftW || 280) + "px");
+  document.documentElement.style.setProperty("--right-w", (settings.rightW || 300) + "px");
+  applyProviderUI();
+  setSettingsCollapsed(!!settings.collapsed);
+}
+function setSettingsCollapsed(collapsed) {
+  $("#settings-panel").classList.toggle("collapsed", collapsed);
+  $("#settings-summary").classList.toggle("visible", collapsed);
+  $("#toggle-settings").textContent = collapsed ? "设置 ▸" : "设置 ▾";
+  if (collapsed) {
+    $("#settings-summary").textContent =
+      "设置已折叠 · 提供商 " + PROVIDER_LABEL[settings.provider] +
+      " · 模型 " + (prov().model || "—") +
+      " · 比例 " + (settings.aspect || "—") +
+      (settings.provider === "openai"
+        ? " → size " + openaiSizeFor(settings.aspect, prov().model)
+        : ((settings.gemini.size ? " · 分辨率 " + settings.gemini.size : "") +
+           (settings.gemini.auth === "bearer" ? " · Bearer 鉴权" : ""))) +
+      " · Key" + (getApiKey() ? "已填" : "未填") +
+      " · 端点 " + normalizedBase().url +
+      (proxyUp ? " · 本地代理已连接" : " · 直连（未连本地代理）");
+  }
+}
+
+/* B4 修复：设置三输入（Key / Base URL / 模型）的保存回调——change 与 input 事件共用，
+ * 粘贴后未失焦、未回车提交也会即时落盘（generate 前不再依赖 change 触发） */
+function onApiKeyInput(e) {
+  setApiKey(e.target.value);
+  updateApiKeyHint();
+  if (settings.collapsed) { setSettingsCollapsed(true); }
+}
+function onBaseUrlInput(e) {
+  prov().baseUrl = e.target.value.trim() || DEFAULT_BASES[settings.provider];
+  saveSettings();
+  updateBaseUrlHint();   // 粘贴 .../v1 后立即提示已自动归一
+  if (settings.collapsed) { setSettingsCollapsed(true); }
+}
+function onModelInput(e) {
+  prov().model = e.target.value.trim();
+  saveSettings();
+  updateAspectHint(); // OpenAI 模式下 dall-e-3 的 size 映射随模型变化
+  if (settings.collapsed) { setSettingsCollapsed(true); }
+}
+
+/* ============================================================
+ * 左栏：素材清单（分组渲染 + 搜索 / 组筛选 / 状态筛选）
+ * ============================================================ */
+function initGroupFilter() {
+  const sel = $("#group-filter");
+  (DATA.groups || []).forEach(g => {
+    const opt = document.createElement("option");
+    opt.value = g.id;
+    opt.textContent = g.full + "（" + g.count + "）";
+    sel.appendChild(opt);
+  });
+  const anchorOpt = document.createElement("option");
+  anchorOpt.value = "anchor";
+  anchorOpt.textContent = "04·锚图（9·生产辅助件）";
+  sel.appendChild(anchorOpt);
+}
+
+function getGroupPriority(groupId) {
+  const counts = {};
+  ITEMS.filter(it => !it.is_anchor && it.group_id === groupId).forEach(it => {
+    const p = (it.priority || "").split(" ")[0];
+    if (p) { counts[p] = (counts[p] || 0) + 1; }
+  });
+  let best = "", bestN = 0;
+  for (const [p, n] of Object.entries(counts)) { if (n > bestN) { bestN = n; best = p; } }
+  return best;
+}
+
+function filterItems() {
+  const q = $("#search-input").value.trim().toLowerCase();
+  const gf = $("#group-filter").value;
+  const sf = $("#status-filter").value;
+  return ITEMS.filter(it => {
+    if (gf === "anchor" && !it.is_anchor) { return false; }
+    if (gf !== "anchor" && gf !== "" && (it.group_id !== gf || it.is_anchor)) { return false; }
+    if (sf === "done" && !isDone(it.id)) { return false; }
+    if (sf === "todo" && isDone(it.id)) { return false; }
+    if (q) {
+      const hay = (it.id + " " + it.name_cn + " " + (it.unit_id || "")).toLowerCase();
+      if (!hay.includes(q)) { return false; }
+    }
+    return true;
+  });
+}
+
+function renderList() {
+  const listEl = $("#asset-list");
+  const shown = filterItems();
+  listEl.innerHTML = "";
+  $("#list-empty").style.display = shown.length ? "none" : "block";
+  const buckets = [];
+  (DATA.groups || []).forEach(g => {
+    buckets.push({ key: g.id, name: g.full, prio: getGroupPriority(g.id), tag: "", items: [] });
+  });
+  const anchorBucket = { key: "anchor", name: "04 锚图", prio: "P1", tag: "锚", items: [] };
+  const bucketMap = {};
+  buckets.forEach(b => { bucketMap[b.key] = b; });
+  shown.forEach(it => {
+    if (it.is_anchor) { anchorBucket.items.push(it); }
+    else if (bucketMap[it.group_id]) { bucketMap[it.group_id].items.push(it); }
+  });
+  const allBuckets = buckets.concat([anchorBucket]);
+  allBuckets.forEach(b => {
+    if (!b.items.length) { return; }
+    const totalCount = b.key === "anchor"
+      ? ITEMS.filter(x => x.is_anchor).length
+      : ITEMS.filter(x => !x.is_anchor && x.group_id === b.key).length;
+    const doneCount = ITEMS.filter(x => (b.key === "anchor" ? x.is_anchor : (!x.is_anchor && x.group_id === b.key)) && isDone(x.id)).length;
+    const head = document.createElement("div");
+    head.className = "group-head";
+    head.innerHTML =
+      "<span class='g-name'>" + esc(b.name) + "</span>" +
+      (b.prio ? "<span class='g-prio'>" + esc(b.prio) + "</span>" : "") +
+      (b.tag ? "<span class='g-anchor-tag'>生产辅助件</span>" : "") +
+      "<span class='g-cnt'>" + doneCount + "/" + totalCount + "</span>";
+    listEl.appendChild(head);
+    b.items.forEach(it => { listEl.appendChild(buildRow(it)); });
+  });
+}
+
+function buildRow(item) {
+  const row = document.createElement("div");
+  row.className = "asset-row" + (isDone(item.id) ? " done" : "") + (item.id === currentId ? " selected" : "");
+  row.dataset.id = item.id;
+  const genN = countGen(item.id);
+  row.innerHTML =
+    "<div class='row-main'>" +
+      "<div class='row-name'>" + esc(item.name_cn) + "</div>" +
+      "<div class='row-id'>" + esc(item.id) + "</div>" +
+    "</div>" +
+    "<div class='row-side'>" +
+      (genN ? "<span class='gen-count' title='本次会话已生成张数'>×" + genN + "</span>" : "") +
+      (isDone(item.id) ? "<span class='done-dot' title='已生成（双击行可取消）'></span>" : "") +
+    "</div>";
+  row.addEventListener("click", () => loadItem(item.id));
+  row.addEventListener("dblclick", () => {
+    setDone(item.id, !isDone(item.id));
+    loadItem(item.id); // 双击后保持选中态刷新
+  });
+  return row;
+}
+
+/* 仅刷新左栏行的选中高亮（不重建 DOM，双击检测不受影响） */
+function updateSelection() {
+  document.querySelectorAll(".asset-row").forEach(row => {
+    row.classList.toggle("selected", row.dataset.id === currentId);
+  });
+}
+
+function updateProgress() {
+  const total = ITEMS.length;
+  const done = ITEMS.filter(it => isDone(it.id)).length;
+  $("#progress-num").textContent = done;
+  $("#progress-total").textContent = total;
+}
+
+/* ============================================================
+ * 中栏：素材载入 / 提示词编辑 / 语言切换
+ * ============================================================ */
+function loadItem(id) {
+  const item = ITEM_MAP.get(id);
+  if (!item) { return; }
+  // B2 修复：切换素材会覆盖提示词框——若当前内容已偏离该件原始基准串（用户编辑过），先确认防丢（与语言切换同款交互）
+  if (currentId !== null && $("#prompt-textarea").value !== currentPromptOriginal() &&
+      !window.confirm("当前提示词已手动编辑，切换素材将丢失修改。确定切换？")) {
+    return;
+  }
+  currentId = id;
+  promptLang = "cn"; // 用户要求：点击素材自动填中文版正向提示词
+  $("#editor-empty").style.display = "none";
+  $("#editor-wrap").classList.add("visible");
+  // 信息头
+  $("#ih-name").textContent = item.name_cn;
+  $("#ih-id").textContent = item.id;
+  $("#ih-tags").innerHTML =
+    "<span class='tag'>" + esc(item.group_id + " " + item.group_name) + "</span>" +
+    (item.priority ? "<span class='tag prio'>" + esc(item.priority) + "</span>" : "") +
+    (item.is_anchor ? "<span class='tag anchor-tag'>锚图 · 所属单位 " + esc(item.unit_id) + "</span>" : "");
+  $("#ih-spec").textContent = (item.is_anchor ? "设定卡：" : "目标规格：") + (item.spec || "—");
+  $("#ih-post-body").textContent = item.post_process || "—";
+  // 提示词
+  $("#prompt-textarea").value = item.prompt_cn || "";
+  updatePromptLangState();
+  // 负面（只读展示）
+  $("#neg-body-cn").textContent = item.negative_cn || "（无）";
+  $("#neg-body-en").textContent = item.negative_en || "（无）";
+  hideError();
+  // 按规格自动推荐比例（用户可随时手改）
+  settings.aspect = recommendAspect(item);
+  $("#aspect-select").value = settings.aspect;
+  saveSettings();
+  updateAspectHint();
+  updateSelection(); // 只更新选中态，不全量重建（避免破坏行双击检测）
+  $("#prompt-textarea").focus();
+}
+
+function currentPromptOriginal() {
+  const item = ITEM_MAP.get(currentId);
+  if (!item) { return ""; }
+  return promptLang === "cn" ? (item.prompt_cn || "") : (item.prompt_en || "");
+}
+
+function updatePromptLangState() {
+  const edited = $("#prompt-textarea").value !== currentPromptOriginal();
+  $("#prompt-lang-state").textContent =
+    "当前：" + (promptLang === "cn" ? "中文参考版" : "英文版") + (edited ? "（已手动编辑）" : "（可编辑）");
+  $("#lang-toggle-btn").textContent = promptLang === "cn" ? "切换英文" : "切换中文";
+}
+
+function togglePromptLang() {
+  const item = ITEM_MAP.get(currentId);
+  if (!item) { return; }
+  const box = $("#prompt-textarea");
+  if (box.value !== currentPromptOriginal() &&
+      !window.confirm("当前提示词已手动编辑，切换语言将丢失修改。确定切换？")) {
+    return; // 防丢确认
+  }
+  promptLang = promptLang === "cn" ? "en" : "cn";
+  box.value = currentPromptOriginal();
+  updatePromptLangState();
+}
+
+function restorePrompt() {
+  const box = $("#prompt-textarea");
+  if (box.value !== currentPromptOriginal() &&
+      !window.confirm("恢复为该件原始提示词将丢弃当前编辑，确定？")) { return; }
+  box.value = currentPromptOriginal();
+  updatePromptLangState();
+}
+
+/* ============================================================
+ * 生成请求（双提供商适配 · 透明错误展示）
+ * ============================================================ */
+
+/* ---------- 本地代理：自动探测与切换 ---------- */
+/* daseinai.xyz 等站点对浏览器 CORS 预检一律 403 无跨域头，页面直连必 Failed to fetch；
+ * 探测到本地代理（server.py / 启动工作台.cmd）在线时，生成请求改经其转发（等效 curl 链路） */
+async function probeProxy() {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 1500);   // 短超时：代理不在线时快速失败
+  try {
+    const resp = await fetch(PROXY_BASE + "/ping", { method: "GET", cache: "no-store", signal: ctrl.signal });
+    proxyUp = resp.ok;
+  } catch (e) {
+    proxyUp = false;
+  } finally {
+    clearTimeout(timer);
+    updateProxyUI();
+  }
+}
+/* 设置栏状态区：在线→绿色标记；离线→黄色可展开说明（不弹窗打扰） */
+function updateProxyUI() {
+  const badge = $("#proxy-ok-badge");
+  const help = $("#proxy-help");
+  if (proxyUp) {
+    badge.textContent = "本地代理已连接（生成请求经 127.0.0.1:8765 转发，绕开站点 CORS 限制）";
+    badge.className = "proxy-ok";
+    badge.style.display = "";
+    help.style.display = "none";
+    help.open = false;
+  } else {
+    badge.style.display = "none";
+    help.style.display = "";
+  }
+  if (settings.collapsed) { setSettingsCollapsed(true); }   // 折叠摘要里含代理状态，联动刷新
+}
+/* fetch 封装：代理在线走 /proxy?url=<目标>（Authorization 等头照常带，由代理透传）；离线直连 */
+function apiFetch(url, init) {
+  if (proxyUp) { return fetch(PROXY_BASE + "/proxy?url=" + encodeURIComponent(url), init); }
+  return fetch(url, init);
+}
+
+function buildFinalPrompt(item) {
+  let prompt = $("#prompt-textarea").value.trim();
+  if ($("#attach-negative-check").checked) {
+    const neg = promptLang === "cn" ? item.negative_cn : item.negative_en;
+    if (neg) {
+      prompt += promptLang === "cn"
+        ? "\n请严格避免画面中出现以下元素：" + neg + "。"
+        : "\nStrictly avoid the following elements in the image: " + neg + ".";
+    }
+  }
+  return prompt;
+}
+
+function showError(text) {
+  $("#error-pre").textContent = text;
+  $("#error-box").classList.add("visible");
+}
+function hideError() {
+  $("#error-box").classList.remove("visible");
+}
+
+/* 组装 HTTP 失败透明报文（状态 + 端点 + 响应体全文） */
+function httpFail(statusText, endpoint, bodyText) {
+  return Object.assign(new Error("HTTP_FAIL"), {
+    httpStatus: statusText, endpoint: endpoint, bodyText: bodyText
+  });
+}
+
+/* Gemini：generateContent + responseModalities IMAGE + imageConfig；
+ * 鉴权双形态（快照自设置栏「鉴权方式」，任务发起时定形）：
+ *   query（Google 原生，默认）——Key 拼 url ?key= 参数，官方 API 形态；
+ *   bearer（中转站）——URL 不带 Key，改放 Authorization: Bearer 请求头（grsai 实测只认此形态）
+ * 参数全部来自任务发起时的 cfg 快照 + 独立 signal（多并发下切设置/切素材不串、可单任务取消） */
+async function generateViaGemini(prompt, cfg, signal) {
+  const baseUrl = normalizeBaseUrl(cfg.baseUrl || DEFAULT_BASES.gemini).url;  // 归一：剥尾斜杠与 /v1
+  const model = (cfg.model || "").trim();
+  const useBearer = cfg.auth === "bearer";
+  const imageConfig = { aspectRatio: cfg.aspect || "1:1" };
+  if (cfg.size) { imageConfig.imageSize = cfg.size; }
+  const body = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { responseModalities: ["IMAGE"], imageConfig: imageConfig }
+  };
+  const path = baseUrl + "/v1beta/models/" + encodeURIComponent(model) + ":generateContent";
+  const url = useBearer ? path : path + "?key=" + encodeURIComponent(cfg.apiKey);
+  const headers = { "Content-Type": "application/json" };
+  if (useBearer) { headers["Authorization"] = "Bearer " + cfg.apiKey; }
+  const meta = { provider: "gemini", model: model,
+                 sizeLabel: cfg.aspect + (cfg.size ? " · " + cfg.size : "") };
+  const resp = await apiFetch(url, {
+    method: "POST",
+    headers: headers,
+    body: JSON.stringify(body),
+    signal: signal
+  });
+  let respText = "";
+  try { respText = await resp.text(); } catch (e) { respText = "（读取响应体失败：" + e.message + "）"; }
+  if (!resp.ok) {
+    /* 端点脱敏跟随鉴权形态：query 模式 Key 在 URL（?key=***）；bearer 模式 URL 本不含 Key，标注头脱敏 */
+    throw httpFail(resp.status + " " + resp.statusText,
+      "POST " + path + (useBearer ? "（Authorization: Bearer ***）" : "?key=***"), respText);
+  }
+  let data = null;
+  try { data = JSON.parse(respText); }
+  catch (e) { throw httpFail("", "", "响应不是合法 JSON：\n" + respText); }
+  const cand = data.candidates && data.candidates[0];
+  const part = cand && cand.content && cand.content.parts &&
+               cand.content.parts.find(p => p.inlineData && p.inlineData.data);
+  if (!part) {
+    const reason = cand && cand.finishReason ? cand.finishReason : "未知";
+    throw httpFail("", "", "未返回图片数据。finishReason = " + reason +
+      (data.promptFeedback ? "\npromptFeedback = " + JSON.stringify(data.promptFeedback) : "") +
+      "\n\n完整响应：\n" + JSON.stringify(data, null, 2));
+  }
+  return { b64: part.inlineData.data, mime: part.inlineData.mimeType || "image/png", meta: meta };
+}
+
+/* OpenAI 兼容：POST /v1/images/generations（dall-e-3 加 response_format=b64_json）
+ * 参数全部来自任务发起时的 cfg 快照 + 独立 signal（多并发下切设置/切素材不串、可单任务取消） */
+async function generateViaOpenAI(prompt, cfg, signal) {
+  const baseUrl = normalizeBaseUrl(cfg.baseUrl || DEFAULT_BASES.openai).url;  // 归一：剥尾斜杠与 /v1（防双 v1）
+  const model = (cfg.model || "").trim();
+  const size = openaiSizeFor(cfg.aspect, model);
+  const body = { model: model, prompt: prompt, n: 1, size: size };
+  if (isDallE3(model)) { body.response_format = "b64_json"; } // dall-e 系默认返 url，须显式改 b64
+  const url = baseUrl + "/v1/images/generations";
+  const meta = { provider: "openai", model: model, sizeLabel: size };
+  const resp = await apiFetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + cfg.apiKey
+    },
+    body: JSON.stringify(body),
+    signal: signal
+  });
+  let respText = "";
+  try { respText = await resp.text(); } catch (e) { respText = "（读取响应体失败：" + e.message + "）"; }
+  if (!resp.ok) {
+    throw httpFail(resp.status + " " + resp.statusText,
+      "POST " + baseUrl + "/v1/images/generations（Authorization: Bearer ***）", respText);
+  }
+  let data = null;
+  try { data = JSON.parse(respText); }
+  catch (e) { throw httpFail("", "", "响应不是合法 JSON：\n" + respText); }
+  const entry = data && data.data && data.data[0];
+  if (!entry) {
+    throw httpFail("", "", "响应 data 数组为空或结构异常\n\n完整响应：\n" + JSON.stringify(data, null, 2));
+  }
+  if (entry.b64_json) {
+    return { b64: entry.b64_json, mime: "image/png", meta: meta };
+  }
+  if (entry.url) {
+    /* grsai 等中转返回 url 形态（如 https://file6.aitohumanize.com/file/xxx.png，无 b64_json）：
+     * 入列为 URL 源——img 直接显示远程直链不受 CORS 限制，下载走三级降级（见 downloadUrlImage） */
+    return { url: String(entry.url), b64: null, mime: "image/png", meta: meta };
+  }
+  throw httpFail("", "", "未返回图片数据（既无 b64_json 也无 url）\n\n完整响应：\n" + JSON.stringify(data, null, 2));
+}
+
+/* ---------- 错误报文格式化（供任务失败与错误卡展开共用） ---------- */
+function formatGenError(err) {
+  if (err && err.name === "AbortError") { return "已取消本次生成请求。"; }
+  if (err && err.message === "HTTP_FAIL") {
+    return (err.httpStatus ? "HTTP " + err.httpStatus + "\n请求端点：" + err.endpoint + "\n\n响应体：\n" : "") +
+      (err.bodyText || String(err));
+  }
+  /* 网络级失败（Failed to fetch 等）：按当前模式给首行指引 */
+  const head = proxyUp
+    ? "本地代理请求失败——请确认 server.py（或「启动工作台.cmd」的窗口）仍在运行，然后在设置栏点「重探」。"
+    : "该站点可能不支持浏览器直连（CORS）——双击工具目录的 启动工作台.cmd 或运行 python server.py 后刷新本页自动走代理。";
+  return head +
+    "\n\n网络请求失败：" + (err && err.message ? err.message : err) +
+    "\n\n常见原因排查：" +
+    "\n1. 站点无 CORS 跨域头（daseinai.xyz 实测如此）或 file:// 直开被浏览器拦截——启动本地代理（见上方首行说明）；" +
+    "\n2. Base URL 不可达（中转站失效 / 断网 / 代理未开）——检查结尾是否多填了 /v1（工具会自动剥除并提示）；" +
+    "\n3. API Key 无效或无该模型权限（看上方 HTTP 错误的响应体）。";
+}
+
+/* 任务发起时的请求配置快照：排队期间切提供商/端点/比例不影响已入队任务（重试也用原快照） */
+function snapshotRequestConfig() {
+  return {
+    provider: settings.provider,
+    baseUrl: prov().baseUrl || DEFAULT_BASES[settings.provider],
+    model: (prov().model || "").trim(),
+    apiKey: getApiKey(),
+    aspect: settings.aspect || "1:1",
+    size: settings.gemini.size || "",
+    auth: settings.gemini.auth === "bearer" ? "bearer" : "query"
+  };
+}
+
+/* ---------- 生成入口（多并发出队） ----------
+ * 并发合法化：原 B3/K1 单请求 in-flight 守卫已随多并发模型移除——
+ * 重复提交防线 = 队列上限（TASK_QUEUE_LIMIT）+ 同素材进行中提示；生成中可自由切素材再发起 */
+function generate() {
+  const item = ITEM_MAP.get(currentId);
+  if (!item) { showError("请先从左侧清单选择素材。"); return; }
+  if (!getApiKey()) {
+    showError("未填写当前提供商（" + PROVIDER_LABEL[settings.provider] + "）的 API Key——展开顶部「设置」栏粘贴后重试。");
+    return;
+  }
+  if (!(prov().model || "").trim()) { showError("未填写模型版本。"); return; }
+
+  const prompt = buildFinalPrompt(item);
+  if (!prompt) { showError("提示词为空。"); return; }
+
+  if (taskQueue.length >= TASK_QUEUE_LIMIT) {
+    showError("排队已满（等待任务上限 " + TASK_QUEUE_LIMIT + " 个），稍后再点。");
+    return;
+  }
+
+  const sameActiveBefore = activeCountFor(item.id);   // 本次点击前该素材进行中（排队+生成中）的张数
+  enqueueTask(item, prompt);
+  if (sameActiveBefore > 0) {
+    flashGenNote("该素材已有 " + sameActiveBefore + " 张生成中，已再排队 1 张");
+  }
+  briefGenerateFeedback();
+}
+
+/* 生成按钮短暂反馈：点按后 300ms 复位，不长期 disabled（并发下按钮不再全局锁） */
+let genBtnTimer = null;
+function briefGenerateFeedback() {
+  const btn = $("#generate-btn");
+  btn.textContent = "已入队…";
+  if (genBtnTimer) { clearTimeout(genBtnTimer); }
+  genBtnTimer = setTimeout(() => {
+    btn.textContent = "生 成";
+    genBtnTimer = null;
+  }, 300);
+}
+/* 中栏非阻塞提示行（同素材重复发起等），3.5s 自动消失 */
+let genNoteTimer = null;
+function flashGenNote(text) {
+  const note = $("#gen-note");
+  note.textContent = text;
+  if (genNoteTimer) { clearTimeout(genNoteTimer); }
+  genNoteTimer = setTimeout(() => { note.textContent = ""; genNoteTimer = null; }, 3500);
+}
+
+/* ============================================================
+ * 任务调度（多并发 + 排队）
+ * 入队 → 顶部插占位卡；调度器按并发上限逐个启动；每任务独立 AbortController。
+ * 完成：占位卡原位变缩略图（保持发起时位置，不重新插顶）；
+ * 失败：占位卡变错误卡（摘要 + 展开完整错误 + 重试 + 删除）；
+ * 取消：排队中直接出队，生成中 abort 该请求后移除卡。
+ * ============================================================ */
+function pendingTaskCount() { return activeTasks.size + taskQueue.length; }
+function activeCountFor(itemId) {
+  let n = 0;
+  activeTasks.forEach(t => { if (t.item.id === itemId) { n++; } });
+  taskQueue.forEach(t => { if (t.item.id === itemId) { n++; } });
+  return n;
+}
+function scheduleTasks() {
+  while (activeTasks.size < concurrencyLimit() && taskQueue.length > 0) {
+    startTask(taskQueue.shift());
+  }
+}
+function cleanupTaskRefs(entry) {
+  taskControllers.delete(entry.taskId);
+  activeTasks.delete(entry.taskId);
+}
+function enqueueTask(item, prompt) {
+  const entry = {
+    kind: "task", taskId: ++taskSeq, status: "queued",
+    item: item, prompt: prompt, cfg: snapshotRequestConfig(),
+    errorFull: "", startedAt: 0, uid: null
+  };
+  images.unshift(entry);                              // 时间线顶部（占位卡 = 发起时的位置）
+  taskQueue.push(entry);
+  if (document.querySelector("#thumb-grid #thumb-empty")) { renderThumbs(); }
+  else { $("#thumb-grid").prepend(buildTaskCard(entry)); }
+  updateTaskStats();
+  scheduleTasks();
+  return entry;
+}
+function startTask(entry) {
+  entry.status = "running";
+  entry.startedAt = Date.now();
+  const ctrl = new AbortController();
+  taskControllers.set(entry.taskId, ctrl);
+  activeTasks.set(entry.taskId, entry);
+  refreshTaskCard(entry);
+  updateTaskStats();
+  const run = entry.cfg.provider === "openai"
+    ? generateViaOpenAI(entry.prompt, entry.cfg, ctrl.signal)
+    : generateViaGemini(entry.prompt, entry.cfg, ctrl.signal);
+  run.then(result => settleTask(entry, result)).catch(err => failTask(entry, err));
+}
+/* 完成：条目原位转为图片记录（保持发起位置），占位卡原位替换为缩略图 */
+function settleTask(entry, result) {
+  cleanupTaskRefs(entry);
+  entry.kind = "image";
+  entry.status = "done";
+  entry.uid = entry.item.id + "_" + Date.now() + "_" + (uidSeed++);   // B1：持久唯一键（id+时间戳+序号）
+  entry.url = result.url || null;                               // URL 源（url 形态响应）：远程图直链，显示不受 CORS 限制
+  entry.b64 = result.b64 ? String(result.b64).replace(/\s+/g, "") : null;  // B5：b64 带换行/空白会裂图，入列前剥净
+  entry.mime = safeMime(result.mime);                           // B8：mime 白名单归一
+  entry.time = Date.now();
+  entry.provider = result.meta.provider;
+  entry.model = result.meta.model;
+  entry.sizeLabel = result.meta.sizeLabel;
+  entry.durationMs = Date.now() - entry.startedAt;
+  setDone(entry.item.id, true);          // 成功 → 自动标红（可双击左栏行取消；setDone 内部已 renderList）
+  replaceTaskCardWithThumb(entry);
+  updateTaskStats();
+  scheduleTasks();                       // 腾出的并发位立即补位
+}
+function failTask(entry, err) {
+  cleanupTaskRefs(entry);
+  if (err && err.name === "AbortError") {
+    removeTaskEntry(entry);              // 用户取消：静默移除卡（不进错误区）
+    updateTaskStats();
+    scheduleTasks();
+    return;
+  }
+  entry.status = "failed";
+  entry.errorFull = formatGenError(err);
+  refreshTaskCard(entry);
+  showErrorWithFailedCount(entry.errorFull);
+  updateTaskStats();
+  scheduleTasks();
+}
+/* 错误区汇总展示：最近一条完整报文 + 其余失败计数（完整错误见各自任务卡，可点击展开） */
+function showErrorWithFailedCount(text) {
+  const failedN = images.filter(im => im.kind === "task" && im.status === "failed").length;
+  showError(text + (failedN > 1 ? "\n\n（另有 " + (failedN - 1) + " 条失败，见右侧任务卡，可单卡重试）" : ""));
+}
+function cancelTask(entry) {
+  if (entry.status === "queued") {
+    removeTaskEntry(entry);              // 排队中：直接出队
+    updateTaskStats();
+  } else if (entry.status === "running") {
+    const ctrl = taskControllers.get(entry.taskId);
+    if (ctrl) { ctrl.abort(); }          // 生成中：abort → failTask(AbortError) 静默移除
+  }
+}
+function retryTask(entry) {
+  if (entry.status !== "failed") { return; }
+  if (taskQueue.length >= TASK_QUEUE_LIMIT) {
+    showError("排队已满（等待任务上限 " + TASK_QUEUE_LIMIT + " 个），稍后再点。");
+    return;
+  }
+  entry.status = "queued";
+  entry.errorFull = "";
+  refreshTaskCard(entry);                // 错误卡原位变回占位卡（保持位置）
+  taskQueue.push(entry);                 // 排到队尾，用原 cfg/prompt 快照重发
+  updateTaskStats();
+  scheduleTasks();
+}
+function removeTaskEntry(entry) {
+  const qi = taskQueue.indexOf(entry);
+  if (qi >= 0) { taskQueue.splice(qi, 1); }
+  const idx = images.indexOf(entry);
+  if (idx >= 0) { images.splice(idx, 1); }
+  const card = findTaskCard(entry.taskId);
+  if (card) { card.remove(); }
+  if (!document.querySelector("#thumb-grid .thumb-card")) { renderThumbs(); }  // 网格已空 → 重建空态提示
+}
+/* 全部取消：排队出队 + 生成中逐个 abort（confirm 确认；clear-session 内部调用走静默） */
+function cancelAllTasks(silent) {
+  if (!silent) {
+    if (pendingTaskCount() === 0) { return; }
+    if (!window.confirm("全部取消：中止 " + activeTasks.size + " 个生成中的请求并清空 " + taskQueue.length + " 个排队任务？")) {
+      return;
+    }
+  }
+  taskQueue.splice(0).forEach(entry => removeTaskEntry(entry));
+  Array.from(activeTasks.values()).forEach(entry => {
+    const ctrl = taskControllers.get(entry.taskId);
+    if (ctrl) { ctrl.abort(); }          // failTask(AbortError) 逐个移除卡并复位计数
+  });
+  updateTaskStats();
+}
+/* 右栏标题行 + 中栏状态行实时计数；无任务时隐藏全部取消钮 */
+function updateTaskStats() {
+  const running = activeTasks.size;
+  const waiting = taskQueue.length;
+  const pending = running + waiting;
+  $("#task-stats").textContent = pending ? ("进行中 " + running + " · 排队 " + waiting) : "";
+  $("#gen-status").textContent = pending ? ("进行中 " + running + " / 排队 " + waiting) : "";
+  $("#cancel-all-btn").style.display = pending ? "inline-block" : "none";
+}
+
+/* ============================================================
+ * 右栏：缩略图网格 / 标记 / 右键菜单 / 下载
+ * ============================================================ */
+function renderThumbs() {
+  const grid = $("#thumb-grid");
+  const onlyMarked = $("#thumb-filter").value === "marked";
+  /* 任务卡（排队/生成/失败）不受「只看已标记」筛选影响——发起即可见，防止「点了没反应」 */
+  const list = images.filter(im => im.kind === "task" || !onlyMarked || getMark(im.uid));
+  grid.innerHTML = "";
+  if (!list.length) {
+    const empty = document.createElement("div");
+    empty.id = "thumb-empty";
+    empty.innerHTML = images.length
+      ? "没有已标记的图片<br>（点击图片右上角 ☆ 循环标记）"
+      : "尚未生成图片<br>选中素材 → 点击「生 成」<br><br>· 双击缩略图看大图<br>· 右键缩略图下载 PNG<br>· 生成图仅存本次会话，刷新即失";
+    grid.appendChild(empty);
+    return;
+  }
+  list.forEach(im => { grid.appendChild(im.kind === "task" ? buildTaskCard(im) : buildThumb(im)); });
+}
+
+/* K3 修复：缩略图 src 优先用 blob URL 引用（b64→Blob 一次转换、结果缓存在 im 上），
+ * 避免每张卡片的 DOM 属性持有整段 base64 文本；转换失败回退 data URL（行为不劣化）。
+ * 释放时机：删除单卡 / 清空会话（见 revokeBlobUrl 调用点）；页面关闭由浏览器统一回收 */
+function thumbSrc(im) {
+  if (im.url) { return im.url; }   // URL 源：<img> 显示远程直链不受 CORS 限制（下载才受限，见 downloadUrlImage）
+  if (im.blobUrl === undefined) {
+    im.blobUrl = "";
+    try {
+      im.blobUrl = URL.createObjectURL(new Blob([b64ToUint8(im.b64)], { type: safeMime(im.mime) }));
+    } catch (e) { im.blobUrl = ""; /* b64 畸形无法建 blob → 回退 data URL */ }
+  }
+  return im.blobUrl || ("data:" + safeMime(im.mime) + ";base64," + im.b64);
+}
+function revokeBlobUrl(im) {
+  if (im && im.blobUrl) {
+    try { URL.revokeObjectURL(im.blobUrl); } catch (e) { /* 忽略 */ }
+    im.blobUrl = "";
+  }
+}
+
+function buildThumb(im) {
+  const card = document.createElement("div");
+  const mark = getMark(im.uid);
+  card.className = "thumb-card" + (mark ? " mark-" + mark : "");
+  card.dataset.uid = String(im.uid);
+  const markBtnContent = mark === "star" ? "★" : (mark ? "<span class='dot'></span>" : "☆");
+  card.innerHTML =
+    "<div class='thumb-img-wrap' title='双击查看大图'>" +
+      "<img src='" + esc(thumbSrc(im)) + "' alt='" + esc(im.item.id) + "'>" +
+    "</div>" +
+    "<button class='mark-btn " + mark + "' title='标记（循环：无 → 星 → 红 → 蓝 → 绿）'>" + markBtnContent + "</button>" +
+    "<div class='thumb-meta'>" +
+      "<span class='thumb-id' title='" + esc(im.item.id) + ".png'>" + esc(im.item.id) + "</span>" +
+      "<span class='thumb-time'>" + fmtTime(im.time) + " · " + (im.provider === "openai" ? "GPT" : "Gemini") +
+        " · " + esc(im.sizeLabel || "—") + (im.url ? " · URL 源" : "") + "</span>" +
+    "</div>";
+  // 双击大图
+  card.querySelector(".thumb-img-wrap").addEventListener("dblclick", () => openModal(im.uid));
+  // 标记按钮（单击循环）
+  card.querySelector(".mark-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    cycleMark(im.uid);
+  });
+  // 右键菜单
+  card.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    openCtxMenu(e.clientX, e.clientY, im.uid);
+  });
+  return card;
+}
+
+/* ---- 任务卡（占位转圈 / 失败错误卡） ---- */
+function buildTaskCard(entry) {
+  const card = document.createElement("div");
+  card.dataset.task = String(entry.taskId);
+  card.addEventListener("contextmenu", (e) => e.preventDefault());   // 任务卡不进图片右键菜单
+  if (entry.status === "failed") {
+    const summary = (entry.errorFull || "").replace(/\s+/g, " ").slice(0, 120);
+    card.className = "thumb-card task-card status-failed";
+    card.innerHTML =
+      "<div class='task-err-wrap' title='点击展开完整错误'>" +
+        "<div class='task-err-head'>生成失败</div>" +
+        "<div class='task-err-sum'>" + esc(summary) + "</div>" +
+        "<div class='task-err-meta'>" + esc(entry.item.name_cn) + "<br>" + esc(entry.item.id) + "</div>" +
+      "</div>" +
+      "<button class='task-retry-btn' title='用原参数（发起时快照）重新排队'>重试</button>" +
+      "<button class='task-del-btn' title='删除这张错误卡'>×</button>";
+    card.querySelector(".task-err-wrap").addEventListener("click", () => showError(entry.errorFull));
+    card.querySelector(".task-retry-btn").addEventListener("click", (e) => { e.stopPropagation(); retryTask(entry); });
+    card.querySelector(".task-del-btn").addEventListener("click", (e) => { e.stopPropagation(); removeTaskEntry(entry); updateTaskStats(); });
+    return card;
+  }
+  card.className = "thumb-card task-card status-" + entry.status;
+  card.innerHTML =
+    "<div class='task-img-wrap'>" +
+      "<div class='task-spinner'></div>" +
+      "<div class='task-info'>" +
+        "<div class='task-name' title='" + esc(entry.item.name_cn) + "'>" + esc(entry.item.name_cn) + "</div>" +
+        "<div class='task-id'>" + esc(entry.item.id) + "</div>" +
+        "<div class='task-state'>" + (entry.status === "running" ? "生成中…" : "排队中") + "</div>" +
+      "</div>" +
+    "</div>" +
+    "<button class='task-cancel-btn' title='取消该任务'>×</button>";
+  card.querySelector(".task-cancel-btn").addEventListener("click", (e) => { e.stopPropagation(); cancelTask(entry); });
+  return card;
+}
+function findTaskCard(taskId) {
+  return document.querySelector('#thumb-grid .task-card[data-task="' + taskId + '"]');
+}
+/* 任务状态变化：原位重建该卡（排队中 → 生成中 / → 失败错误卡） */
+function refreshTaskCard(entry) {
+  const old = findTaskCard(entry.taskId);
+  if (old) { old.replaceWith(buildTaskCard(entry)); }
+}
+/* 完成：占位卡原位替换为正常缩略图（保持发起位置）；
+ * 「只看已标记」筛选下新图未标记不属于筛选集 → 移除卡（时间线条目仍在） */
+function replaceTaskCardWithThumb(entry) {
+  const old = findTaskCard(entry.taskId);
+  if (!old) { renderThumbs(); return; }   // 卡不在（异常路径）→ 兜底全量重建
+  const onlyMarked = $("#thumb-filter").value === "marked";
+  if (onlyMarked && !getMark(entry.uid)) {
+    old.remove();
+    if (!document.querySelector("#thumb-grid .thumb-card")) { renderThumbs(); }
+  } else {
+    old.replaceWith(buildThumb(entry));
+  }
+}
+
+/* K2 修复：标记点击改差分更新——只改该卡片的 class 与按钮图标，不全量重建网格（保节点引用/滚动位置/解码缓存）；
+ * 仅「只看已标记」筛选下取消标记（卡片不再属于筛选集）时移除单卡；筛选切换仍走 renderThumbs 全量 */
+function findThumbCard(uid) {
+  const cards = document.querySelectorAll("#thumb-grid .thumb-card");
+  for (const c of cards) { if (c.dataset.uid === String(uid)) { return c; } }
+  return null;
+}
+function updateThumbCardMark(uid, mark) {
+  const card = findThumbCard(uid);
+  if (!card) { return; }
+  MARK_CYCLE.forEach(m => { if (m) { card.classList.remove("mark-" + m); } });
+  if (mark) { card.classList.add("mark-" + mark); }
+  const btn = card.querySelector(".mark-btn");
+  if (btn) {
+    btn.className = "mark-btn" + (mark ? " " + mark : "");
+    btn.innerHTML = mark === "star" ? "★" : (mark ? "<span class='dot'></span>" : "☆");
+  }
+}
+function removeThumbCard(uid) {
+  const card = findThumbCard(uid);
+  if (card) { card.remove(); }
+  if (!document.querySelector("#thumb-grid .thumb-card")) { renderThumbs(); }  // 网格已空 → 重建空态提示
+}
+function cycleMark(uid) {
+  const cur = getMark(uid);
+  const next = MARK_CYCLE[(MARK_CYCLE.indexOf(cur) + 1) % MARK_CYCLE.length];
+  setMark(uid, next);
+  if ($("#thumb-filter").value === "marked" && !next) {
+    removeThumbCard(uid);
+  } else {
+    updateThumbCardMark(uid, next);
+  }
+}
+
+/* ---- 右键菜单浮层 ---- */
+let ctxUid = null;
+function openCtxMenu(x, y, uid) {
+  ctxUid = uid;
+  const menu = $("#ctx-menu");
+  const im = images.find(i => String(i.uid) === String(uid));
+  $("#ctx-title").textContent = im ? im.item.id + ".png" : "";
+  menu.classList.add("visible");
+  const mw = menu.offsetWidth, mh = menu.offsetHeight;
+  menu.style.left = Math.min(x, window.innerWidth - mw - 6) + "px";
+  menu.style.top = Math.min(y, window.innerHeight - mh - 6) + "px";
+}
+function closeCtxMenu() {
+  $("#ctx-menu").classList.remove("visible");
+  ctxUid = null;
+}
+document.addEventListener("click", (e) => {
+  if (!e.target.closest("#ctx-menu")) { closeCtxMenu(); }
+});
+document.addEventListener("scroll", closeCtxMenu, true);
+$("#ctx-menu").addEventListener("click", (e) => {
+  const act = e.target.dataset ? e.target.dataset.act : "";
+  if (!act || ctxUid == null) { return; }
+  const uid = ctxUid;
+  closeCtxMenu();
+  if (act === "download") { downloadImage(uid); }
+  else if (act === "open-tab") { openImageInTab(uid); }
+  else if (act === "mark") { cycleMark(uid); }
+  else if (act === "delete") { deleteImage(uid); }
+});
+
+function deleteImage(uid) {
+  const idx = images.findIndex(i => String(i.uid) === String(uid));
+  if (idx >= 0) {
+    revokeBlobUrl(images[idx]);   // K3：释放该卡 blob URL
+    images.splice(idx, 1);
+    setMark(uid, "");
+    renderList();
+    renderThumbs();
+    if (modalUid === String(uid)) { closeModal(); }
+  }
+}
+
+/* 新标签页直开图片：URL 源开远程直链、b64 源开本地 blob/data URL——
+ * URL 源跨域受限自动下载失败时，从这里走浏览器原生另存（下载降级第③级的出口） */
+function openImageInTab(uid) {
+  const im = images.find(i => String(i.uid) === String(uid));
+  if (!im) { return; }
+  window.open(im.url || thumbSrc(im), "_blank");
+}
+
+/* ---- 下载 PNG（文件名 = 资源英文名 id.png；非 png 自动经 canvas 转 png） ---- */
+function b64ToUint8(b64) {
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) { arr[i] = bin.charCodeAt(i); }
+  return arr;
+}
+function loadImageEl(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("图片解码失败"));
+    img.src = src;
+  });
+}
+async function toPngBlob(im) {
+  if (im.mime === "image/png") {
+    return new Blob([b64ToUint8(im.b64)], { type: "image/png" });
+  }
+  // jpeg/webp → canvas 重绘为 png（保留 alpha）
+  const img = await loadImageEl("data:" + im.mime + ";base64," + im.b64);
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  canvas.getContext("2d").drawImage(img, 0, 0);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) { resolve(blob); } else { reject(new Error("canvas 导出 PNG 失败")); }
+    }, "image/png");
+  });
+}
+/* URL 源取字节（三级降级前两级）：①直连 fetch（站点允许 CORS 时成功）
+ * ②本地代理在线 → GET /proxy-get?url=…（服务端下载后回传，绕开浏览器跨域限制） */
+async function fetchUrlBlob(url) {
+  let directErr = null;
+  try {
+    const resp = await fetch(url);
+    if (resp.ok) { return await resp.blob(); }
+    directErr = new Error("直连 HTTP " + resp.status);
+  } catch (e) {
+    directErr = e;   // 典型为跨域拦截（Failed to fetch）→ 转走本地代理
+  }
+  if (proxyUp) {
+    const resp = await fetch(PROXY_BASE + "/proxy-get?url=" + encodeURIComponent(url));
+    if (resp.ok) { return await resp.blob(); }
+    throw new Error("代理 proxy-get HTTP " + resp.status +
+      "；直连失败原因：" + (directErr && directErr.message ? directErr.message : "未知"));
+  }
+  throw directErr || new Error("下载失败");
+}
+/* blob → png blob：已是 png 直用；其余格式经 canvas 重绘转 png（fetch 来的 blob 无跨域污染） */
+async function blobToPngBlob(blob) {
+  if (blob.type === "image/png") { return blob; }
+  const objUrl = URL.createObjectURL(blob);
+  try {
+    const img = await loadImageEl(objUrl);
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    canvas.getContext("2d").drawImage(img, 0, 0);
+    return await new Promise((resolve, reject) => {
+      canvas.toBlob((b) => { b ? resolve(b) : reject(new Error("canvas 导出 PNG 失败")); }, "image/png");
+    });
+  } finally {
+    try { URL.revokeObjectURL(objUrl); } catch (e) { /* 忽略 */ }
+  }
+}
+/* 触发浏览器保存：a[download] 短链点击，4 秒后回收 blob URL */
+function saveBlobAs(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;            // 如 spr_cls_mage_cast_ranged.png / bg_battle_mine.png
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+async function downloadImage(uid) {
+  const im = images.find(i => String(i.uid) === String(uid));
+  if (!im) { return; }
+  if (im.url) { await downloadUrlImage(im); return; }   // URL 源走三级降级下载
+  try {
+    const blob = await toPngBlob(im);
+    saveBlobAs(blob, im.item.id + ".png");
+    hideError();   // B7 修复：下载成功时清掉残留的旧错误提示框
+  } catch (err) {
+    showError("下载失败：" + (err && err.message ? err.message : err));
+  }
+}
+/* URL 源下载三级降级：①直连 fetch→blob→a[download] ②本地代理 /proxy-get 同前
+ * ③两级都失败 → 错误框指引用户手动另存，并把 url 复制到剪贴板（复制失败则展示可选中 url） */
+async function downloadUrlImage(im) {
+  let blob = null;
+  let failReason = "";
+  try {
+    blob = await blobToPngBlob(await fetchUrlBlob(im.url));
+  } catch (err) {
+    blob = null;
+    failReason = err && err.message ? err.message : String(err);
+  }
+  if (blob) {
+    saveBlobAs(blob, im.item.id + ".png");
+    hideError();
+    return;
+  }
+  let clipNote = "";
+  try {
+    await navigator.clipboard.writeText(im.url);
+    clipNote = "\n图片 url 已复制到剪贴板（也可粘贴到浏览器地址栏打开）。";
+  } catch (e) { clipNote = ""; }   // 剪贴板不可用（非聚焦/权限拒）→ 至少错误框里可手动选中
+  showError("该图源跨域受限，自动下载失败" + (failReason ? "（" + failReason + "）" : "") + "。" +
+    "\n请右键缩略图 → 「在新标签页打开图片」→ 浏览器另存为（文件名请手动改为 " + im.item.id + ".png" + "）。" +
+    clipNote +
+    "\n图片地址（可选中复制）：\n" + im.url);
+}
+
+/* ============================================================
+ * 大图模态（缩放 / 平移 / 双击复位 / Esc 关闭）
+ * 打开与复位基准 = contain 全屏适配缩放（上限 1，低分辨率图不放大）
+ * ============================================================ */
+let modalUid = null;
+let modalView = { scale: 1, tx: 0, ty: 0 };
+let modalFitScale = 1;   // 当前图的 contain 适配缩放（打开态/双击复位基准；滚轮下限随其放宽）
+/* 视口可用区留白：左右各 32px；顶部 48px 清开提示条与关闭钮；底部 16px + 信息条实测高度 */
+const MODAL_FIT_PAD_X = 32;
+const MODAL_FIT_TOP = 48;
+const MODAL_FIT_BOTTOM = 16;
+function applyModalTransform() {
+  $("#modal-img").style.transform =
+    "translate(-50%, -50%) translate(" + modalView.tx + "px," + modalView.ty + "px) scale(" + modalView.scale + ")";
+}
+/* contain 适配缩放：图完整落入视口可用区（视口 - 留白 - 底部信息条），上限 1；
+ * naturalWidth/naturalHeight 对跨域 URL 源同样可读（仅 canvas 导出受限），b64/blob 源一致处理 */
+function computeFitScale(natW, natH) {
+  if (!natW || !natH) { return 1; }
+  const vp = $("#modal-viewport");
+  const infoH = $("#modal-info-bar").offsetHeight || 44;   // 模态可见后实测信息条高；异常兜底 44
+  const availW = Math.max(1, vp.clientWidth - MODAL_FIT_PAD_X * 2);
+  const availH = Math.max(1, vp.clientHeight - MODAL_FIT_TOP - MODAL_FIT_BOTTOM - infoH);
+  return Math.min(1, availW / natW, availH / natH);
+}
+/* 图片尺寸就绪后按 contain 适配并居中（打开初始化与加载完成共用，幂等） */
+function fitModalToImage() {
+  const img = $("#modal-img");
+  modalFitScale = computeFitScale(img.naturalWidth, img.naturalHeight);
+  modalView = { scale: modalFitScale, tx: 0, ty: 0 };
+  applyModalTransform();
+}
+/* 双击复位：回到打开时的全屏适配态（适配缩放 + 居中） */
+function resetModalView() {
+  if (!modalUid) { return; }   // 双击背景在 click 阶段已关模态，此处不再复位
+  modalView = { scale: modalFitScale, tx: 0, ty: 0 };
+  applyModalTransform();
+}
+function openModal(uid) {
+  const im = images.find(i => String(i.uid) === String(uid));
+  if (!im) { return; }
+  modalUid = String(uid);
+  $("#modal-id").textContent = im.item.id + ".png";
+  $("#modal-meta").textContent =
+    im.item.name_cn + " · " + fmtTime(im.time) + " · " + (im.provider === "openai" ? "GPT·OpenAI 兼容" : "Gemini") +
+    " · " + im.model + " · " + (im.sizeLabel || "—") + (im.url ? " · URL 源" : "") +
+    " · 耗时 " + (im.durationMs / 1000).toFixed(1) + "s";
+  $("#img-modal").classList.add("visible");   // 先显示再测视口：display:none 下 clientWidth/offsetHeight 均为 0
+  modalView = { scale: 1, tx: 0, ty: 0 };     // 兜底初值：图未就绪/加载失败时按 1:1 居中
+  modalFitScale = 1;
+  applyModalTransform();
+  const img = $("#modal-img");
+  img.onload = fitModalToImage;               // 尺寸就绪（含缓存命中）即适配
+  img.onerror = () => {                        // 加载失败（URL 源断链等）：维持 1:1 兜底
+    modalFitScale = 1;
+    modalView = { scale: 1, tx: 0, ty: 0 };
+    applyModalTransform();
+  };
+  img.src = im.url ? im.url : "data:" + im.mime + ";base64," + im.b64;   // URL 源直接显示远程直链
+  if (img.complete && img.naturalWidth > 0) { fitModalToImage(); }   // 已缓存：同步先算一次（onload 再触发亦幂等）
+}
+function closeModal() {
+  $("#img-modal").classList.remove("visible");
+  modalUid = null;
+}
+$("#modal-viewport").addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const old = modalView.scale;
+  const factor = Math.exp(-e.deltaY * 0.0015);
+  const lo = Math.min(0.1, modalFitScale);   // 超大图适配值 <0.1 时放宽下限，保证能缩回全屏适配态
+  const next = Math.min(8, Math.max(lo, old * factor));
+  if (next === old) { return; }
+  // 以指针位置为缩放锚点
+  const rect = $("#modal-viewport").getBoundingClientRect();
+  const cx = e.clientX - rect.left - rect.width / 2;
+  const cy = e.clientY - rect.top - rect.height / 2;
+  const k = next / old;
+  modalView.tx = cx - (cx - modalView.tx) * k;
+  modalView.ty = cy - (cy - modalView.ty) * k;
+  modalView.scale = next;
+  applyModalTransform();
+}, { passive: false });
+(() => {
+  const vp = $("#modal-viewport");
+  let dragging = false, lastX = 0, lastY = 0, moved = 0;
+  vp.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) { return; }
+    dragging = true; moved = 0; lastX = e.clientX; lastY = e.clientY;
+    vp.classList.add("dragging");
+    vp.setPointerCapture(e.pointerId);
+  });
+  vp.addEventListener("pointermove", (e) => {
+    if (!dragging) { return; }
+    modalView.tx += e.clientX - lastX;
+    modalView.ty += e.clientY - lastY;
+    moved += Math.abs(e.clientX - lastX) + Math.abs(e.clientY - lastY);
+    lastX = e.clientX; lastY = e.clientY;
+    applyModalTransform();
+  });
+  vp.addEventListener("pointerup", () => { dragging = false; vp.classList.remove("dragging"); });
+  /* 双击图片=复位到全屏适配态；双击背景则在 click 阶段已关模态（resetModalView 内有守卫不误改） */
+  vp.addEventListener("dblclick", resetModalView);
+  // 点背景关闭（拖拽平移后不误关）
+  vp.addEventListener("click", (e) => {
+    if (e.target.id === "modal-viewport" && moved < 6) { closeModal(); }
+  });
+})();
+$("#modal-close-btn").addEventListener("click", closeModal);
+$("#modal-download-btn").addEventListener("click", () => { if (modalUid) { downloadImage(modalUid); } });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    closeModal();
+    closeCtxMenu();
+  }
+  if (e.ctrlKey && e.key === "Enter") {
+    e.preventDefault();
+    generate();
+  }
+});
+
+/* ============================================================
+ * 栏宽拖拽（左 / 右栏可调，持久化）
+ * ============================================================ */
+function bindResizer(handleId, varName, min, max, isRight) {
+  const handle = $(handleId);
+  handle.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    handle.classList.add("dragging");
+    handle.setPointerCapture(e.pointerId);
+    const startX = e.clientX;
+    const startW = isRight ? settings.rightW : settings.leftW;
+    const onMove = (ev) => {
+      let w = isRight ? startW - (ev.clientX - startX) : startW + (ev.clientX - startX);
+      w = Math.min(max, Math.max(min, w));
+      document.documentElement.style.setProperty(varName, w + "px");
+      handle.dataset.w = String(w);
+    };
+    // K5 修复：pointercancel（系统手势打断/触控笔移出等）与 pointerup 同款清理，防监听残留
+    const onEnd = () => {
+      handle.classList.remove("dragging");
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("pointerup", onEnd);
+      handle.removeEventListener("pointercancel", onEnd);
+      if (handle.dataset.w) {
+        if (isRight) { settings.rightW = parseInt(handle.dataset.w, 10); }
+        else { settings.leftW = parseInt(handle.dataset.w, 10); }
+        saveSettings();
+      }
+    };
+    handle.addEventListener("pointermove", onMove);
+    handle.addEventListener("pointerup", onEnd);
+    handle.addEventListener("pointercancel", onEnd);
+  });
+}
+
+/* ============================================================
+ * 初始化
+ * ============================================================ */
+function init() {
+  if (!DATA || !ITEMS.length) {
+    document.body.innerHTML = "<div style='padding:40px;color:#d9534f'>assets_data.js 加载失败——请先运行 extract_prompts.py 生成数据文件，且与本页面同目录。</div>";
+    return;
+  }
+  migrateApiKeys();
+  // 设置栏
+  applySettingsToUI();
+  $("#toggle-settings").addEventListener("click", () => {
+    settings.collapsed = !settings.collapsed;
+    saveSettings();
+    setSettingsCollapsed(settings.collapsed);
+  });
+  $("#provider-select").addEventListener("change", (e) => {
+    // 切提供商：各槽配置已随字段即时保存，这里只做 UI 联动（Key/端点/模型/分辨率禁用态/映射提示）
+    if (!PROVIDERS.includes(e.target.value)) { e.target.value = "gemini"; return; }
+    settings.provider = e.target.value;
+    saveSettings();
+    applyProviderUI();
+    if (settings.collapsed) { setSettingsCollapsed(true); }
+  });
+  $("#api-key-input").addEventListener("change", onApiKeyInput);
+  $("#api-key-input").addEventListener("input", onApiKeyInput);    // B4：粘贴未提交也即时保存
+  $("#key-visibility-btn").addEventListener("click", () => {
+    const input = $("#api-key-input");
+    const show = input.type === "password";
+    input.type = show ? "text" : "password";
+    $("#key-visibility-btn").textContent = show ? "隐" : "显";
+  });
+  $("#key-clear-btn").addEventListener("click", () => {
+    $("#api-key-input").value = "";
+    lsRemove(apiKeySlot());
+    updateApiKeyHint();
+  });
+  $("#base-url-input").addEventListener("change", onBaseUrlInput);
+  $("#base-url-input").addEventListener("input", onBaseUrlInput);  // B4
+  $("#auth-select").addEventListener("change", (e) => {
+    // 鉴权方式只对 Gemini 通道有意义（存 gemini 槽）；OpenAI 模式下拉已禁用，不会触发
+    settings.gemini.auth = e.target.value === "bearer" ? "bearer" : "query";
+    saveSettings();
+    refreshProviderControls();   // 联动刷新下拉提示行与 Key 提示行（含折叠摘要）
+    if (settings.collapsed) { setSettingsCollapsed(true); }
+  });
+  $("#model-input").addEventListener("change", onModelInput);
+  $("#model-input").addEventListener("input", onModelInput);       // B4
+  $("#aspect-select").addEventListener("change", (e) => {
+    settings.aspect = e.target.value;
+    saveSettings();
+    updateAspectHint();
+  });
+  $("#size-select").addEventListener("change", (e) => {
+    settings.gemini.size = e.target.value;
+    saveSettings();
+    refreshProviderControls();
+  });
+  $("#concurrency-select").addEventListener("change", (e) => {
+    settings.concurrency = clampConcurrency(e.target.value);
+    saveSettings();
+    scheduleTasks();   // 上调并发时立即补位启动排队中的任务
+  });
+  $("#attach-negative-check").addEventListener("change", (e) => { settings.attachNegative = e.target.checked; saveSettings(); });
+  // 本地代理：加载即探测 + 每 30s 重探 + 手动重探（探测结果只改设置栏状态，不弹窗打扰）
+  $("#proxy-refresh-btn").addEventListener("click", probeProxy);
+  probeProxy();
+  setInterval(probeProxy, 30000);
+
+  // 左栏
+  initGroupFilter();
+  $("#search-input").addEventListener("input", renderList);
+  $("#group-filter").addEventListener("change", renderList);
+  $("#status-filter").addEventListener("change", renderList);
+  renderList();
+
+  // 中栏
+  $("#lang-toggle-btn").addEventListener("click", togglePromptLang);
+  $("#prompt-restore-btn").addEventListener("click", restorePrompt);
+  $("#prompt-textarea").addEventListener("input", updatePromptLangState);
+  $("#generate-btn").addEventListener("click", generate);
+
+  // 右栏
+  $("#thumb-filter").addEventListener("change", renderThumbs);
+  $("#cancel-all-btn").addEventListener("click", () => cancelAllTasks(false));
+  $("#clear-session-btn").addEventListener("click", () => {
+    if (!images.length) { return; }   // B9：无图但有进行中任务时也允许清空（走取消）
+    const pending = pendingTaskCount();
+    const imgCount = images.filter(im => im.kind === "image").length;
+    if (window.confirm("清空本次会话的全部 " + imgCount + " 张生成图？（标记记录一并清除；已下载文件不受影响）" +
+        (pending ? "\n注意：排队 / 生成中的 " + pending + " 个任务将同时被取消。" : ""))) {
+      cancelAllTasks(true);           // B9：先取消全部进行中任务（排队出队 + 生成中 abort）
+      images.forEach(revokeBlobUrl);  // K3：释放全部 blob URL
+      images = [];
+      markMap = {};
+      lsSetJSON(LS_MARKS, markMap);
+      closeModal();
+      renderList();
+      renderThumbs();
+      updateTaskStats();
+    }
+  });
+  renderThumbs();
+
+  // 栏宽
+  bindResizer("#left-resizer", "--left-w", 200, 480, false);
+  bindResizer("#right-resizer", "--right-w", 220, 520, true);
+
+  // 窗口激活时刷新折叠摘要（key 状态可能已变）
+  window.addEventListener("focus", () => { if (settings.collapsed) { setSettingsCollapsed(true); } });
+
+  updateProgress();
+}
+
+init();
+</script>
+</body>
+</html>

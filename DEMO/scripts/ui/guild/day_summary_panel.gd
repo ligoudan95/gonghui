@@ -44,14 +44,15 @@ var _title_label: Label = null
 ## 正文行（明细行 \n 拼接）
 var _body_label: Label = null
 
-func setup(cfg: CoreConfig) -> void:
-	## 构建弹层骨架（标题/正文/关闭钮——初始隐藏）
-	## 参数 cfg：总控配置
+func setup(cfg: CoreConfig, game_data: Node = null) -> void:
+	## 构建弹层骨架（标题/正文/关闭钮——初始隐藏）；M6 批 3.5b：game_data
+	## 注入（九宫格面板贴图态；空 = 缺件降级 StyleBoxFlat）
+	## 参数 cfg：总控配置；game_data：GameData（可空）
 	## 返回：无
 	_cfg = cfg
 	visible = false
 	z_index = POPUP_Z_INDEX
-	add_theme_stylebox_override("panel", UiTheme.make_dark_panel_style(cfg))
+	add_theme_stylebox_override("panel", UiTheme.make_dark_panel_style(cfg, game_data))
 	_box = VBoxContainer.new()
 	_box.add_theme_constant_override("separation", 8)
 	add_child(_box)

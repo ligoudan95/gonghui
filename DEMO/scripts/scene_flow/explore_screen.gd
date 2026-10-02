@@ -26,6 +26,9 @@ extends Control
 ## SceneManager 脚本常量引用
 const SceneManagerScript: GDScript = preload("res://scripts/autoload/scene_manager.gd")
 
+## 场景背景资源 id（M6 批 3.5b 组 1：bg_explore——AssetRegistry 单源路径映射）
+const BACKGROUND_ASSET_ID: StringName = &"bg_explore"
+
 ## UI 弹层 z 单源（2026-09-25 层级拍板：事件面板/结算面板等 UI 弹层压过
 ## board 全部绘制层——z_index 在 CanvasLayer 内跨子树全局生效，弹层留默认 0
 ## 会被迷雾(Z_FOG)/图标(Z_OVERLAY+)穿透；须恒大于 ExploreBoard.Z_PARTY）
@@ -171,6 +174,7 @@ func _ready() -> void:
 	## 返回：无
 	_game_data = get_node("/root/GameData")
 	_cfg = _game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
+	_ApplyBackgroundTexture()
 	var scene_manager: Node = get_node("/root/SceneManager")
 	var incoming: Dictionary = scene_manager.take_pending_params()
 	_run = incoming.get(&"expedition_run", null) as ExpeditionRun
@@ -187,7 +191,7 @@ func _ready() -> void:
 		var weight := record as EncounterWeightDef
 		_encw_by_region[weight.region_id] = weight
 	_panel = EventPanel.new()
-	_panel.setup(_cfg)
+	_panel.setup(_cfg, _game_data)
 	_panel.set_cast_provider(_CastProvider())
 	_panel.custom_minimum_size = Vector2(EVENT_PANEL_WIDTH, 0)
 	%PanelHost.add_child(_panel)
@@ -238,7 +242,7 @@ func _ready() -> void:
 	_state.setup(_map_def, _TileLookup())
 	# 迷雾墙体遮挡挂接（2026-09-26 拍板：视野被墙遮挡）：迷雾在 run 侧建立时
 	# 地图态未装配，此处挂接实时墙体查询（回调按次现查 tile_at——暗门 reveal
-	# 后格变 etile_path，遮挡随之解除；不清探索记忆）
+	# 后格变 etile_secret_passage，遮挡随之解除；不清探索记忆）
 	if _run.fog != null:
 		_run.fog.set_opaque_probe(_OpaqueProbe())
 		# V-2（2026-09-26 审计）：初始视野揭示在此统一执行（挂接遮挡探针之后
@@ -257,6 +261,14 @@ func _ready() -> void:
 	_ApplySecretRevealIfNeeded()
 	_RefreshBoard()
 	_RefreshStatus()
+
+func _ApplyBackgroundTexture() -> void:
+	## 场景背景接线（M6 批 3.5b 组 1）：AssetTex.apply_to 单源装配 bg_explore
+	## （KEEP_ASPECT_COVERED 铺满全屏——guild_shell 同构）；缺件/缺登记返回
+	## false——Background ColorRect 纯色兜底原样可见（图缺失降级路径同生效）
+	## 参数：无
+	## 返回：无
+	AssetTex.apply_to(%BackgroundTexture, BACKGROUND_ASSET_ID, _game_data)
 
 func _exit_tree() -> void:
 	## 引擎回调：离树恢复出征锁（会话结束；路由战斗期间锁由 battle_screen
@@ -403,11 +415,24 @@ func _ActiveTargetId() -> StringName:
 	return &""
 
 func _ExitActive() -> bool:
-	## 出口激活判定：判据达成，或自由探索会话（无判据——直接可交付，
-	## 2026-09-25 拍板）
+	## 出口激活判定：委托判据达成（_QuestGoalDone），或自由探索会话（无判据
+	## ——直接可交付，2026-09-25 拍板）。与 _QuestGoalDone 的关系（顺手4 锚定）：
+	## 本谓词 = 委托判据达成 or 自由探索——出口交付两语义并集；撤退口
+	## _OnRetreatPressed 只消费 _QuestGoalDone（自由探索无「完成」语义，
+	## _ExitActive 对其为真而完成语义为假）——两谓词语义不同不可互换，
+	## 改动任一口须同步复核另一口
 	## 参数：无
 	## 返回：true = 出口可交付
-	return _goal.is_done() or _run.goal_kind == -1
+	return _QuestGoalDone() or _run.goal_kind == -1
+
+func _QuestGoalDone() -> bool:
+	## 委托判据达成判定（顺手4 抽取——原 _OnRetreatPressed 内联裸谓词）：
+	## goal_kind != -1 且 _goal.is_done()。自由探索（kind==-1）恒 false——
+	## 无「完成」语义，回城走确认弹窗不误入完成结算；委托会话判据达成后
+	## 撤退按钮直走完成结算（2026-10-01 试玩反馈修复口径）
+	## 参数：无
+	## 返回：true = 委托判据已达成
+	return _run.goal_kind != -1 and _goal.is_done()
 
 func _RefreshStatus() -> void:
 	## 顶部状态行（委托/判据/耗时/队伍 HP）
@@ -1275,13 +1300,22 @@ func _OnSettleReturnPressed() -> void:
 		_SetHint(String(UI_TEXTS[&"settle_return_failed"]) % err)
 
 func _OnRetreatPressed() -> void:
-	## 撤退按钮：确认弹窗（撤退 = 委托失败——达成后撤退仍走失败通道）；
-	## 功能二批 3（Q-A 拍板：恒弹+增强）——有倒地成员时弹窗动态注入
-	## 倒地名单+转重伤警告（天数经 injury_rest_days 缩减链）；无倒地时
-	## 弹窗文案完全不变（tscn 静态文案维持）
+	## 撤退按钮：完成态直走交付结算（2026-10-01 试玩反馈：委托判据已达成后
+	## 回城 = 交付——不再弹撤退确认；旧序「先弹『是否放弃』确认、取消后才
+	## 见完成结算」交互顺序错误。判据达成态经 _FinishSession(SUCCESS) 走与
+	## 出口点交付同一条完成结算路；自由探索不在此列——无「完成」语义，回城
+	## 仍走确认弹窗零改动）；未达成（含部分达成）维持确认弹窗（撤退 = 委托
+	## 失败——历史拍板口径保留）；功能二批 3（Q-A 拍板：恒弹+增强）——
+	## 有倒地成员时弹窗动态注入倒地名单+转重伤警告（天数经 injury_rest_days
+	## 缩减链）；无倒地时弹窗文案完全不变（tscn 静态文案维持）；完成态判定
+	## 经 _QuestGoalDone（顺手4 抽取——与 _ExitActive 两口同源防漂移，语义
+	## 辨析见该谓词注：自由探索不进完成结算）
 	## 参数：无
 	## 返回：无
 	if _finished or _moving or _event_open or _resuming:
+		return
+	if _QuestGoalDone():
+		_FinishSession(GuildCore.ExpeditionOutcome.SUCCESS)
 		return
 	var downed_names: Array[String] = _DownedDisplayNames()
 	if not downed_names.is_empty():

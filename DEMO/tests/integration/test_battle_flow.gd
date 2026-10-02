@@ -771,3 +771,58 @@ func test_move_unit_degenerate_path_defensive_recheck() -> void:
 	assert_bool(warrior.grid_pos == from_pos) \
 			.override_failure_message("占位格 dest 应原地不动").is_true()
 	assert_object(context.grid.get_unit_at(enemy.grid_pos)).is_same(enemy)
+
+func test_lair_user_geometry_enemies_all_activate() -> void:
+	## 兜底 2.5 端到端（M5 后用户几何死锁修复·ai_repro6 蓝本）：真实链装配
+	## （enc_m1_lair_pack）+ 重摆用户几何（敌列 (3,1)(3,2)(3,3) + 第 4 敌东
+	## 走廊 (6,1)），我方全程被动——修复前三列敌空决策稳态冻结 9 回合；
+	## 修复后 6 回合内全部存活敌 grid_pos 都变过（全局路径跟随解冻）。
+	## 血量拉平（hp_overrides 同值）：目标四级链落「距离最近」= (3,9)
+	## （正对凹帽）——异血职业链会锁低血东侧目标，该几何贪心可解不构成
+	## 死锁（用例必须锚定用户现场几何）
+	var params := BattleParams.new()
+	params.pack_id = &"enc_m1_lair_pack"
+	params.party = _MakeParty()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = LAIR_SEED
+	params.rng = rng
+	for adv: AdventurerData in params.party:
+		params.hp_overrides[adv.unit_id] = 60
+	var context := BattleSetup.build(params, _game_data)
+	assert_object(context).is_not_null()
+	assert_int(context.enemies.size()).is_equal(4)
+	# 重摆用户几何：三敌一列 + 第 4 敌东走廊（前 3 位占位互为障碍的冻结蓝本）
+	var spawns: Array[Vector2i] = [Vector2i(3, 1), Vector2i(3, 2),
+			Vector2i(3, 3), Vector2i(6, 1)]
+	var initial_pos: Dictionary = {}
+	for index: int in context.enemies.size():
+		var enemy: BattleUnit = context.enemies[index]
+		context.grid.remove_unit(enemy.grid_pos)
+		enemy.grid_pos = spawns[index]
+		context.grid.place_unit(enemy.grid_pos, enemy)
+		initial_pos[enemy.unit_id] = enemy.grid_pos
+	var controller := _MakeController(context)
+	# 第 1 回合敌方移动实时捕获（delay 0 下一帧可跨多回合，轮询回合号锚不住
+	## 时点——信号回调与帧速率无关）
+	var round1_movers: Dictionary = {}
+	controller.unit_moved.connect(func(unit: BattleUnit, _from: Vector2i, _to: Vector2i,
+			_path: Array) -> void:
+		if unit.side == SkillDef.SkillSide.ENEMY and context.round_no == 1:
+			round1_movers[unit.unit_id] = true)
+	_AttachStrategy(controller, context, {}, true)
+	controller.start_battle(context)
+	# 推进到第 2 回合开（第 1 回合全部敌轮完成；被动我方挨打不还手）
+	var waited: int = 0
+	while not controller.is_battle_over() and context.round_no < 2 \
+			and waited < MAX_WAIT_FRAMES * 10:
+		await get_tree().process_frame
+		waited += 1
+	# 断言：三列敌第 1 回合内全部移动（解冻即刻性——修复前 R1 全体空决策
+	## 稳态冻结；多回合窗口会被「第 4 敌杀伤→目标链换血→借换目标脱困」的
+	## 次生路径掩盖死锁）
+	for index: int in range(3):
+		var enemy: BattleUnit = context.enemies[index]
+		assert_bool(round1_movers.has(enemy.unit_id)) \
+				.override_failure_message("列队敌 %s 第一回合未移动（死锁未解冻）" % String(enemy.unit_id)) \
+				.is_true()
+	controller.abort_battle()

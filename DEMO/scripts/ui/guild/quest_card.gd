@@ -14,7 +14,8 @@ const ATTR_NAMES: Dictionary = {
 }
 
 ## UI 文案单源（M4 增补批：轻度信息行格式串；M6 批 2 挂账 4.2：内联 UI
-## 中文收编——改措辞只动此处）
+## 中文收编——改措辞只动此处；M6 批 3.5b 组 6：奖励分段格式串——贴图态
+## 三图标分段，缺件态维持整行 reward_format 现状）
 const UI_TEXTS: Dictionary = {
 	&"accept_button": "接单",
 	&"title_format": "%s（等级 %d）",
@@ -23,15 +24,30 @@ const UI_TEXTS: Dictionary = {
 	&"reward_none": "奖励：—",
 	&"desc_format": "%s：%s",
 	&"light_info_format": "剩余 %d 天｜派 %d-%d 人 · 工期 %d 天 · 无需出征",
+	&"reward_title": "奖励：",
+	&"reward_gold_format": "%d 金",
+	&"reward_exp_format": "%d 经验",
+	&"reward_repu_format": "%d 声望",
 }
+
+## 奖励行三段图标资产 id（组 6：金/经验/声望——AssetTex 单源解析；
+## 三键全缺件时奖励行维持现状整行文本零回归）
+const REWARD_ICON_IDS: Array[StringName] = [&"icon_res_gold", &"icon_res_exp",
+		&"icon_res_repu"]
+## 奖励行图标边长（px）
+const REWARD_ICON_SIZE: float = 18.0
 
 ## 总控配置（setup 注入）
 var _cfg: CoreConfig = null
+## GameData（setup 注入——奖励图标 AssetTex 解析；空 = 缺件降级）
+var _game_data: Node = null
 ## 名称行（加急前缀+名称+等级档）
 var _title_label: Label = null
 ## 明细行（剩余天数/推荐属性/人力区间/目标区域）
 var _info_label: Label = null
-## 奖励预览行
+## 奖励行容器（组 6：整行 Label / 三段图标行两种形态切换）
+var _reward_box: HBoxContainer = null
+## 奖励预览行（缺件降级态整行文本——现状分支保留）
 var _reward_label: Label = null
 ## 描述/发布人行
 var _desc_label: Label = null
@@ -43,19 +59,24 @@ var _serial: int = 0
 ## 接取请求信号（serial=实例序号）
 signal accept_requested(serial: int)
 
-func setup(cfg: CoreConfig) -> void:
-	## 构建卡片骨架（宿主 add_child 前后调用皆可）
-	## 参数 cfg：总控配置（字号档位表驱动）
+func setup(cfg: CoreConfig, game_data: Node = null) -> void:
+	## 构建卡片骨架（宿主 add_child 前后调用皆可）；M6 批 3.5b：game_data
+	## 注入（九宫格面板与奖励行图标解析；空 = 双缺件降级——现状零回归）
+	## 参数 cfg：总控配置（字号档位表驱动）；game_data：GameData（可空）
 	## 返回：无
 	_cfg = cfg
-	add_theme_stylebox_override("panel", UiTheme.make_dark_panel_style(cfg))
+	_game_data = game_data
+	add_theme_stylebox_override("panel", UiTheme.make_dark_panel_style(cfg, game_data))
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 4)
 	add_child(box)
 	_title_label = _MakeLabel(box, &"ui_font_size_body", UiTheme.FONT_BODY)
 	_info_label = _MakeLabel(box, &"ui_font_size_normal", UiTheme.FONT_NORMAL)
 	_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_reward_label = _MakeLabel(box, &"ui_font_size_normal", UiTheme.FONT_NORMAL)
+	_reward_box = HBoxContainer.new()
+	_reward_box.add_theme_constant_override("separation", 10)
+	box.add_child(_reward_box)
+	_reward_label = _MakeLabel(_reward_box, &"ui_font_size_normal", UiTheme.FONT_NORMAL)
 	_reward_label.add_theme_color_override("font_color",
 			UiTheme.color_of(cfg, &"ui_highlight_gold_color", UiTheme.HIGHLIGHT_GOLD))
 	_desc_label = _MakeLabel(box, &"ui_font_size_small", UiTheme.FONT_SMALL)
@@ -108,4 +129,57 @@ func refresh(inst: QuestInstance, game_data: Node, day: int) -> void:
 	_reward_label.text = UI_TEXTS[&"reward_format"] % [
 			tpl.reward.gold, tpl.reward.exp, tpl.reward.reputation] if tpl.reward != null \
 			else UI_TEXTS[&"reward_none"]
+	_RefreshRewardRow(tpl)
 	_desc_label.text = UI_TEXTS[&"desc_format"] % [tpl.issuer, tpl.description]
+
+func _RefreshRewardRow(tpl: QuestTemplateDef) -> void:
+	## 奖励行形态装配（M6 批 3.5b 组 6）：三段图标任一在档 → 标题+三段
+	## [icon+数值] 图标行（_reward_label 隐藏）；三键全缺件/无奖励 → 整行
+	## Label 文本现状（缺件态视觉零回归——_reward_label.text 已由调用方写好）
+	## 参数 tpl：委托模板（reward 为空的降级分支同现况）
+	## 返回：无
+	for child: Node in _reward_box.get_children():
+		if child != _reward_label:
+			child.queue_free()
+	var textures: Array[Texture2D] = []
+	for asset_id: StringName in REWARD_ICON_IDS:
+		textures.append(AssetTex.texture_of(asset_id, _game_data))
+	var has_any_icon: bool = false
+	for texture: Texture2D in textures:
+		if texture != null:
+			has_any_icon = true
+			break
+	if tpl.reward == null or not has_any_icon:
+		_reward_label.visible = true
+		return
+	_reward_label.visible = false
+	var title := Label.new()
+	title.text = UI_TEXTS[&"reward_title"]
+	title.add_theme_font_size_override("font_size",
+			UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
+	title.add_theme_color_override("font_color",
+			UiTheme.color_of(_cfg, &"ui_highlight_gold_color", UiTheme.HIGHLIGHT_GOLD))
+	_reward_box.add_child(title)
+	var value_keys: Array[StringName] = [&"gold", &"exp", &"reputation"]
+	var value_formats: Array[StringName] = [&"reward_gold_format",
+			&"reward_exp_format", &"reward_repu_format"]
+	for index: int in textures.size():
+		var part := HBoxContainer.new()
+		part.add_theme_constant_override("separation", 4)
+		if textures[index] != null:
+			var icon := TextureRect.new()
+			icon.texture = textures[index]
+			icon.custom_minimum_size = Vector2.ONE * REWARD_ICON_SIZE
+			icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			part.add_child(icon)
+		var value_label := Label.new()
+		value_label.text = UI_TEXTS[value_formats[index]] % int(tpl.reward.get(value_keys[index]))
+		value_label.add_theme_font_size_override("font_size",
+				UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
+		value_label.add_theme_color_override("font_color",
+				UiTheme.color_of(_cfg, &"ui_highlight_gold_color", UiTheme.HIGHLIGHT_GOLD))
+		part.add_child(value_label)
+		_reward_box.add_child(part)

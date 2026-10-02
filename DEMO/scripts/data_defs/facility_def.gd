@@ -26,6 +26,9 @@ enum FacilityKind {
 ## 设施场景名（SceneManager.SCENE_REGISTRY 键；场景文件批 2 落地、本批先落引用值，
 ## 拍板⑥「设施=三独立场景」的表侧承载）
 @export var scene_id: StringName = &""
+## 设施背景资产 id（M6 批 3.5a A6：背景接线的数据位——bg_* 键经 assets 域
+## AssetRegistry 映射；空 = 占位合法（3.5b 接线前过渡态，V-M6-fac-bg 不收紧空值））
+@export var bg_asset_id: StringName = &""
 
 ## 设计备注（【占位·试玩校准】等标注与数据来源说明，Inspector 可编辑）
 @export var comment: String = ""

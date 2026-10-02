@@ -1,9 +1,12 @@
 ## 战场板层（BattleBoard，Control——格子网格 + 覆盖层 + 单位徽章容器）
-## 职责：按 BattleContext 渲染战场——地格色块池（tile 表 kind/status_id 驱动：
-## 草丛绿/高地亮黄凸边/毒沼紫黑/障碍深灰岩块描边/普通土色）、地格 hover 描述
+## 职责：按 BattleContext 渲染战场——地格池（M6 批 3.5b 组 3 贴图接线：
+## tile.asset_id/asset_variants → pick_variant 混铺 → Control 根+满格贴图，
+## gap=0 无缝；缺件降级色块池 kind/status_id 驱动：草丛绿/高地亮黄凸边/
+## 毒沼紫黑/障碍深灰岩块描边/普通土色）、地格 hover 描述
 ## （特殊/障碍格 PASS + tooltip_text，文案取 tile 表 description——UI 零硬编码；
-## 2026-09-24 试玩反馈）、动态地格标记（陷阱点）、覆盖层（移动范围高亮+亮边框/
-## 技能范围红显/路径预览/二次确认提示）、单位徽章池、飘字伤害数字；
+## 2026-09-24 试玩反馈）、动态地格标记（陷阱点——贴图态整格半透明/缺件角块）、
+## 覆盖层（移动范围高亮+亮边框/技能范围红显——组 8 fx_battle_range 染色态/
+## 路径预览（A8 箭头）/二次确认提示）、单位徽章池、飘字伤害数字；
 ## 提供本地坐标 → 格坐标换算（点击命中入口）。
 ## 数据来源：M1 批 3 方案 §7.1；格子尺寸自适应版面（40-88px 钳制）。
 ## 输入口径：本层 gui_input 统一接点按（battle_screen 分发两段式确认）；
@@ -49,6 +52,22 @@ const DAMAGE_TEXT_NORMAL: String = "%d"
 ## per-file UI_TEXTS 既定模式）
 const UI_TEXTS: Dictionary = {
 	&"miss_text": "闪避",
+}
+## 路径箭头资产 id（M6 批 3.5a A8：右向基准素材——上/下 rotate ±90°、
+## 左 rotate 180° 复用单件，不出多朝向素材）
+const PATH_ARROW_ASSET_ID: StringName = &"fx_battle_path_arrow"
+## 范围覆盖贴图资产 id（M6 批 3.5b 组 8：_ShowOverlay 填充块贴图态——
+## modulate = cfg 填充色染蓝/染红；缺件回退现状 ColorRect）
+const RANGE_OVERLAY_ASSET_ID: StringName = &"fx_battle_range"
+## 陷阱格贴图态整格透明度（组 3——贴图自带纹样，半透明显「区域」而非「实心」）
+const TRAP_TILE_ALPHA: float = 0.55
+## 方向 → 箭头旋转角（度；右向基准：右 0 / 下 90 / 左 180 / 上 270——
+## 09 组规格 v1.1 勘正口径）
+const PATH_ARROW_ROTATIONS: Dictionary = {
+	Vector2i.RIGHT: 0.0,
+	Vector2i.DOWN: 90.0,
+	Vector2i.LEFT: 180.0,
+	Vector2i.UP: 270.0,
 }
 ## 移动演出步数上限口径注（D6：tween 总时长 = 步长 × min(路径步数, 上限)——
 ## 远距移动时长钳制防长路径演出拖沓；低15 盲审修复：上限值入表
@@ -125,6 +144,9 @@ var _tips_line2: Label = null
 ## GameData（sprite 路径解析——批 4 H3：纹理缓存与解析逻辑单源至 SpriteResolver，
 ## 本层缓存字段删除）
 var _game_data: Node = null
+## resized 重建待执行标记（拍板 A 防抖一帧合并：同帧多次 resized 只排一次
+## call_deferred——重复排队前查此标记防重入；帧末执行体置回）
+var _resize_rebuild_queued: bool = false
 
 func _ready() -> void:
 	## 引擎回调：尺寸变化监听挂接（W3-04——窗口/容器尺寸变化后格子几何、
@@ -146,12 +168,29 @@ func setup(board_context: BattleSetup.BattleContext, game_data: Node) -> void:
 
 func _OnResized() -> void:
 	## 尺寸变化重算（W3-04）：未装配（降级路径/装配前首帧零尺寸）跳过；
-	## 几何实际变化才全量重建（格子尺寸/原点/地格/徽章/覆盖层/动态标记——
-	## 覆盖层与 tips 随重建清空，选择态由宿主后续交互重建，属可接受瞬时态）；
+	## 拍板 A 防抖一帧合并：窗口拖动期 resized 每帧触发、origin 随尺寸必变
+	## 致几何变更判定恒真、每帧全量重建几百节点——同帧多次 resized 只在帧末
+	## 合并重建一次（脏标记 + call_deferred——重复排队前查待执行标记防重入）；
+	## 几何架构零改：origin 计算与重建逻辑原样收口 _ApplyResizeRebuild
+	## 参数：无
+	## 返回：无
+	if context == null or context.grid == null:
+		return
+	if _resize_rebuild_queued:
+		return
+	_resize_rebuild_queued = true
+	_ApplyResizeRebuild.call_deferred()
+
+func _ApplyResizeRebuild() -> void:
+	## resized 防抖执行体（帧末单次——原 _OnResized 重建逻辑原样迁移）：
+	## 先置回待执行标记（后续 resized 可再排队）→ 几何实际变化才全量重建
+	##（格子尺寸/原点/地格/徽章/覆盖层/动态标记——覆盖层与 tips 随重建清空，
+	## 选择态由宿主后续交互重建，属可接受瞬时态）；
 	## S4-R2-03：重建前 kill 在飞飘字 tween（label 随下方全量重建统一释放，
 	## kill 阻断 tween_callback 的二次 queue_free 与对已释放对象的插值报错）
 	## 参数：无
 	## 返回：无
+	_resize_rebuild_queued = false
 	if context == null or context.grid == null:
 		return
 	var old_cell: float = cell_size
@@ -163,6 +202,11 @@ func _OnResized() -> void:
 	for unit_id: StringName in _move_tweens.keys():
 		_KillMoveTween(unit_id)
 	for child: Node in get_children():
+		# S4-R3-01 同式（event_panel._Reset 先例）：先隐藏断输入/渲染再释放
+		#（queue_free 延迟帧末——旧格子层与新层一帧叠渲）
+		var visual: CanvasItem = child as CanvasItem
+		if visual != null:
+			visual.visible = false
 		child.queue_free()
 	_cells.clear()
 	_badges.clear()
@@ -235,8 +279,10 @@ func show_skill_range(cells: Array[Vector2i], caster_pos: Vector2i,
 	_ShowBlockedOverlay(blocked, _skill_overlays)
 
 func show_path_preview(from_cell: Vector2i, to_cell: Vector2i) -> void:
-	## 路径预览（直线近似：起终间逐格高亮——M1 无寻路折线渲染，确认执行后以
-	## 实际移动为准）
+	## 路径预览（M6 批 3.5a A8 箭头形态：逐格方向推导（cells[i+1]-cells[i]，末格
+	## 沿用前方向）+ 每格 TextureRect（fx_battle_path_arrow 右向基准按方向旋转）；
+	## 缺件降级 = 逐格高亮 overlay（占位先行口径）；直线近似口径不变（cells
+	## 生成零改，确认执行后以实际移动为准）
 	## 参数 from_cell/to_cell：起终格
 	## 返回：无
 	var cells: Array[Vector2i] = []
@@ -245,7 +291,58 @@ func show_path_preview(from_cell: Vector2i, to_cell: Vector2i) -> void:
 		var t: float = float(index) / float(steps)
 		cells.append(Vector2i(roundi(lerpf(from_cell.x, to_cell.x, t)),
 				roundi(lerpf(from_cell.y, to_cell.y, t))))
-	_ShowOverlay(cells, _OverlayColor(&"ui_overlay_path_color", UiTheme.OVERLAY_PATH), _path_overlays)
+	var arrow: Texture2D = AssetTex.texture_of(PATH_ARROW_ASSET_ID, _game_data)
+	if arrow != null:
+		_ShowPathArrows(cells, arrow)
+	else:
+		_ShowOverlay(cells, _OverlayColor(&"ui_overlay_path_color", UiTheme.OVERLAY_PATH), _path_overlays)
+
+static func path_arrow_rotation(cells: Array[Vector2i], index: int) -> float:
+	## 单格箭头方向角推导（A8 可测纯函数）：direction = cells[index+1] -
+	## cells[index]，末格沿用前方向（末格取倒数第二格的推导方向）；单格路径
+	## 回退 0°（右）；对角步（直线近似的斜向跳格）水平分量优先（dx != 0 取
+	## 水平、否则取垂直——确定性映射，不随坐标值抖动）
+	## 参数 cells：路径格列表；index：格下标
+	## 返回：旋转角（度——右 0 / 下 90 / 左 180 / 上 270）
+	var delta: Vector2i = Vector2i.ZERO
+	if index + 1 < cells.size():
+		delta = cells[index + 1] - cells[index]
+	elif index >= 1:
+		delta = cells[index] - cells[index - 1]
+	if delta == Vector2i.ZERO:
+		return 0.0
+	var unit_dir: Vector2i = Vector2i.RIGHT if delta.x != 0 else Vector2i.DOWN
+	if delta.x < 0 or (delta.x == 0 and delta.y < 0):
+		unit_dir = -unit_dir
+	return float(PATH_ARROW_ROTATIONS.get(unit_dir, 0.0))
+
+func _ShowPathArrows(cells: Array[Vector2i], arrow: Texture2D) -> void:
+	## 路径箭头渲染（A8 内部口）：清池重画——每格一个居中 TextureRect（右向
+	## 基准素材按方向旋转，pivot 居中）；holder 入 _path_overlays 池
+	## （clear 链路零改——clear_overlays/_ClearOverlay 原口径直接复用）
+	## 参数 cells：路径格列表；arrow：箭头纹理（已解析非空）
+	## 返回：无
+	_ClearOverlay(_path_overlays)
+	_EnsureOverlayLayer()
+	for index: int in cells.size():
+		var holder := Control.new()
+		holder.position = origin + Vector2(cells[index]) * cell_size
+		holder.size = Vector2(cell_size, cell_size)
+		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var sprite := TextureRect.new()
+		sprite.texture = arrow
+		# 属性序契约（高1 修复——_MakeTileVisual/_MakeTexturedCell 同款）：stretch/
+		## expand 必须先于 size/pivot——expand 默认 KEEP_SIZE 时纹理 min-size
+		##（128×128）钳住 size 赋值，箭头恒纹理原尺寸溢出格且 pivot 随之偏移
+		sprite.stretch_mode = TextureRect.STRETCH_SCALE
+		sprite.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		sprite.size = holder.size
+		sprite.pivot_offset = sprite.size * 0.5
+		sprite.rotation_degrees = path_arrow_rotation(cells, index)
+		sprite.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		holder.add_child(sprite)
+		_overlay_layer.add_child(holder)
+		_path_overlays.append(holder)
 
 func show_target_confirm(cell: Vector2i) -> void:
 	## 二次确认提示（目标格亮框）
@@ -343,9 +440,11 @@ func _EnsureTipsPanel() -> void:
 	if _tips_panel != null and is_instance_valid(_tips_panel):
 		return
 	_tips_panel = PanelContainer.new()
-	# B-4：深底面板样式单源（UiTheme.make_dark_panel_style——与 BattleLog 共用）
+	# B-4：深底面板样式单源（UiTheme.make_dark_panel_style——与 BattleLog 共用；
+	## M6 批 3.5b 组 7：九宫格贴图态经 game_data 参切换）
 	_tips_panel.add_theme_stylebox_override("panel",
-			UiTheme.make_dark_panel_style(context.cfg if context != null else null))
+			UiTheme.make_dark_panel_style(context.cfg if context != null else null,
+					_game_data))
 	_tips_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var box := VBoxContainer.new()
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -568,22 +667,46 @@ func _KeepTipsOnTop() -> void:
 		move_child(_tips_panel, get_child_count() - 1)
 
 func RefreshDynamicMarks() -> void:
-	## 动态地格标记刷新（陷阱橙色点——调试可见口径；S1-4：标记色经 tile 表
-	## mark_color 字段驱动）；地格 hover 描述全量重算（动态陷阱格经 tile_at
-	## 动态优先获得陷阱描述，消耗后回落基础层）；S4-11：创建后保 tips 恒顶层
+	## 动态地格标记刷新（陷阱——调试可见口径；S1-4：标记色经 tile 表
+	## mark_color 字段驱动）；M6 批 3.5b 组 3：tile 表贴图在档（如 tile_trap
+	## → tile_battle_trap）→ 整格半透明 TextureRect（贴图自带纹样，alpha=
+	## TRAP_TILE_ALPHA；meta trap_mark 沿用），缺件回退现状橙色角块；
+	## 地格 hover 描述全量重算（动态陷阱格经 tile_at 动态优先获得陷阱描述，
+	## 消耗后回落基础层）；S4-11：创建后保 tips 恒顶层
 	## 参数：无
 	## 返回：无
 	for child: Node in get_children():
-		if child is ColorRect and child.get_meta(&"trap_mark", false):
+		if child.get_meta(&"trap_mark", false):
 			child.queue_free()
 	_ApplyAllCellTooltips()
 	for cell: Vector2i in context.grid.dynamic_tiles:
-		var mark := ColorRect.new()
-		mark.color = _TrapMarkColorOf(cell)
-		mark.size = Vector2(TRAP_MARK_SIZE, TRAP_MARK_SIZE)
-		mark.position = cell_rect(cell).position \
-				+ Vector2(cell_size - TRAP_MARK_CORNER_OFFSET, cell_size - TRAP_MARK_CORNER_OFFSET)
-		mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var tile: TileTypeDef = context.grid.tile_at(cell)
+		var trap_texture: Texture2D = _TileTextureOf(cell, tile)
+		var mark: Control = null
+		if trap_texture != null:
+			# 贴图态：整格半透明陷阱面（格根 IGNORE + 满格贴图）
+			var holder := Control.new()
+			holder.position = cell_rect(cell).position
+			holder.size = Vector2(cell_size, cell_size)
+			holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			holder.modulate.a = TRAP_TILE_ALPHA
+			var rect := TextureRect.new()
+			rect.texture = trap_texture
+			rect.stretch_mode = TextureRect.STRETCH_SCALE
+			rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			rect.size = holder.size
+			rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			holder.add_child(rect)
+			mark = holder
+		else:
+			# 缺件降级：现状橙色角块（S1-4 表驱动标记色）
+			var corner := ColorRect.new()
+			corner.color = _TrapMarkColorOf(cell)
+			corner.size = Vector2(TRAP_MARK_SIZE, TRAP_MARK_SIZE)
+			corner.position = cell_rect(cell).position \
+					+ Vector2(cell_size - TRAP_MARK_CORNER_OFFSET, cell_size - TRAP_MARK_CORNER_OFFSET)
+			corner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			mark = corner
 		mark.set_meta(&"trap_mark", true)
 		add_child(mark)
 	_KeepTipsOnTop()
@@ -630,11 +753,17 @@ func _BuildCells() -> void:
 
 func _MakeCellVisual(cell: Vector2i, tile: TileTypeDef) -> Control:
 	## 构建单个地格视觉（批 A H2 表驱动：fill_color/accent_color/style 三字段
-	## 驱动——UI 只按样式枚举分支，新增状态地格改表零改码）
+	## 驱动——UI 只按样式枚举分支，新增状态地格改表零改码）；M6 批 3.5b 组 3：
+	## match 前贴图分支——tile.asset_id/asset_variants → pick_variant 稳定哈希
+	## 混铺（同格恒定/异格打散）→ AssetTex 在档走 Control 根容器 + 满格
+	## TextureRect 子节点（贴图态 gap=0 无缝）；缺件/空 id 落回现状色块分支
 	## 参数 cell：格坐标；tile：地格定义
 	## 返回：视觉根节点
 	if tile == null:
 		return _MakeCellRect(cell, _TileFallbackColor(), CELL_GAP)
+	var tile_texture: Texture2D = _TileTextureOf(cell, tile)
+	if tile_texture != null:
+		return _MakeTexturedCell(cell, tile_texture)
 	match tile.style:
 		TileTypeDef.Style.BLOCK:
 			# 障碍岩块：底色 + 深色内块（darkened 同原式）+ 强调色描边
@@ -664,6 +793,38 @@ func _MakeCellVisual(cell: Vector2i, tile: TileTypeDef) -> Control:
 			# PLAIN：平色块（格间缝）
 			return _MakeCellRect(cell, tile.fill_color, CELL_GAP)
 
+func _TileTextureOf(cell: Vector2i, tile: TileTypeDef) -> Texture2D:
+	## 地格贴理解析（组 3 接线口）：tile 空/asset_id 空 → null（降级信号）；
+	## pick_variant 主件+变体按格坐标稳定哈希选取 → AssetTex.texture_of
+	##（进程级缓存——逐格解析开销恒定；缺件 null 穿透）
+	## 参数 cell：格坐标（哈希种子）；tile：地格定义
+	## 返回：贴图；无贴图位/缺件返回 null
+	if tile == null or String(tile.asset_id).is_empty():
+		return null
+	var asset_id: StringName = AssetTex.pick_variant(tile.asset_id,
+			tile.asset_variants, cell)
+	return AssetTex.texture_of(asset_id, _game_data)
+
+func _MakeTexturedCell(cell: Vector2i, texture: Texture2D) -> Control:
+	## 构建贴图态地格视觉（组 3）：Control 根容器（满格、IGNORE——tooltip/
+	## mouse_filter 契约与 _ApplyCellTooltip 的 ColorRect 根同构）+ 满格
+	## TextureRect 子节点；贴图态 gap=0 无缝（整片战场连贴图）
+	## 参数 cell：格坐标；texture：已解析地格贴图
+	## 返回：视觉根节点（已挂树）
+	var holder := Control.new()
+	holder.position = origin + Vector2(cell) * cell_size
+	holder.size = Vector2(cell_size, cell_size)
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var rect := TextureRect.new()
+	rect.texture = texture
+	rect.stretch_mode = TextureRect.STRETCH_SCALE
+	rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	rect.size = holder.size
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.add_child(rect)
+	add_child(holder)
+	return holder
+
 func _MakeCellRect(cell: Vector2i, color: Color, gap: float) -> ColorRect:
 	## 构建地格底色块（gap = 格间缝）
 	## 参数 cell/color/gap：坐标、颜色、缝宽
@@ -690,7 +851,7 @@ func _BuildBadges() -> void:
 					action, _game_data)
 			if strip != null:
 				anim_textures[action] = strip
-		badge.setup(unit, cell_size, context.cfg, anim_textures)
+		badge.setup(unit, cell_size, context.cfg, anim_textures, _game_data)
 		badge.position = origin + Vector2(unit.grid_pos) * cell_size
 		add_child(badge)
 		_badges[unit.unit_id] = badge
@@ -698,22 +859,38 @@ func _BuildBadges() -> void:
 func _ShowOverlay(cells: Array[Vector2i], color: Color, pool: Array[Control],
 		border_color: Color = Color(0, 0, 0, 0), border_width: float = OVERLAY_BORDER_WIDTH) -> void:
 	## 覆盖层画制（清池重画；每格容器 = 极淡填充 + 可选四边框；挂覆盖层专用
-	## 容器——层级见 _overlay_layer 注）
+	## 容器——层级见 _overlay_layer 注）；M6 批 3.5b 组 8：fx_battle_range
+	## 在档 → 填充块改 TextureRect + modulate=填充色（贴图染色态——移动范围
+	## 染蓝/技能范围染红，α 语义随 cfg 色不变）；缺件回退现状 ColorRect；
+	## 程序边框带两态通用保留（_ShowBlockedOverlay 不动）
 	## 参数 cells/color/pool/border_color/border_width：格列表、填充色、目标池、
 	## 边框色（alpha ≤ 0 无边框）、边框条宽
 	## 返回：无
 	_ClearOverlay(pool)
 	_EnsureOverlayLayer()
+	var range_texture: Texture2D = AssetTex.texture_of(RANGE_OVERLAY_ASSET_ID,
+			_game_data)
 	for cell: Vector2i in cells:
 		var holder := Control.new()
 		holder.position = origin + Vector2(cell) * cell_size
 		holder.size = Vector2(cell_size, cell_size)
 		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var fill := ColorRect.new()
-		fill.color = color
-		fill.size = holder.size
-		fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		holder.add_child(fill)
+		if range_texture != null:
+			# 贴图染色态：贴图 + modulate = 填充色（α 随色——淡填充语义不变）
+			var fill_tex := TextureRect.new()
+			fill_tex.texture = range_texture
+			fill_tex.modulate = color
+			fill_tex.stretch_mode = TextureRect.STRETCH_SCALE
+			fill_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			fill_tex.size = holder.size
+			fill_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			holder.add_child(fill_tex)
+		else:
+			var fill := ColorRect.new()
+			fill.color = color
+			fill.size = holder.size
+			fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			holder.add_child(fill)
 		if border_color.a > 0.0:
 			for edge: ColorRect in _MakeEdgeStrips(holder.size, border_color, border_width):
 				holder.add_child(edge)

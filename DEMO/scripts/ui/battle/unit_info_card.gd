@@ -7,6 +7,13 @@ extends PanelContainer
 
 ## 状态图标尺寸
 const STATUS_ICON_SIZE: float = 22.0
+## HP 图标资产 id（M6 批 3.5b 组 6：_stats_label 行前——固定 HP 图标）
+const HP_ICON_ASSET_ID: StringName = &"icon_res_hp"
+## 资源图标资产 id（法力/精力——按 unit.resource_kind 选）
+const RES_ICON_MANA_ASSET_ID: StringName = &"icon_res_mp"
+const RES_ICON_STAMINA_ASSET_ID: StringName = &"icon_res_sp"
+## 状态行图标边长（px）
+const STAT_ICON_SIZE: float = 16.0
 
 ## 修正键中文映射（S4-R4-02：状态 tooltip 修正量英文键直出「dodge+0.15」
 ## ——UI 层有限枚举字典，ATTR_NAMES（event_panel）豁免先例同口径；
@@ -22,6 +29,9 @@ const MOD_NAMES: Dictionary = {
 
 ## 总控配置（B-1：配色/字号表驱动注入——setup 传入，空 = 纯兜底模式）
 var _cfg: CoreConfig = null
+## GameData（M6 批 3.5b 组 6：状态行 HP/资源图标解析——apply_cfg 注入；
+## 空 = 缺件降级单 Label 现状）
+var _game_data: Node = null
 
 ## 表驱动色读取（B-1：cfg ui_card_* 优先、UiTheme 兜底）
 func _Color(field: StringName, fallback: Color) -> Color:
@@ -42,7 +52,10 @@ var _status_lookup: Callable = Callable()
 var _name_resolver: Callable = Callable()
 ## 名称标签
 var _name_label: Label = null
-## 属性标签（HP/资源）
+## 属性行容器（组 6：缺件态单 Label / 贴图态 [HP 图标+HP 段][资源图标+资源段]
+## 两形态切换）
+var _stats_box: HBoxContainer = null
+## 属性标签（HP/资源——缺件降级态整行文本，现状分支保留）
 var _stats_label: Label = null
 ## 状态图标行
 var _status_box: HBoxContainer = null
@@ -66,9 +79,12 @@ func setup(status_lookup: Callable, name_resolver: Callable = Callable(),
 	_name_label = Label.new()
 	_name_label.add_theme_font_size_override("font_size", _UiFont(&"ui_font_size_body", UiTheme.FONT_BODY))
 	box.add_child(_name_label)
+	_stats_box = HBoxContainer.new()
+	_stats_box.add_theme_constant_override("separation", 6)
+	box.add_child(_stats_box)
 	_stats_label = Label.new()
 	_stats_label.add_theme_font_size_override("font_size", _UiFont(&"ui_font_size_small", UiTheme.FONT_SMALL))
-	box.add_child(_stats_label)
+	_stats_box.add_child(_stats_label)
 	var status_title := Label.new()
 	_status_title = status_title
 	status_title.text = "状态"
@@ -81,13 +97,15 @@ func setup(status_lookup: Callable, name_resolver: Callable = Callable(),
 	add_child(box)
 	visible = false
 
-func apply_cfg(cfg: CoreConfig) -> void:
+func apply_cfg(cfg: CoreConfig, game_data: Node = null) -> void:
 	## 后置注入总控配置（B-1：battle_screen 装配上下文后补cfg——
 	## setup 先于 context 建立的时序适配）；R3-02：常驻标签字号随 cfg 重设
-	## （setup 期 cfg 为空时字号用兜底档，注入后按表值刷新）
-	## 参数 cfg：总控配置
+	## （setup 期 cfg 为空时字号用兜底档，注入后按表值刷新）；M6 批 3.5b 组 6：
+	## game_data 一并注入（状态行 HP/资源图标解析；空 = 缺件降级）
+	## 参数 cfg：总控配置；game_data：GameData（可空）
 	## 返回：无
 	_cfg = cfg
+	_game_data = game_data
 	_name_label.add_theme_font_size_override("font_size",
 			_UiFont(&"ui_font_size_body", UiTheme.FONT_BODY))
 	_stats_label.add_theme_font_size_override("font_size",
@@ -97,7 +115,10 @@ func apply_cfg(cfg: CoreConfig) -> void:
 				_UiFont(&"ui_font_size_minor", UiTheme.FONT_MINOR))
 
 func show_unit(unit: BattleUnit) -> void:
-	## 展示单位详情（点选任意单位刷新；S4-9：名称经 name_resolver 单源解析）
+	## 展示单位详情（点选任意单位刷新；S4-9：名称经 name_resolver 单源解析；
+	## M6 批 3.5b 组 6：HP/资源贴图齐备 → 状态行拆段带图标（HP 固定
+	## icon_res_hp、资源按 resource_kind 选 icon_res_mp/icon_res_sp）；任一
+	## 缺件 → 单 Label 整行文本现状零回归）
 	## 参数 unit：目标单位
 	## 返回：无
 	var side_text: String = "我方" if unit.side == SkillDef.SkillSide.ALLY else "敌方"
@@ -107,7 +128,28 @@ func show_unit(unit: BattleUnit) -> void:
 		resource_text = "法力 %d/%d" % [unit.current_mana, unit.max_mana]
 	else:
 		resource_text = "精力 %d/%d" % [unit.current_stamina, unit.max_stamina]
+	var hp_icon: Texture2D = AssetTex.texture_of(HP_ICON_ASSET_ID, _game_data)
+	var res_icon: Texture2D = AssetTex.texture_of(
+			RES_ICON_MANA_ASSET_ID if unit.resource_kind == SkillDef.ResourceKind.MANA
+					else RES_ICON_STAMINA_ASSET_ID, _game_data)
 	_stats_label.text = "HP %d/%d｜%s" % [unit.current_hp, unit.max_hp, resource_text]
+	if hp_icon == null or res_icon == null:
+		# 缺件降级：单 Label 整行文本（现状分支——_stats_label 常驻 _stats_box）
+		for child: Node in _stats_box.get_children():
+			if child != _stats_label:
+				child.queue_free()
+		_stats_label.visible = true
+	else:
+		# 贴图态：[HP 图标+HP 段][资源图标+资源段] 拆段（整行文本仍写
+		# _stats_label——测试契约读值不因形态切换漂移）
+		_stats_label.visible = false
+		for child: Node in _stats_box.get_children():
+			if child != _stats_label:
+				child.queue_free()
+		_stats_box.add_child(_MakeStatIcon(hp_icon))
+		_stats_box.add_child(_MakeStatLabel("HP %d/%d" % [unit.current_hp, unit.max_hp]))
+		_stats_box.add_child(_MakeStatIcon(res_icon))
+		_stats_box.add_child(_MakeStatLabel(resource_text))
 	for child: Node in _status_box.get_children():
 		child.queue_free()
 	for instance: StatusInstance in unit.statuses:
@@ -131,6 +173,30 @@ func _DisplayNameOf(unit: BattleUnit) -> String:
 		if not resolved.is_empty() and resolved != String(unit.unit_id):
 			return resolved
 	return unit.display_name
+
+func _MakeStatIcon(texture: Texture2D) -> TextureRect:
+	## 状态行图标节点构建（组 6：16px 垂直居中——不挂树由调用方挂入）
+	## 参数 texture：已解析图标贴图
+	## 返回：TextureRect
+	var icon := TextureRect.new()
+	icon.texture = texture
+	icon.custom_minimum_size = Vector2.ONE * STAT_ICON_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return icon
+
+func _MakeStatLabel(text: String) -> Label:
+	## 状态行拆段标签构建（组 6：字号随 _stats_label 同档；不挂树由调用方挂入）
+	## 参数 text：段文本
+	## 返回：Label
+	var label := Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size",
+			_UiFont(&"ui_font_size_small", UiTheme.FONT_SMALL))
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return label
 
 func _MakeStatusIcon(instance: StatusInstance) -> Control:
 	## 构建状态图标（极性色点 + Tooltip 详情：悬停/长按查看）

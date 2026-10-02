@@ -11,6 +11,9 @@ extends Control
 ## 经 preloaded 脚本访问 SceneId 是环境无关且类型安全的方式）
 const SceneManagerScript: GDScript = preload("res://scripts/autoload/scene_manager.gd")
 
+## 场景背景资源 id（M6 批 3.5b 组 1：bg_title——AssetRegistry 单源路径映射）
+const BACKGROUND_ASSET_ID: StringName = &"bg_title"
+
 ## 读档直进路由白名单（S5-01：城内四屏——title「继续」只直进城内时点；存档
 ## scene_id 非白名单（title/战斗/探索屏名或畸形值）一律回退 GUILD_SHELL，
 ## 对齐畸形存档保守处理拍板先例——战斗/探索屏不可裸开）
@@ -45,6 +48,7 @@ func _ready() -> void:
 	## 参数：无
 	## 返回：无
 	AppSettings.apply_window_size(AppSettings.load_window_size())
+	_ApplyBackgroundTexture()
 	_ApplyFontTiers()
 	%VersionLabel.text = _BuildVersionText()
 	# S3/S5-R4-01：可读档判定走正本或 .bak 任一（bak-only 崩溃窗口下
@@ -55,10 +59,20 @@ func _ready() -> void:
 	_save_manager().save_corrupt.connect(_OnSaveCorrupt)
 	# M4 增补批 3：设置面板装配与入口接线
 	_settings_panel = SettingsPanel.new()
-	_settings_panel.setup(_cfg())
+	_settings_panel.setup(_cfg(), get_node_or_null("/root/GameData"))
 	_settings_panel.closed.connect(_OnSettingsClosed)
 	%SettingsHost.add_child(_settings_panel)
 	%SettingsButton.text = UI_TEXTS[&"settings_button"]
+
+func _ApplyBackgroundTexture() -> void:
+	## 场景背景接线（M6 批 3.5b 组 1）：AssetTex.apply_to 单源装配 bg_title
+	## （KEEP_ASPECT_COVERED 铺满全屏——guild_shell 同构）；GameData 缺失
+	## （异常环境）/缺件/缺登记返回 false——Background ColorRect 纯色兜底
+	## 原样可见
+	## 参数：无
+	## 返回：无
+	AssetTex.apply_to(%BackgroundTexture, BACKGROUND_ASSET_ID,
+			get_node_or_null("/root/GameData"))
 
 func _OnSaveCorrupt(reason: String) -> void:
 	## 存档拒载原因缓存（SaveManager save_corrupt 信号——读档失败时点回填，
@@ -77,8 +91,8 @@ func _ApplyFontTiers() -> void:
 	var cfg: CoreConfig = null
 	if game_data != null:
 		cfg = game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
-	%VersionLabel.get_parent().get_node("TitleLabel").add_theme_font_size_override(
-			"font_size", UiTheme.font_of(cfg, &"ui_font_size_display", UiTheme.FONT_DISPLAY))
+	%TitleLabel.add_theme_font_size_override("font_size",
+			UiTheme.font_of(cfg, &"ui_font_size_display", UiTheme.FONT_DISPLAY))
 	%VersionLabel.add_theme_font_size_override("font_size",
 			UiTheme.font_of(cfg, &"ui_font_size_body", UiTheme.FONT_BODY))
 	%HintLabel.add_theme_font_size_override("font_size",

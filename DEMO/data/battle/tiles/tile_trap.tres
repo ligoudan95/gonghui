@@ -6,6 +6,7 @@
 script = ExtResource("1_gbvhi")
 id = &"tile_trap"
 display_name = "陷阱"
+asset_id = &"tile_battle_trap"
 kind = 2
 trigger = 1
 fill_color = Color(0.32, 0.36, 0.29, 1)

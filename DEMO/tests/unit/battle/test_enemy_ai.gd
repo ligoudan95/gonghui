@@ -436,3 +436,128 @@ func test_expected_damage_applies_race_mult() -> void:
 	assert_float(vs_undead).is_greater(vs_humanoid)
 	# 比值带（减免轨减法项使精确比偏离 1.5——带内断言）
 	assert_float(vs_undead / maxi(0.0001, vs_humanoid)).is_between(1.4, 1.7)
+
+## 10×10 lair 图路径（兜底 2.5 用例——套件默认 8×8，用例内切换）
+const LAIR_MAP_PATH: String = "res://data/battle/maps/btm_m1_lair_10x10.tres"
+
+func _SetupLairGrid() -> void:
+	## 用例内切换 10×10 巢穴图（用户几何死锁复现——凹帽障碍 (3,4)(4,3)(2,5)
+	## 使 (3,3) 南向截断、曼哈顿贪心不可达严格更近格；套件默认 8×8 不动）
+	## 参数：无
+	## 返回：无
+	_grid = BattleGrid.new()
+	_grid.setup(load(LAIR_MAP_PATH) as BattleMapDef,
+			func(tile_id: StringName) -> Resource:
+				return _tiles.get(tile_id, null))
+
+func _PlaceUserGeometry() -> Array:
+	## 摆出用户现场几何（ai_repro3 复现）：我方默认出生排 (3,9)-(6,9)、
+	## 敌列 (3,1)(3,2)(3,3)——三敌互为障碍连锁冻结蓝本
+	## 参数：无
+	## 返回：我方单位数组（candidates）
+	var allies: Array = []
+	for index: int in range(4):
+		allies.append(_MakeAlly(StringName("ua_%d" % index),
+				Vector2i(3 + index, 9), 90))
+	_MakeEnemy(&"ur_1", "en_m1_mutant_rat.tres", Vector2i(3, 1))
+	_MakeEnemy(&"ur_2", "en_m1_mutant_rat.tres", Vector2i(3, 2))
+	_MakeEnemy(&"ur_3", "en_m1_mutant_rat.tres", Vector2i(3, 3))
+	return allies
+
+func test_fallback25_concave_deadlock_routes_globally() -> void:
+	## 兜底 2.5（M5 后用户几何死锁修复）：凹帽障碍前「严格更近」（曼哈顿）
+	## 可达格不存在（绕行真实距离 11 > 移动力 4）且兜底 1/2 双空——修复前
+	## 真待机稳态冻结；修复后沿全场距离场严格降格绕行（(3,3)→(0,4)：全局
+	## 11→7，西侧走廊），移动后不在射程不攻击
+	_SetupLairGrid()
+	var allies: Array = _PlaceUserGeometry()
+	var rat: BattleUnit = _grid.get_unit_at(Vector2i(3, 3))
+	# 前提锚点：贪心死锁成立——可达格 5 个且到锁定目标 (3,9) 曼哈顿全部 ≥6
+	##（当前距离 6，无严格更近）
+	var reachable: Array[Vector2i] = _grid.find_reachable(rat, rat.move_final())
+	assert_int(reachable.size()).is_equal(5)
+	for cell: Vector2i in reachable:
+		assert_int(BattleGrid.manhattan(cell, Vector2i(3, 9))) \
+				.override_failure_message("前提锚点破坏：可达格存在严格更近 %s" % str(cell)) \
+				.is_greater_equal(6)
+	var action := EnemyAI.decide(rat, _grid, allies, _Ctx())
+	assert_vector(action.move_dest) \
+			.override_failure_message("凹帽死锁应产出绕行移动而非待机") \
+			.is_equal(Vector2i(0, 4))
+	# 全局距离严格降（距离场单源断言——11 → 7），且非贪心方向（曼哈顿不减）
+	var field: Dictionary = _grid.distance_field_to_reach(rat, Vector2i(3, 9), 1)
+	assert_int(field.get(Vector2i(3, 3), -1)).is_equal(11)
+	assert_int(field.get(action.move_dest, -1)).is_equal(7)
+	assert_vector(action.attack_cell).is_equal(EnemyAI.NO_CELL)
+
+func test_fallback25_column_queue_all_move() -> void:
+	## 兜底 2.5 列队堵塞（用户几何）：三敌一列互为障碍——前位 (3,3) 走西廊
+	## (0,4)、中位 (3,2) 与后位 (3,1) 距离场含前位占位自然分流东廊 (5,4)(5,3)
+	## ——三敌全部产出非空移动决策（修复前连锁冻结全体空决策）
+	_SetupLairGrid()
+	var allies: Array = _PlaceUserGeometry()
+	var spawns: Dictionary = {
+		Vector2i(3, 3): Vector2i(0, 4),
+		Vector2i(3, 2): Vector2i(5, 4),
+		Vector2i(3, 1): Vector2i(5, 3),
+	}
+	for spawn: Vector2i in spawns:
+		var rat: BattleUnit = _grid.get_unit_at(spawn)
+		var action := EnemyAI.decide(rat, _grid, allies, _Ctx())
+		assert_vector(action.move_dest) \
+				.override_failure_message("列队敌 %s 应分流绕行非待机" % str(spawn)) \
+				.is_equal(spawns[spawn])
+
+func test_fallback25_true_idle_when_target_fully_enclosed() -> void:
+	## 兜底 2.5 真无路语义保留（兜底 3 回归锚）：锁定目标被完全围死（射程格
+	## 集全被占 → 距离场空）且贪心死锁——兜底 2.5 无候选落真待机（无移动
+	## 无攻击），不产出幻影绕行
+	_SetupLairGrid()
+	var target := _MakeAlly(&"walled", Vector2i(3, 9), 90)
+	# 围位（敌方单位占位——占位对称，敌我皆障）：射程 1 格集 (2,9)(4,9)(3,8)
+	## 全占 + (3,10) 越界 → 距离场空
+	_MakeEnemy(&"w1", "en_m1_mutant_rat.tres", Vector2i(2, 9))
+	_MakeEnemy(&"w2", "en_m1_mutant_rat.tres", Vector2i(4, 9))
+	_MakeEnemy(&"w3", "en_m1_mutant_rat.tres", Vector2i(3, 8))
+	var rat := _MakeEnemy(&"rat", "en_m1_mutant_rat.tres", Vector2i(3, 3))
+	assert_bool(_grid.distance_field_to_reach(rat, target.grid_pos, 1).is_empty()) \
+			.override_failure_message("前提锚点破坏：目标未围死").is_true()
+	var action := EnemyAI.decide(rat, _grid, [target], _Ctx())
+	assert_str(String(action.skill_id)).is_equal("skl_enemy_plague_bite")
+	assert_str(String(action.target_unit.id)).is_equal("walled")
+	assert_vector(action.move_dest).is_equal(EnemyAI.NO_CELL)
+	assert_vector(action.attack_cell).is_equal(EnemyAI.NO_CELL)
+
+func test_fallback25_no_oscillation_monotonic_field_descent() -> void:
+	## 兜底 2.5 防振荡：连续多轮决策+移位——每步全场距离严格降（单调收敛，
+	## 无来回震荡），有限轮内抵达攻击位（距离场 0 值）
+	_SetupLairGrid()
+	var allies: Array = _PlaceUserGeometry()
+	var grid_enemy: BattleUnit = _grid.get_unit_at(Vector2i(3, 1))
+	_grid.remove_unit(grid_enemy.grid_pos)
+	var queue_mid: BattleUnit = _grid.get_unit_at(Vector2i(3, 2))
+	_grid.remove_unit(queue_mid.grid_pos)
+	# 仅保留列尾敌 (3,3)（单敌推进——我方满血静立，追击记忆锁 (3,9)）
+	var rat: BattleUnit = _grid.get_unit_at(Vector2i(3, 3))
+	var moved_count: int = 0
+	var last_fd: int = 11
+	for round_index: int in range(6):
+		var field: Dictionary = _grid.distance_field_to_reach(rat,
+				Vector2i(3, 9), 1)
+		var action := EnemyAI.decide(rat, _grid, allies, _Ctx())
+		if action.move_dest == EnemyAI.NO_CELL:
+			break
+		var dest_fd: int = field.get(action.move_dest, -1)
+		assert_int(dest_fd).override_failure_message(
+				"绕行目的格应在距离场内").is_greater_equal(0)
+		assert_int(dest_fd).override_failure_message(
+				"第 %d 轮全局距离未严格降（振荡/回归）" % [round_index + 1]) \
+				.is_less(last_fd)
+		last_fd = dest_fd
+		_grid.remove_unit(rat.grid_pos)
+		rat.grid_pos = action.move_dest
+		_grid.place_unit(rat.grid_pos, rat)
+		moved_count += 1
+	# 实测 11→7→3→0 三步抵攻击位（宽容下限 2——防几何微调碎步退化）
+	assert_int(moved_count).is_greater_equal(2)
+	assert_int(last_fd).is_equal(0)

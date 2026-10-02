@@ -8,7 +8,7 @@
 ## 数据来源：案 7《地图与探索》（迷雾口径）；案 17 §3.10/§3.11 #17
 ## （视野半径 R 欧氏圆形度量——cfg.vision_radius 表值注入）。
 ## 纯逻辑约束：不触任何 autoload；radius/lit_rows/size/is_opaque 全参数注入
-## （本类不知地图——墙体遮蔽经回调实时查询，暗门 reveal 后格变 etile_path
+## （本类不知地图——墙体遮蔽经回调实时查询，暗门 reveal 后格变 etile_secret_passage
 ## 遮挡随之解除）。
 class_name FogOfWar
 extends RefCounted

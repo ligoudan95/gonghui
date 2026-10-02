@@ -35,11 +35,13 @@ func before() -> void:
 func test_registry_anim_entries_resolvable() -> void:
 	## 54 条 spr_*_<action> 动作映射：get_asset_path 非空、指向 assets/units/
 	## 下、物理文件存在；后缀序与 SpriteResolver.ANIM_ACTIONS 一致锚定
+	##（M6 批 3 首批背景入库 +bg_guild_hall 1 键；M6 批 3.5a 占位资产 +63 键
+	## = 62 件 PNG + ui_main_theme 主题，总数 55→118）
 	assert_int(ACTIONS.size()).is_equal(SpriteResolver.ANIM_ACTIONS.size())
 	for index: int in ACTIONS.size():
 		assert_str(String(ACTIONS[index])).is_equal(String(SpriteResolver.ANIM_ACTIONS[index]))
 	var registry: AssetRegistry = _game_data.get_record(&"registry") as AssetRegistry
-	assert_int(registry.mapping.size()).is_equal(54)
+	assert_int(registry.mapping.size()).is_equal(118)
 	for sprite_id: StringName in SPRITE_IDS:
 		for action: StringName in ACTIONS:
 			var asset_id: StringName = StringName(String(sprite_id) + "_" + String(action))
@@ -53,9 +55,9 @@ func test_registry_anim_entries_resolvable() -> void:
 		assert_str(_game_data.get_asset_path(sprite_id)).is_empty()
 
 func test_run_all_clean_with_registry() -> void:
-	## 全库校验应零错误零警告（registry 加入 assets 域后计数带不变；功能一批 1 后全库 138）
+	## 全库校验应零错误零警告（registry 加入 assets 域后计数带不变；M6 批 3.5a 后全库 144）
 	var report: ValidationReport = DataValidator.run_all(_game_data)
-	assert_int(report.checked_count).is_equal(139)
+	assert_int(report.checked_count).is_equal(144)
 	assert_int(report.errors.size()).is_equal(0)
 	assert_int(report.warnings.size()).is_equal(0)
 	assert_bool(report.is_ok()).is_true()

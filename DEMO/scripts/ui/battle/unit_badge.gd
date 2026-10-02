@@ -6,6 +6,9 @@
 ## （预扣色带 + 「−N」闪烁数字——二轮试玩反馈）、蛊惑紫边闪烁、受击白闪
 ## （M6：ui_hit_flash_seconds）、倒地尸态（D5=A：downed 末帧锁定 + 灰度
 ## 维持 + 隐藏血条/资源条/高亮环）。
+## M6 批 3.5b 组 8：当前行动高亮环贴图接线——fx_battle_select 在档 →
+## 单 TextureRect 满格选中框（格尺寸 STRETCH_SCALE）；缺件回退现状金边
+## 四边带；呼吸 tween 对 _ring 元素 modulate.a 泛化 Control 后两态零改复用。
 ## 数据来源：M1 批 3 方案 §7.1；动作资产 = DEMO/assets/units/spr_*_<action>.png
 ## （AssetRegistry 登记 54 动作键，tools/gen_unit_anim_frames.gd 占位产出）。
 ## 输入口径：本节点不消费鼠标（mouse_filter = IGNORE）——点击统一由
@@ -41,9 +44,15 @@ const PREVIEW_LABEL_Y_OFFSET: float = -16.0
 const PREVIEW_OUTLINE_SIZE: int = 3
 ## 精英超大时按格宽加成的余量
 const ELITE_CLAMP_MARGIN: float = 12.0
+## 当前行动选中框贴图资产 id（M6 批 3.5b 组 8：fx_battle_select 在档 →
+## 单 TextureRect 替代四边金边带；缺件回退现状四边带——蛊惑紫边不接线）
+const SELECT_RING_ASSET_ID: StringName = &"fx_battle_select"
 
 ## 总控配置（B-1：配色表驱动注入——setup 传入，空 = 纯兜底模式）
 var _cfg: CoreConfig = null
+## GameData（M6 批 3.5b 组 8：选中框贴图解析——AssetTex 单源；空 = 占位
+## 四边带降级，纯兜底模式兼容）
+var _game_data: Node = null
 
 ## 表驱动色读取（B-1：cfg ui_badge_* 优先、UiTheme 兜底）
 func _Color(field: StringName, fallback: Color) -> Color:
@@ -82,10 +91,10 @@ var _hp_fill: ColorRect = null
 ## 资源条背景/填充
 var _res_back: ColorRect = null
 var _res_fill: ColorRect = null
-## 当前行动高亮环（金色四边）
-var _ring: Array[ColorRect] = []
-## 蛊惑紫边（闪烁）
-var _bewitch_ring: Array[ColorRect] = []
+## 当前行动高亮环（贴图态单 TextureRect / 占位态金色四边——组 8 泛化 Control）
+var _ring: Array[Control] = []
+## 蛊惑紫边（闪烁——组 8 泛化 Control，视觉不动）
+var _bewitch_ring: Array[Control] = []
 ## 行动高亮呼吸 Tween（当前行动单位激活；否则为 null/失效）
 var _ring_tween: Tween = null
 ## 伤害预览预扣色带（血条末段闪烁；null = 无预览）
@@ -99,7 +108,7 @@ var bewitched: bool = false:
 	set(value):
 		bewitched = value
 		if not value:
-			for edge: ColorRect in _bewitch_ring:
+			for edge: Control in _bewitch_ring:
 				edge.visible = false
 
 func _init() -> void:
@@ -109,16 +118,21 @@ func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func setup(badge_unit: BattleUnit, badge_cell_size: float,
-		cfg: CoreConfig = null, anim_textures: Dictionary = {}) -> void:
+		cfg: CoreConfig = null, anim_textures: Dictionary = {},
+		game_data: Node = null) -> void:
 	## 装配徽章：建子节点（sprite/条/环）并按单位数据初刷；B-1：cfg 注入
-	## （配色表驱动，缺省纯兜底）；M6：六动作竖条纹理注入（空 = 占位色块）
+	##（配色表驱动，缺省纯兜底）；M6：六动作竖条纹理注入（空 = 占位色块）；
+	## M6 批 3.5b 组 8：game_data 注入（选中框 fx_battle_select 贴图解析；
+	## 空 = 占位四边带降级——纯兜底模式兼容）
 	## 参数 badge_unit：绑定单位；badge_cell_size：所在格像素尺寸；
-	## cfg：总控配置（可空）；anim_textures：UnitAnimState.Action -> 竖条纹理
+	## cfg：总控配置（可空）；anim_textures：UnitAnimState.Action -> 竖条纹理；
+	## game_data：GameData（可空）
 	## 返回：无
 	unit = badge_unit
 	cell_size = badge_cell_size
 	_cfg = cfg
 	_anim_textures = anim_textures
+	_game_data = game_data
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	_BuildChildren()
 	refresh()
@@ -260,10 +274,10 @@ func _SetBarsVisible(visible_bars: bool) -> void:
 		if bar != null:
 			bar.visible = visible_bars
 	if not visible_bars:
-		for edge: ColorRect in _ring:
+		for edge: Control in _ring:
 			edge.visible = false
 		bewitched = false
-		for edge: ColorRect in _bewitch_ring:
+		for edge: Control in _bewitch_ring:
 			edge.visible = false
 		_StopRingBreath()
 
@@ -339,7 +353,7 @@ func set_current(current: bool) -> void:
 	## 当前行动高亮环开关（开启时呼吸脉动——2026-09-24 试玩反馈增强辨识）
 	## 参数 current：true = 高亮
 	## 返回：无
-	for edge: ColorRect in _ring:
+	for edge: Control in _ring:
 		edge.visible = current
 	if current:
 		_StartRingBreath()
@@ -369,7 +383,7 @@ func _SetRingAlpha(alpha: float) -> void:
 	## 统一设置行动高亮环四边透明度（呼吸动画驱动）
 	## 参数 alpha：目标透明度
 	## 返回：无
-	for edge: ColorRect in _ring:
+	for edge: Control in _ring:
 		edge.modulate.a = alpha
 
 func _process(delta: float) -> void:
@@ -382,7 +396,7 @@ func _process(delta: float) -> void:
 		return
 	var visible_phase: bool = fmod(Time.get_ticks_msec() / 1000.0, BEWITCH_FLICK_PERIOD) \
 			< BEWITCH_FLICK_PERIOD * 0.5
-	for edge: ColorRect in _bewitch_ring:
+	for edge: Control in _bewitch_ring:
 		edge.visible = visible_phase
 
 func _AdvanceAnim(delta: float) -> void:
@@ -448,11 +462,19 @@ func _BuildChildren() -> void:
 	_res_fill = _MakeBar(Vector2(BAR_X_MARGIN, BAR_RES_Y),
 			Vector2(bar_width, BAR_HEIGHT_RES),
 			_Color(&"ui_badge_res_stamina_color", UiTheme.BADGE_RES_STAMINA))
-	# 高亮环（金色四边 5px——B-3 表驱动）与蛊惑边（紫色四边 3px——B-1 表驱动）
-	_ring = _MakeRing(_Color(&"ui_highlight_gold_color", UiTheme.HIGHLIGHT_GOLD), RING_THICKNESS)
+	# 高亮环（M6 批 3.5b 组 8：fx_battle_select 在档 → 单 TextureRect 选中框
+	## 格尺寸 STRETCH_SCALE；缺件回退现状金色四边 5px——B-3 表驱动）与蛊惑边
+	##（紫色四边 3px——B-1 表驱动，不接线维持程序带）
+	var select_texture: Texture2D = AssetTex.texture_of(SELECT_RING_ASSET_ID,
+			_game_data)
+	if select_texture != null:
+		_ring = [_MakeSelectRing(select_texture)]
+	else:
+		_ring = _MakeRing(_Color(&"ui_highlight_gold_color", UiTheme.HIGHLIGHT_GOLD),
+				RING_THICKNESS)
 	_bewitch_ring = _MakeRing(_Color(&"ui_badge_bewitch_color", UiTheme.BADGE_BEWITCH),
 			BEWITCH_RING_THICKNESS)
-	for edge: ColorRect in _ring + _bewitch_ring:
+	for edge: Control in _ring + _bewitch_ring:
 		edge.visible = false
 
 func _MakeBar(position: Vector2, size: Vector2, color: Color) -> ColorRect:
@@ -467,14 +489,30 @@ func _MakeBar(position: Vector2, size: Vector2, color: Color) -> ColorRect:
 	add_child(rect)
 	return rect
 
-func _MakeRing(color: Color, thickness: float = BEWITCH_RING_THICKNESS) -> Array[ColorRect]:
+func _MakeRing(color: Color, thickness: float = BEWITCH_RING_THICKNESS) -> Array[Control]:
 	## 构建四边框环（B-19 单源：UiTheme.make_edge_strip_bars——与 battle_board
-	## 覆盖层边框同构收口；条带挂树复用 _MakeBar）
+	## 覆盖层边框同构收口；条带挂树复用 _MakeBar；组 8 返回泛化 Control——
+	## _ring 贴图态/四边态同池管理）
 	## 参数 color：环色；thickness：条宽（行动环 5px / 蛊惑边 3px）
-	## 返回：四条 ColorRect
-	var edges: Array[ColorRect] = []
+	## 返回：四条色带 Control
+	var edges: Array[Control] = []
 	for rect: ColorRect in UiTheme.make_edge_strip_bars(
 			Vector2(cell_size, cell_size), thickness, color):
 		add_child(rect)
 		edges.append(rect)
 	return edges
+
+func _MakeSelectRing(texture: Texture2D) -> Control:
+	## 构建贴图态选中框（M6 批 3.5b 组 8）：单 TextureRect 替代四边带——
+	## 格尺寸 STRETCH_SCALE 满格；呼吸 tween 对 _ring 元素 modulate.a 泛化
+	## Control 后零改复用（set_current/_StartRingBreath/_SetRingAlpha 不动）
+	## 参数 texture：fx_battle_select 已解析贴图
+	## 返回：选中框节点（已挂树）
+	var rect := TextureRect.new()
+	rect.texture = texture
+	rect.stretch_mode = TextureRect.STRETCH_SCALE
+	rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	rect.size = Vector2(cell_size, cell_size)
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(rect)
+	return rect

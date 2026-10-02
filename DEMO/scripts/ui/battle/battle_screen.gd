@@ -4,6 +4,7 @@
 ## 两段式确认交互（选中→高亮→点目标预览→再点确认；取消=点其他区域/再点钮；
 ## 技能确认带血条伤害预览——2026-09-24 二轮反馈）、技能按钮态（资源不足灰显、
 ## hover 描述与预计伤害——二轮反馈）、蛊惑紫边提示、敌方延时点按跳过、
+## 敌方行动提示行（拍板 C 2026-10-01：敌方轮日志栏顶部一行，我方轮/终局清除）、
 ## 撤退确认弹窗、结算面板路由回公会壳。
 ## 移动范围回显口径（2026-09-26 试玩反馈②③）：指令窗内全部取消路径
 ## （出格点按/不可达空格/执行被拒/技能取消）统一 R3-05「取消后回显」——
@@ -16,6 +17,9 @@ extends Control
 const SceneManagerScript: GDScript = preload("res://scripts/autoload/scene_manager.gd")
 ## 二段式确认「无待确认」哨兵
 const NO_CELL: Vector2i = Vector2i(-9, -9)
+## 场景背景资源 id（M6 批 3.5b 组 1：bg_battle_mine——矿洞战场底图，
+## AssetRegistry 单源路径映射；正式多图后随 battle_map 表字段化归口 M6 后续）
+const BACKGROUND_ASSET_ID: StringName = &"bg_battle_mine"
 
 ## 战斗上下文（装配后供测试/UI 查询）
 var context: BattleSetup.BattleContext = null
@@ -42,6 +46,7 @@ const UI_TEXTS: Dictionary = {
 	&"cost_mana_format": "法力 %d",
 	&"cost_stamina_format": "精力 %d",
 	&"range_self": "自身",
+	&"enemy_turn_hint": "敌方行动中…（点按战场可跳过演出）",
 }
 ## 降级返回公会失败提示（S3-06：go 失败的可见反馈——IdleLabel 通道呈现）
 const DEGRADED_RETURN_FAIL_TEXT: String = "返回公会失败（错误码 %d）——请重试。"
@@ -74,6 +79,7 @@ func _ready() -> void:
 	## 返回：无
 	# 中4：右栏矮窗滚动条补偿挂接（降级路径同样生效——面板存在于场景本身）
 	_SetupRightPanelScrollCompensation()
+	_ApplyBackgroundTexture()
 	var scene_manager: Node = get_node("/root/SceneManager")
 	var params: Dictionary = scene_manager.take_pending_params()
 	var battle_params: BattleParams = params.get(&"battle_params", null) as BattleParams
@@ -116,11 +122,21 @@ func _ready() -> void:
 	controller.delay_seconds = context.cfg.ui_battle_delay_seconds
 	# B-7：tscn 内嵌字号按档位覆写（tscn 值留占位——字号体系只动 cfg）
 	_ApplyFontTiers()
-	%UnitInfoCard.apply_cfg(context.cfg)
+	%UnitInfoCard.apply_cfg(context.cfg, _game_data)
 	%BoardLayer.setup(context, _game_data)
 	%TurnOrderBar.setup(_game_data, context.cfg)
 	_ConnectController()
 	controller.start_battle(context)
+
+func _ApplyBackgroundTexture() -> void:
+	## 场景背景接线（M6 批 3.5b 组 1）：AssetTex.apply_to 单源装配
+	## bg_battle_mine（KEEP_ASPECT_COVERED 铺满全屏——guild_shell 同构）；
+	## 缺件/缺登记返回 false——Background ColorRect 纯色兜底原样可见。
+	## 降级路径（无战斗参数直开）同样生效——背景与战斗装配解耦
+	## 参数：无
+	## 返回：无
+	AssetTex.apply_to(%BackgroundTexture, BACKGROUND_ASSET_ID,
+			get_node_or_null("/root/GameData"))
 
 func _ApplyFontTiers() -> void:
 	## tscn 内嵌字号档位覆写（B-7）：RoundLabel（26→large）/ OrderTitle（16→
@@ -135,6 +151,9 @@ func _ApplyFontTiers() -> void:
 			"font_size", UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 	%IdleLabel.add_theme_font_size_override("font_size",
 			UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
+	# 拍板 C：敌方行动提示行与日志条目同档（minor——tscn 值留占位）
+	%EnemyTurnHint.add_theme_font_size_override("font_size",
+			UiTheme.font_of(cfg, &"ui_font_size_minor", UiTheme.FONT_MINOR))
 	var button_font: int = UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL)
 	%AttackButton.add_theme_font_size_override("font_size", button_font)
 	%SkillButtonA.add_theme_font_size_override("font_size", button_font)
@@ -250,7 +269,7 @@ func _ConnectController() -> void:
 		%BoardLayer.refresh_badge(unit)
 	)
 	controller.battle_ended.connect(_OnBattleEnded)
-	%BattleLog.setup(controller, context)
+	%BattleLog.setup(controller, context, _game_data)
 	%ResultPanel.return_pressed.connect(_OnReturnPressed)
 
 # --------------------------------------------------------------------------
@@ -285,6 +304,11 @@ func _OnTurnStarted(unit: BattleUnit) -> void:
 	_RefreshActionBar(unit)
 	if unit.is_controllable() and control == StatusDef.ControlKind.NONE:
 		%BoardLayer.show_move_range(context.grid.find_reachable(unit, unit.move_final()))
+	# 拍板 C（2026-10-01）：敌方行动提示行——敌方轮显示（日志栏顶部一行，
+	# 点按跳过演出的可发现性），轮到我方单位即清除；文案单源 UI_TEXTS
+	%EnemyTurnHint.visible = unit.side == SkillDef.SkillSide.ENEMY
+	if %EnemyTurnHint.visible:
+		%EnemyTurnHint.text = UI_TEXTS[&"enemy_turn_hint"]
 
 func _OnSkillExecuted(caster: BattleUnit, result: SkillExecutor.ExecutionResult) -> void:
 	## 技能执行后：伤害飘字 + 徽章刷新 + 动态地格标记 + 按钮组按真实可用性
@@ -371,6 +395,8 @@ func _OnBattleEnded(result: BattleResult) -> void:
 	## 解析——单源 BattleContext.display_name_of，批 4 C 组 M4）
 	## 参数 result：战斗结果
 	## 返回：无
+	# 拍板 C：终局清除敌方行动提示行（防终局面板背后残留「敌方行动中」）
+	%EnemyTurnHint.visible = false
 	# M2 批 3+E3-01①：回传包**合并键**写入（战斗结果并入既有 expedition_run/
 	# 锚点——整体替换会丢 run 引用断续跑链）
 	_return_payload[&"battle_result"] = result
@@ -394,10 +420,16 @@ func _OnBattleEnded(result: BattleResult) -> void:
 func _on_board_gui_input(event: InputEvent) -> void:
 	## 板面点按入口：左键点按 → 格命中 → 分发（我方指令窗 = 移动/技能两段式；
 	## 非指令窗 = 点按跳过演出延迟——拍板 D）；W2-11 同式守卫（S4-01）：撤退
-	## 确认弹窗挂起期忽略板面点按（模态弹窗期间点格抢跑指令）
+	## 确认弹窗挂起期忽略板面点按（模态弹窗期间点格抢跑指令）；终局帧守卫
+	##（循环盲审第二轮·低，S4-R2-02 按钮组同口径）：is_battle_over 后板面
+	## 点按整体忽略——终局若发生在玩家指令窗内 awaiting_command 残留 true，
+	## 同帧批内第二输入可画路径预览/范围层残留（request_* 侧 _can_command
+	## 已挡执行，此处挡的是两段式首点的展示态）
 	## 参数 event：输入事件
 	## 返回：无
 	if %RetreatConfirm.visible:
+		return
+	if controller != null and controller.is_battle_over():
 		return
 	if not (event is InputEventMouseButton):
 		return
@@ -688,9 +720,13 @@ func _RangeText(skill: SkillDef) -> String:
 
 func _on_attack_button_pressed() -> void:
 	## 普攻钮：进入/取消技能选择模式（S4-7：再点取消——与 _ToggleSkillSlot
-	## 对称，取消后回显移动范围）；降级路径空守卫（盲审批 1-6 双保险）
+	## 对称，取消后回显移动范围）；降级路径空守卫（盲审批 1-6 双保险）；
+	## 撤退确认弹窗挂起期守卫（循环盲审修复①，_on_board_gui_input W2-11/
+	## S4-01 同式——泄漏点击不得进技能模式画范围层）
 	## 参数：无
 	## 返回：无
+	if %RetreatConfirm.visible:
+		return
 	if controller == null or controller.current_unit == null:
 		return
 	var unit: BattleUnit = controller.current_unit
@@ -701,15 +737,21 @@ func _on_attack_button_pressed() -> void:
 	_EnterSkillMode(unit.base_attack_id)
 
 func _on_skill_button_a_pressed() -> void:
-	## 技能钮 A：进入/取消技能选择模式
+	## 技能钮 A：进入/取消技能选择模式；撤退确认弹窗挂起期守卫
+	##（循环盲审修复①，_on_board_gui_input W2-11/S4-01 同式）
 	## 参数：无
 	## 返回：无
+	if %RetreatConfirm.visible:
+		return
 	_ToggleSkillSlot(1)
 
 func _on_skill_button_b_pressed() -> void:
-	## 技能钮 B：进入/取消技能选择模式
+	## 技能钮 B：进入/取消技能选择模式；撤退确认弹窗挂起期守卫
+	##（循环盲审修复①，_on_board_gui_input W2-11/S4-01 同式）
 	## 参数：无
 	## 返回：无
+	if %RetreatConfirm.visible:
+		return
 	_ToggleSkillSlot(2)
 
 func _ToggleSkillSlot(skill_index: int) -> void:
@@ -808,9 +850,13 @@ func _RestoreMoveRangeIfUsable(unit: BattleUnit) -> void:
 	%BoardLayer.show_move_range(context.grid.find_reachable(unit, unit.move_final()))
 
 func _on_end_turn_button_pressed() -> void:
-	## 行动结束钮（降级路径空守卫——盲审批 1-6 双保险）
+	## 行动结束钮（降级路径空守卫——盲审批 1-6 双保险）；撤退确认弹窗挂起期
+	## 守卫（循环盲审修复①，_on_board_gui_input W2-11/S4-01 同式——泄漏点击
+	## 不得结束行动轮）
 	## 参数：无
 	## 返回：无
+	if %RetreatConfirm.visible:
+		return
 	if controller == null:
 		return
 	_ClearSelection()

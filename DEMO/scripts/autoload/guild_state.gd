@@ -12,11 +12,14 @@ extends Node
 
 ## 日结算完成（等待/跳过一天或回城补结算逐日——参数 DaySummary）
 signal day_settled(summary: GuildCore.DaySummary)
-## 回城结算完成（参数 ExpeditionSummary）
+## 预留信号：无当前监听者（2026-10-01 拍板保留），预留用途=出征结算的
+## UI 刷新触点，接线归后续 UI 批次（参数 ExpeditionSummary）
 signal expedition_settled(summary: GuildCore.ExpeditionSummary)
-## 设施升级完成（参数设施 id）
+## 预留信号：无当前监听者（2026-10-01 拍板保留），预留用途=设施升级的
+## UI 刷新触点，接线归后续 UI 批次（参数设施 id）
 signal facility_upgraded(facility_id: StringName)
-## 招募入册完成（参数新成员）
+## 预留信号：无当前监听者（2026-10-01 拍板保留），预留用途=成员招募的
+## UI 刷新触点，接线归后续 UI 批次（参数新成员）
 signal member_recruited(member: AdventurerData)
 
 ## 公会运行态核心（规则门面——UI/流程层经本单例访问）

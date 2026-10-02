@@ -69,6 +69,9 @@ func refresh(instances: Array[QuestInstance], core: GuildCore) -> void:
 	## 参数 instances：挂单实例（ACCEPTED+IN_PROGRESS）；core：公会核心
 	## 返回：无
 	for row: VBoxContainer in _rows:
+		# S4-R3-01 同式（event_panel._Reset 先例）：旧行先隐藏断输入/渲染再
+		# 释放（queue_free 延迟帧末——旧行与新行一帧叠渲）
+		row.visible = false
 		row.queue_free()
 	_rows.clear()
 	for inst: QuestInstance in instances:

@@ -56,6 +56,13 @@ enum Style {
 @export var mark_color: Color = Color(0, 0, 0, 0)
 ## 视觉样式（PLAIN/RAISED/BLOCK——UI 渲染分支的唯一依据）
 @export var style: Style = Style.PLAIN
+## 主纹理资产 id（M6 批 3.5a：战棋 tile 渲染接线的数据位——路径经 assets 域
+## AssetRegistry 映射，表内不写死路径；空 = 占位合法（3.5b 接线前的过渡态，
+## V-M6-tile-asset 不收紧空值）；批 3.5b 起 BattleBoard 按此键取纹理）
+@export var asset_id: StringName = &""
+## 变体纹理资产 id 列表（AssetTex.pick_variant 按格坐标稳定哈希混铺——
+## 打破大面积同纹重复感；空 = 恒用主件）
+@export var asset_variants: Array[StringName] = []
 
 ## 玩家可读效果描述（hover tooltip 文案来源——UI 零硬编码文案，铁律①口径延伸；
 ## 2026-09-24 试玩反馈：特殊/障碍地格悬停显示描述页签）

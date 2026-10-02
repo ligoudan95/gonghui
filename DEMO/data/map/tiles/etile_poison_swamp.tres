@@ -6,6 +6,7 @@
 script = ExtResource("1_pzmire")
 id = &"etile_poison_swamp"
 display_name = "毒瘴"
+asset_id = &"tile_battle_poison_swamp"
 fill_color = Color(0.42, 0.13, 0.5, 1)
 effect_kind = 1
 effect_status_id = &"DEBUFF_poison"

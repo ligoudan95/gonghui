@@ -41,6 +41,9 @@ enum ResourceType {
 ## 战场 sprite 资源 id（批 A H3：入表——路径经 assets 域 AssetRegistry 映射，
 ## 表内不写死路径；V-A-sprite-id 校验非空，登记齐套由 V-M6-anim-quad 查六动作件）
 @export var sprite_id: StringName = &""
+## 职业图标资产 id（M6 批 3.5a A5：图标接线的数据位——icon_class_* 键；
+## 空 = 占位合法（3.5b 接线前过渡态，V-M6-class-icon 不收紧空值））
+@export var icon_id: StringName = &""
 ## 可选倾向分支列表（TendencyDef 子资源数组）
 @export var tendencies: Array[TendencyDef] = []
 

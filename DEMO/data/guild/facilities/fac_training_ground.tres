@@ -23,4 +23,5 @@ facility_kind = 1
 max_level = 2
 levels = Array[ExtResource("1_flv")]([SubResource("Resource_lv1"), SubResource("Resource_lv2")])
 scene_id = &"guild_training_ground"
+bg_asset_id = &"bg_training_ground"
 comment = "【占位·试玩校准】案 3 §2.2/案 17 §3.7/§3.11 #10：Lv1 分享率 0.3；Lv2 升级 600·分享率 0.4（先便宜：核心养成 sink 先触达）；DEMO 两级均只开档 1"

@@ -75,6 +75,9 @@ const UI_TEXTS: Dictionary = {
 
 ## 战斗上下文（单位名解析；可空）
 var context: BattleSetup.BattleContext = null
+## GameData（M6 批 3.5b 组 7：九宫格面板贴图态解析——setup 注入；空 = 缺件
+## 降级 StyleBoxFlat）
+var _game_data: Node = null
 
 ## 行色档（B-6：LineKind -> cfg 字段名 + UiTheme 兜底——setup 后按表驱动取色）
 const LINE_COLOR_FIELDS: Dictionary = {
@@ -101,9 +104,11 @@ func _ready() -> void:
 	## 参数：无
 	## 返回：无
 	# B-4：深底面板样式单源（UiTheme.make_dark_panel_style——与 tips 共用，
-	# 原 alpha 0.86/0.92 漂移统一 0.9）
+	# 原 alpha 0.86/0.92 漂移统一为 0.9）；M6 批 3.5b 组 7：九宫格贴图态经
+	## game_data 参切换（_ready 期未注入 = 占位降级）
 	add_theme_stylebox_override("panel",
-			UiTheme.make_dark_panel_style(context.cfg if context != null else null))
+			UiTheme.make_dark_panel_style(context.cfg if context != null else null,
+					_game_data))
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_scroll = ScrollContainer.new()
 	_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -115,11 +120,15 @@ func _ready() -> void:
 	_entries.add_theme_constant_override("separation", 2)
 	_scroll.add_child(_entries)
 
-func setup(log_controller: BattleController, log_context: BattleSetup.BattleContext) -> void:
-	## 订阅控制器信号（信号自带参数即日志数据——trace 经 skill_executed 携带）
-	## 参数 log_controller：战斗控制器；log_context：战斗上下文（单位名解析，可空）
+func setup(log_controller: BattleController, log_context: BattleSetup.BattleContext,
+		game_data: Node = null) -> void:
+	## 订阅控制器信号（信号自带参数即日志数据——trace 经 skill_executed 携带）；
+	## M6 批 3.5b 组 7：game_data 注入（九宫格面板贴图态；空 = 缺件降级）
+	## 参数 log_controller：战斗控制器；log_context：战斗上下文（单位名解析，可空）；
+	## game_data：GameData（可空）
 	## 返回：无
 	context = log_context
+	_game_data = game_data
 	log_controller.round_started.connect(func(round_no: int) -> void:
 		push_line(UI_TEXTS[&"round_line_format"] % round_no, LineKind.SYSTEM))
 	log_controller.turn_started.connect(func(unit: BattleUnit) -> void:
@@ -155,7 +164,8 @@ func setup(log_controller: BattleController, log_context: BattleSetup.BattleCont
 	# R3-01：setup 时 context 就绪——按表值重建面板样式（_ready 期 context
 	# 为空只能用兜底色，表驱动的深底色自此生效）
 	add_theme_stylebox_override("panel",
-			UiTheme.make_dark_panel_style(context.cfg if context != null else null))
+			UiTheme.make_dark_panel_style(context.cfg if context != null else null,
+					_game_data))
 
 func push_line(text: String, kind: int) -> void:
 	## 追加一条日志（公开口——信号回调与测试消费）；自动滚底、超限裁旧

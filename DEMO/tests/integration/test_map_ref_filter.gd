@@ -121,14 +121,10 @@ func test_explore_board_icon_filter_by_map_ref() -> void:
 	auto_free(board)
 	board.setup(_game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig,
 			map_def, state, _game_data)
-	var interact_icons: int = 0
-	for child: Node in board.get_children():
-		if child is Label and child.z_index == ExploreBoard.Z_CONTENT:
-			interact_icons += 1
-	var target_icons: int = 0
-	for child: Node in board.get_children():
-		if child is Label and child.z_index == ExploreBoard.Z_OVERLAY:
-			target_icons += 1
+	# M6 批 3.5b 组 4 适配：图标贴图态为 Control 根（非 Label），树扫 z 层
+	# 会混入衬底 ColorRect——改按 _point_icons/_target_icons 字典尺寸直断
+	var interact_icons: int = board._point_icons.size()
+	var target_icons: int = board._target_icons.size()
 	assert_int(interact_icons).is_equal(11)
 	assert_int(target_icons).is_equal(6)
 	# 过滤：宝箱点改挂他图 → 图标层 10 个（重建后；queue_free 延迟释放——
@@ -140,10 +136,7 @@ func test_explore_board_icon_filter_by_map_ref() -> void:
 			map_def, state, _game_data)
 	chest.map_ref = original
 	await get_tree().process_frame
-	var interact_after: int = 0
-	for child: Node in board.get_children():
-		if child is Label and child.z_index == ExploreBoard.Z_CONTENT:
-			interact_after += 1
+	var interact_after: int = board._point_icons.size()
 	assert_int(interact_after).is_equal(10) \
 			.override_failure_message("他图点位图标未被过滤（%d）" % interact_after)
 

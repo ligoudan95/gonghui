@@ -6,6 +6,7 @@
 script = ExtResource("1_ek32l")
 id = &"tile_grass"
 display_name = "草丛"
+asset_id = &"tile_battle_bush"
 kind = 2
 status_id = &"BUFF_tile_grass"
 fill_color = Color(0.14, 0.56, 0.2, 1)

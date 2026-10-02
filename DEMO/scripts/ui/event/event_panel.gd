@@ -4,6 +4,9 @@
 ## 提示+取消）、D20 演出（数字滚动点按跳过、演出期输入门禁）、四档反馈条
 ## （四色标签+结算文本+数值反馈行）、B 出口战前演出视图（「进入战斗」）。
 ## check_cast 改派面板内嵌（M2 方案批 3 允许合并）。
+## M6 批 3.5b 接线：四档反馈底图（组 7 ui_label_result_*）与 D20 骰面
+## （组 8 fx_d20）均为「CenterContainer 底图 TextureRect + 文字 Label 叠印
+## 居中」容器——文字/字色/滚动/跳过/门禁逻辑零改，缺件降级纯文字/纯数字。
 ## 数据来源：M2 方案批 3；案 18 §3（机制词只在反馈标签不入叙述）。
 ## UI 口径：字号走 UiTheme 档位；四档色 cfg 表驱动；属性中文映射 = UI 层
 ## 有限枚举字典（豁免先例）；热区 ≥48px。
@@ -26,6 +29,19 @@ const ATTR_NAMES: Dictionary = {
 ## 空改派名单提示（E3-13：全员倒地可达——提示+取消路径；test_event_panel 契约引用）
 const NO_CAST_TEXT: String = "没有能执行检定的队员。"
 
+## 四档反馈底图资产 id（M6 批 3.5b 组 7：档位 → ui_label_result_*——
+## TextureRect 底图 + Label 文字叠印容器；缺件降级 = 现状纯文字标签）
+const GRADE_ASSETS: Dictionary = {
+	CheckResult.Grade.CRIT_SUCCESS: &"ui_label_result_crit_success",
+	CheckResult.Grade.SUCCESS: &"ui_label_result_success",
+	CheckResult.Grade.FAILURE: &"ui_label_result_failure",
+	CheckResult.Grade.CRIT_FAILURE: &"ui_label_result_crit_failure",
+}
+## D20 骰面贴图资产 id（组 8：fx_d20——骰面底图 + 数字 Label 叠印居中）
+const D20_ASSET_ID: StringName = &"fx_d20"
+## D20 骰面最小边长（px——骰面 ≥200px 口径）
+const D20_FACE_MIN_SIZE: float = 200.0
+
 ## UI 文案单源（M6 批 2 挂账 4.2：内联 UI 中文收编——改措辞只动此处）
 const UI_TEXTS: Dictionary = {
 	&"continue_button": "继续",
@@ -43,6 +59,9 @@ const UI_TEXTS: Dictionary = {
 
 ## 总控配置（setup 注入）
 var _cfg: CoreConfig = null
+## GameData（M6 批 3.5b 组 7/8：四档底图与 D20 骰面贴图解析——setup 注入；
+## 空 = 缺件降级纯文字/纯数字现状）
+var _game_data: Node = null
 ## 改派候选供给闭包（attr_id -> Array——宿主注入按属性现算 E4；
 ## 未注入时按空名单处理）
 var _cast_provider: Callable = Callable()
@@ -56,9 +75,18 @@ var _cast_box: VBoxContainer = null
 var _pending_check: Dictionary = {}
 ## 当前呈现视图（空名单取消时恢复呈现）
 var _current_view: EventRunner.EventView = null
-## D20 演出标签（滚动期显示）
+## D20 演出容器（组 8：CenterContainer 叠印——骰面 TextureRect + 数字 Label
+## 双子独立居中视觉叠加）
+var _d20_host: CenterContainer = null
+## D20 骰面贴图（缺件 texture null 不占位）
+var _d20_icon: TextureRect = null
+## D20 演出标签（滚动期显示——数字滚动逻辑零改）
 var _d20_label: Label = null
-## 反馈条（四档标签+文本+数值行）
+## 四档反馈容器（组 7：CenterContainer 叠印——底图 TextureRect + 文字 Label）
+var _grade_host: CenterContainer = null
+## 四档反馈底图（缺件 texture null 不占位）
+var _grade_icon: TextureRect = null
+## 反馈条（四档标签文字——文字/字色逻辑零改）
 var _grade_label: Label = null
 var _result_label: RichTextLabel = null
 ## 继续钮
@@ -71,13 +99,16 @@ var _d20_skip: bool = false
 ## 呈结果止，期间禁用全部交互钮）
 var _busy: bool = false
 
-func setup(cfg: CoreConfig) -> void:
-	## 装配面板子树（宿主 _ready 调）；B-4 深底 + UiTheme 档位
-	## 参数 cfg：总控配置（四档色/字号/演出时长表驱动）
+func setup(cfg: CoreConfig, game_data: Node = null) -> void:
+	## 装配面板子树（宿主 _ready 调）；B-4 深底 + UiTheme 档位；
+	## M6 批 3.5b：game_data 注入（九宫格面板/四档底图/D20 骰面贴图解析；
+	## 空 = 缺件降级——纯文字/纯数字现状零回归）
+	## 参数 cfg：总控配置（四档色/字号/演出时长表驱动）；game_data：GameData（可空）
 	## 返回：无
 	_cfg = cfg
+	_game_data = game_data
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_theme_stylebox_override("panel", UiTheme.make_dark_panel_style(cfg))
+	add_theme_stylebox_override("panel", UiTheme.make_dark_panel_style(cfg, game_data))
 	var box := VBoxContainer.new()
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_theme_constant_override("separation", 10)
@@ -97,18 +128,43 @@ func setup(cfg: CoreConfig) -> void:
 	_cast_box = VBoxContainer.new()
 	_cast_box.visible = false
 	box.add_child(_cast_box)
+	# D20 演出容器（组 8：CenterContainer 双子独立居中 = 骰面+数字叠印；
+	## 缺件态 _d20_icon.texture null 不占位——min size 由数字 Label 撑，现状零回归）
+	_d20_host = CenterContainer.new()
+	_d20_host.visible = false
+	box.add_child(_d20_host)
+	_d20_icon = TextureRect.new()
+	_d20_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_d20_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_d20_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	# 骰面贴图在档才占位（min size 撑容器）；缺件 texture null 恒挂树
+	##（未挂树节点不随面板释放——孤儿泄漏，CenterContainer 内零占位无害）
+	var d20_texture: Texture2D = AssetTex.texture_of(D20_ASSET_ID, game_data)
+	if d20_texture != null:
+		_d20_icon.texture = d20_texture
+		_d20_icon.custom_minimum_size = Vector2.ONE \
+				* maxf(D20_FACE_MIN_SIZE, maxf(d20_texture.get_width(),
+						d20_texture.get_height()))
+	_d20_host.add_child(_d20_icon)
 	_d20_label = Label.new()
 	_d20_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_d20_label.add_theme_font_size_override("font_size",
 			UiTheme.font_of(cfg, &"ui_font_size_display", UiTheme.FONT_DISPLAY))
-	_d20_label.visible = false
-	box.add_child(_d20_label)
+	_d20_host.add_child(_d20_label)
+	# 四档反馈容器（组 7：底图 + 文字叠印同构）
+	_grade_host = CenterContainer.new()
+	_grade_host.visible = false
+	box.add_child(_grade_host)
+	_grade_icon = TextureRect.new()
+	_grade_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_grade_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_grade_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_grade_host.add_child(_grade_icon)
 	_grade_label = Label.new()
 	_grade_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_grade_label.add_theme_font_size_override("font_size",
 			UiTheme.font_of(cfg, &"ui_font_size_subheading", UiTheme.FONT_SUBHEADING))
-	_grade_label.visible = false
-	box.add_child(_grade_label)
+	_grade_host.add_child(_grade_label)
 	_result_label = RichTextLabel.new()
 	_result_label.bbcode_enabled = true
 	_result_label.fit_content = true
@@ -174,6 +230,8 @@ func show_settled(grade: int, text: String, reward_text: String,
 	## 返回：无
 	_Reset()
 	if grade >= 0:
+		_grade_host.visible = true
+		_ShowGradeAsset(grade)
 		_grade_label.visible = true
 		_grade_label.text = _GradeText(grade)
 		_grade_label.add_theme_color_override("font_color", _GradeColor(grade))
@@ -190,11 +248,25 @@ func show_battle_intro(view: EventRunner.EventView, reward_text: String,
 	## 返回：无
 	_Reset()
 	if view.check_grade >= 0:
+		_grade_host.visible = true
+		_ShowGradeAsset(view.check_grade)
 		_grade_label.visible = true
 		_grade_label.text = _GradeText(view.check_grade)
 		_grade_label.add_theme_color_override("font_color", _GradeColor(view.check_grade))
 	_result_label.text = _ComposeResultBody(roll_text, view.narrative, reward_text)
 	_battle_button.visible = true
+
+func _ShowGradeAsset(grade: int) -> void:
+	## 四档底图装配（M6 批 3.5b 组 7 内部口）：档位 → ui_label_result_* 贴图
+	## 在档 → 底图 + min size 撑容器（CenterContainer 内与文字叠印居中）；
+	## 缺件 → texture null 不占位（文字 Label 独撑容器——纯文字现状零回归）
+	## 参数 grade：CheckResult.Grade
+	## 返回：无
+	var texture: Texture2D = AssetTex.texture_of(GRADE_ASSETS.get(grade, &"") as StringName,
+			_game_data)
+	_grade_icon.texture = texture
+	_grade_icon.custom_minimum_size = texture.get_size() if texture != null \
+			else Vector2.ZERO
 
 func _ComposeResultBody(roll_text: String, text: String, reward_text: String) -> String:
 	## 结算呈现文本拼装：掷骰明细行（有则置首行——醒目）+ 正文 + 数值反馈行
@@ -305,6 +377,7 @@ func play_d20_roll() -> void:
 	_SetInteractive(false)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_d20_skip = false
+	_d20_host.visible = true
 	_d20_label.visible = true
 	_d20_label.text = "?"
 	var rng := RandomNumberGenerator.new()
@@ -314,6 +387,7 @@ func play_d20_roll() -> void:
 		_d20_label.text = str(rng.randi_range(1, 20))
 		await get_tree().process_frame
 		elapsed += get_process_delta_time()
+	_d20_host.visible = false
 	_d20_label.visible = false
 	_busy = false
 	_SetInteractive(true)
@@ -415,8 +489,10 @@ func _Reset() -> void:
 	for child: Node in _cast_box.get_children():
 		child.queue_free()
 	_cast_box.visible = false
+	_grade_host.visible = false
 	_grade_label.visible = false
 	_result_label.text = ""
 	_continue_button.visible = false
 	_battle_button.visible = false
+	_d20_host.visible = false
 	_d20_label.visible = false

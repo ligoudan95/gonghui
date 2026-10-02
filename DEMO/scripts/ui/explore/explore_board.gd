@@ -1,8 +1,12 @@
 ## 探索图板（ExploreBoard，Control——程序化占位视觉组件）
-## 职责：探索图渲染与点按命中——地格表驱动色块（Style 语义：PLAIN 平色块 /
-## RAISED 凸边 / BLOCK 障碍块）、三态迷雾遮罩（UNSEEN 浓雾/DIM 记忆/LIT 透）、
-## 交互点图标（已消耗灰态、暗门未揭示隐藏）、目标点常显（绑定目标金色高亮/
-## 非绑定灰显——绘制在迷雾层之上）、小队图标、出口达成态。
+## 职责：探索图渲染与点按命中——地格表驱动（M6 批 3.5b 组 2 贴图接线：
+## etile.asset_id/asset_variants → AssetTex.pick_variant 稳定哈希混铺贴图，
+## 缺件降级 Style 三样式色块 PLAIN/RAISED/BLOCK）、三态迷雾遮罩（组 5：
+## UNSEEN 浓雾/DIM 记忆贴图染色态 modulate=cfg 色（净 α=cfg 调定值——中2：
+## 贴图与纯色兜底同格二选一显示，不再叠加），LIT 透——缺件纯色现状）、
+## 交互点图标（组 4：icon_pt_* 贴图 48 居中，缺件降级字形；已消耗灰态、
+## 暗门未揭示隐藏）、目标点常显（icon_pt_target，绑定目标金色高亮/非绑定
+## 灰显——绘制在迷雾层之上）、小队图标（icon_explore_party）、出口达成态。
 ## 显示层级（2026-09-25 用户拍板）：底格(Z_TILE) < 已探索内容图标(Z_CONTENT)
 ## < 迷雾遮罩(Z_FOG——画在图标之后：DIM 半透明压暗已探索图标) <
 ## 常显目标点+衬底(Z_OVERLAY) < 小队图标(Z_PARTY)；UI 弹层（事件面板等）
@@ -37,7 +41,8 @@ const Z_PARTY: int = 4
 const BACKDROP_INSET: int = 8
 ## 小队图标描边宽（占位视觉结构参数——X3-06 豁免先例同口径）
 const PARTY_OUTLINE_SIZE: int = 4
-## 交互点图标字形（占位视觉：链/单点/宝箱/暗门/战斗/出口）
+## 交互点图标字形（占位降级视觉：链/单点/宝箱/暗门/战斗/出口——贴图缺件时
+## 的 Label 字形回退；贴图接线后仅为降级分支）
 const KIND_GLYPHS: Dictionary = {
 	InteractPointDef.Kind.CHAIN: "!",
 	InteractPointDef.Kind.SINGLE: "?",
@@ -46,10 +51,30 @@ const KIND_GLYPHS: Dictionary = {
 	InteractPointDef.Kind.BATTLE: "戈",
 	InteractPointDef.Kind.EXIT: "出",
 }
-## 目标点图标字形（常显）
+## 交互点图标资产 id（M6 批 3.5b 组 4：Kind -> icon_pt_*——贴图分支单源；
+## SECRET_DOOR 无图标资产（暗门揭示前隐藏、揭示后走事件流——维持字形降级）
+const KIND_ICONS: Dictionary = {
+	InteractPointDef.Kind.CHAIN: &"icon_pt_event",
+	InteractPointDef.Kind.SINGLE: &"icon_pt_event",
+	InteractPointDef.Kind.TREASURE: &"icon_pt_treasure",
+	InteractPointDef.Kind.BATTLE: &"icon_pt_battle",
+	InteractPointDef.Kind.EXIT: &"icon_pt_exit",
+}
+## 目标点图标资产 id（常显层）
+const TARGET_ASSET_ID: StringName = &"icon_pt_target"
+## 目标点图标字形（常显——降级）
 const TARGET_GLYPH: String = "◇"
-## 小队图标字形
+## 小队图标资产 id
+const PARTY_ASSET_ID: StringName = &"icon_explore_party"
+## 小队图标字形（降级）
 const PARTY_GLYPH: String = "队"
+## 图标贴图渲染边长（px——64 源渲染 48 居中；占位 UI 结构参数，
+## X3-06 豁免先例同口径）
+const ICON_RENDER_SIZE: float = 48.0
+## 迷雾贴图资产 id（M6 批 3.5b 组 5：UNSEEN 浓雾 / DIM 记忆——任一在档即
+## 懒挂子贴图染色态；modulate = cfg 色，α 语义不变）
+const FOG_UNSEEN_ASSET_ID: StringName = &"fx_fog_unseen"
+const FOG_DIM_ASSET_ID: StringName = &"fx_fog_dim"
 
 ## 总控配置（setup 注入）
 var _cfg: CoreConfig = null
@@ -59,18 +84,27 @@ var _map_def: ExploreMapDef = null
 var _state: ExploreMapState = null
 ## GameData（setup 注入——点位表查询）
 var _game_data: Node = null
-## 格根节点表（Vector2i -> Panel——底格层）
+## 格根节点表（Vector2i -> Control——底格层：贴图态 TextureRect /
+## 占位降级 Panel，M6 批 3.5b 组 2 泛化）
 var _cell_panels: Dictionary = {}
-## 迷雾遮罩表（Vector2i -> ColorRect）
+## 迷雾遮罩表（Vector2i -> ColorRect——常驻纯色兜底）
 var _fog_rects: Dictionary = {}
-## 交互点图标表（point_id -> Label）
+## 迷雾贴图表（Vector2i -> TextureRect——组 5 懒建染色态，与 _fog_rects 同格
+## 兄弟节点（中2：父隐藏连带隐藏子树，兄弟才能贴图/纯色二选一显示）；空表 =
+## 两键均缺件不建，纯色现状零回归）
+var _fog_textures: Dictionary = {}
+## 迷雾贴图解析缓存（_BuildFogLayer 期一次解析——setup 后不变）
+var _fog_unseen_tex: Texture2D = null
+var _fog_dim_tex: Texture2D = null
+## 交互点图标表（point_id -> Control——贴图态 TextureRect / 降级 Label）
 var _point_icons: Dictionary = {}
-## 目标点图标表（tp_id -> Label——迷雾上层常显）
+## 目标点图标表（tp_id -> Control——迷雾上层常显；贴图态 TextureRect /
+## 降级 Label）
 var _target_icons: Dictionary = {}
 ## 目标点衬底表（tp_id -> ColorRect——迷雾上层常显对比底）
 var _target_backdrops: Dictionary = {}
-## 小队图标
-var _party_icon: Label = null
+## 小队图标（贴图态 TextureRect / 降级 Label）
+var _party_icon: Control = null
 ## 当前适配缩放（fit_to 计算；1.0 = 原尺寸）
 var _fit_scale: float = 1.0
 
@@ -84,9 +118,15 @@ func setup(cfg: CoreConfig, map_def: ExploreMapDef, state: ExploreMapState,
 	_state = state
 	_game_data = game_data
 	for child: Node in get_children():
+		# S4-R3-01 同式（_BuildTileLayer 先例）：queue_free 延迟帧末——先隐藏
+		# 断渲染再释放，防旧板面与重建层一帧叠渲（setup 重复装配可感知）
+		var old_visual: CanvasItem = child as CanvasItem
+		if old_visual != null:
+			old_visual.visible = false
 		child.queue_free()
 	_cell_panels.clear()
 	_fog_rects.clear()
+	_fog_textures.clear()
 	_point_icons.clear()
 	_target_icons.clear()
 	_target_backdrops.clear()
@@ -185,16 +225,22 @@ func refresh(party_pos: Vector2i, fog: FogOfWar, consumed: Dictionary,
 		match cell_state:
 			FogOfWar.CellState.UNSEEN:
 				overlay.color = unseen_color
-				overlay.visible = true
+				_ApplyFogTexture(cell, _fog_unseen_tex, unseen_color)
+				# 中2 修复：贴图态父纯色隐藏（父+子同显 α 叠加 UNSEEN 0.92→0.99、
+				## DIM 0.55→0.69 偏离 cfg）；子贴图已移为兄弟节点——父隐藏不连带
+				## 遮蔽贴图；该态缺件 → 父纯色恢复显示（净 α = cfg 调定值）
+				overlay.visible = _fog_unseen_tex == null
 			FogOfWar.CellState.DIM:
 				overlay.color = dim_color
-				overlay.visible = true
+				_ApplyFogTexture(cell, _fog_dim_tex, dim_color)
+				overlay.visible = _fog_dim_tex == null
 			_:
 				overlay.visible = false
+				_ApplyFogTexture(cell, null, Color.WHITE)
 	# 交互点图标：UNSEEN 隐藏 / 已消耗灰态 / 暗门未揭示未消耗隐藏（隐藏内容不剧透）/
 	# 出口激活金色、未达成灰显；查无记录跳过该图标（X3-10——刷新不中断）
 	for point_id: StringName in _point_icons:
-		var icon: Label = _point_icons[point_id]
+		var icon: Control = _point_icons[point_id]
 		var point: InteractPointDef = _game_data.get_record(point_id) as InteractPointDef
 		if point == null:
 			push_warning("ExploreBoard: 交互点 '%s' 查无——图标跳过" % point_id)
@@ -225,31 +271,71 @@ func refresh(party_pos: Vector2i, fog: FogOfWar, consumed: Dictionary,
 	_party_icon.position = Vector2(party_pos) * float(CELL_SIZE)
 
 func _BuildTileLayer() -> void:
-	## 底格层：按地格表驱动样式逐格构建（占位色块；z_index 分层——重建不破层序）
+	## 底格层：按地格表逐格构建（M6 批 3.5b 组 2——贴图分支在前：etile 表
+	## asset_id + pick_variant 稳定哈希混铺；缺件/空 asset_id 降级现状占位
+	## Panel 色块；z_index 分层——重建不破层序）
 	## 参数：无
 	## 返回：无
 	for cell_key: Vector2i in _cell_panels:
-		var old_panel: Panel = _cell_panels[cell_key]
-		old_panel.queue_free()
+		var old_visual: Control = _cell_panels[cell_key]
+		# S4-R3-01 同式（event_panel._Reset 先例）：queue_free 延迟帧末——先
+		# 隐藏断渲染再释放，防旧底格层与新层一帧叠渲（暗门揭示等重建可感知）
+		old_visual.visible = false
+		old_visual.queue_free()
 	_cell_panels.clear()
 	for y: int in _map_def.size.y:
 		for x: int in _map_def.size.x:
 			var cell: Vector2i = Vector2i(x, y)
 			var tile: ExploreTileDef = _state.tile_at(cell)
-			var panel := Panel.new()
-			panel.position = Vector2(cell) * float(CELL_SIZE)
-			panel.size = Vector2.ONE * float(CELL_SIZE)
-			panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			panel.z_index = Z_TILE
-			panel.add_theme_stylebox_override("panel", _TileStyleOf(tile))
-			add_child(panel)
-			_cell_panels[cell] = panel
+			var visual: Control = _MakeTileVisual(cell, tile)
+			add_child(visual)
+			_cell_panels[cell] = visual
+
+func _MakeTileVisual(cell: Vector2i, tile: ExploreTileDef) -> Control:
+	## 构建单个底格视觉（组 2 接线口）：贴图分支在前——pick_variant（同格
+	## 恒定/异格打散）→ AssetTex.texture_of 有 → TextureRect（STRETCH_SCALE
+	## 满格、z=Z_TILE）；无/空 asset_id → 现状 Panel + _TileStyleOf 占位色块
+	## 降级（缺件态视觉零回归）
+	## 参数 cell：格坐标；tile：地格定义（null = 解析失败走占位）
+	## 返回：格视觉根（未挂树由调用方挂入）
+	if tile != null and not String(tile.asset_id).is_empty():
+		var asset_id: StringName = AssetTex.pick_variant(tile.asset_id,
+				tile.asset_variants, cell)
+		var texture: Texture2D = AssetTex.texture_of(asset_id, _game_data)
+		if texture != null:
+			var rect := TextureRect.new()
+			rect.texture = texture
+			# 属性序契约：expand 必须先于 position/size——expand 默认 KEEP_SIZE
+			# 时 position setter 会把 size 撑到纹理尺寸且旧 min 缓存钳住后续
+			# size 赋值（Godot Control 坑——顺序反了格子尺寸漂移成纹理原尺寸）
+			rect.stretch_mode = TextureRect.STRETCH_SCALE
+			rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			rect.position = Vector2(cell) * float(CELL_SIZE)
+			rect.size = Vector2.ONE * float(CELL_SIZE)
+			rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			rect.z_index = Z_TILE
+			return rect
+	var panel := Panel.new()
+	panel.position = Vector2(cell) * float(CELL_SIZE)
+	panel.size = Vector2.ONE * float(CELL_SIZE)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.z_index = Z_TILE
+	panel.add_theme_stylebox_override("panel", _TileStyleOf(tile))
+	return panel
 
 func _BuildFogLayer() -> void:
 	## 迷雾遮罩层（Z_FOG——画在已探索内容图标之后：DIM 半透明压暗记忆格图标 /
-	## UNSEEN 浓雾遮蔽；常显目标点与小队在更高层不受遮）
+	## UNSEEN 浓雾遮蔽；常显目标点与小队在更高层不受遮）；M6 批 3.5b 组 5：
+	## 每格 ColorRect 常驻兜底 + 懒建同格兄弟 TextureRect（fx_fog_unseen/
+	## fx_fog_dim 任一在档即建——染色态 refresh 按态选贴图 modulate=cfg 色，
+	## 净 α = cfg 调定值；两键均缺件不建——纯色现状零回归）。中2 修复：贴图
+	## 与纯色是同格二选一显示（refresh 切换），故为兄弟节点而非父子——父
+	## ColorRect visible=false 时引擎连带隐藏整棵子树，父子结构无法只显贴图
 	## 参数：无
 	## 返回：无
+	_fog_unseen_tex = AssetTex.texture_of(FOG_UNSEEN_ASSET_ID, _game_data)
+	_fog_dim_tex = AssetTex.texture_of(FOG_DIM_ASSET_ID, _game_data)
+	var has_fog_texture: bool = _fog_unseen_tex != null or _fog_dim_tex != null
 	for y: int in _map_def.size.y:
 		for x: int in _map_def.size.x:
 			var cell: Vector2i = Vector2i(x, y)
@@ -260,19 +346,50 @@ func _BuildFogLayer() -> void:
 			overlay.z_index = Z_FOG
 			add_child(overlay)
 			_fog_rects[cell] = overlay
+			if has_fog_texture:
+				var fog_tex := TextureRect.new()
+				fog_tex.stretch_mode = TextureRect.STRETCH_SCALE
+				fog_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+				fog_tex.position = Vector2(cell) * float(CELL_SIZE)
+				fog_tex.size = Vector2.ONE * float(CELL_SIZE)
+				fog_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				fog_tex.z_index = Z_FOG
+				fog_tex.visible = false
+				add_child(fog_tex)
+				_fog_textures[cell] = fog_tex
+
+func _ApplyFogTexture(cell: Vector2i, texture: Texture2D, tint: Color) -> void:
+	## 迷雾贴图按态落位（组 5 refresh 内部口）：该态贴图在档 → 贴图显示 +
+	## modulate=cfg 色（染色不换色语义——净遮蔽 α = cfg 色原样，父纯色由
+	## refresh 隐藏）；该态缺件 → 贴图隐藏（父 ColorRect 纯色兜底可见，现状
+	## 分支）；未建贴图（两键全缺）跳过。LIT 态 texture=null + 白 tint 隐藏
+	## 贴图（tint 不生效——仅占位参数）
+	## 参数 cell：格坐标；texture：该态贴图（可空）；tint：cfg 遮蔽色
+	## 返回：无
+	if not _fog_textures.has(cell):
+		return
+	var fog_tex: TextureRect = _fog_textures[cell]
+	fog_tex.texture = texture
+	fog_tex.modulate = tint
+	fog_tex.visible = texture != null
 
 func _BuildIconLayers() -> void:
 	## 图标层：交互点图标（Z_CONTENT 已探索内容层——迷雾之下，DIM 态被遮罩
 	## 压暗）/ 目标点常显图标+衬底（Z_OVERLAY——迷雾之上）/ 小队图标
 	## （Z_PARTY——迷雾之上，深色描边保证可读）；M6 批 2 挂账 4.1：按当前图
-	## （_map_def.id）过滤点位归属——多图数据不越权建图标
+	##（_map_def.id）过滤点位归属——多图数据不越权建图标；
+	## M6 批 3.5b 组 4：图标经 _MakeIconNode 接线——贴图在档走 icon_pt_* /
+	## icon_pt_target / icon_explore_party（64 源渲染 48 居中），缺件降级
+	## 现状 Label 字形（衬底 _MakeBackdrop 维持色块不动）
 	## 参数：无
 	## 返回：无
 	for record: Resource in _game_data.get_domain(&"map/interact_points"):
 		var point := record as InteractPointDef
 		if point.map_ref != _map_def.id:
 			continue
-		var icon := _MakeGlyphLabel(KIND_GLYPHS.get(point.kind, "?"))
+		var icon: Control = _MakeIconNode(
+				KIND_ICONS.get(point.kind, &"") as StringName,
+				String(KIND_GLYPHS.get(point.kind, "?")))
 		icon.position = Vector2(point.cell) * float(CELL_SIZE)
 		icon.z_index = Z_CONTENT
 		add_child(icon)
@@ -288,21 +405,48 @@ func _BuildIconLayers() -> void:
 		backdrop.z_index = Z_OVERLAY
 		add_child(backdrop)
 		_target_backdrops[target.id] = backdrop
-		var icon := _MakeGlyphLabel(TARGET_GLYPH)
+		var icon: Control = _MakeIconNode(TARGET_ASSET_ID, TARGET_GLYPH)
 		icon.position = Vector2(target.cell) * float(CELL_SIZE)
 		icon.z_index = Z_OVERLAY
 		add_child(icon)
 		_target_icons[target.id] = icon
-	_party_icon = _MakeGlyphLabel(PARTY_GLYPH)
-	_party_icon.add_theme_color_override("font_color",
-			UiTheme.color_of(_cfg, &"ui_explore_party_color", UiTheme.EXPLORE_PARTY))
-	_party_icon.add_theme_color_override("font_outline_color", UiTheme.BADGE_OUTLINE)
-	_party_icon.add_theme_constant_override("outline_size", PARTY_OUTLINE_SIZE)
+	_party_icon = _MakeIconNode(PARTY_ASSET_ID, PARTY_GLYPH)
+	if _party_icon is Label:
+		# 占位降级态（Label 字形）配色/描边维持现状；贴图态纹理自带颜色不染
+		var party_label: Label = _party_icon as Label
+		party_label.add_theme_color_override("font_color",
+				UiTheme.color_of(_cfg, &"ui_explore_party_color", UiTheme.EXPLORE_PARTY))
+		party_label.add_theme_color_override("font_outline_color", UiTheme.BADGE_OUTLINE)
+		party_label.add_theme_constant_override("outline_size", PARTY_OUTLINE_SIZE)
 	_party_icon.z_index = Z_PARTY
 	add_child(_party_icon)
 
+func _MakeIconNode(asset_id: StringName, glyph: String) -> Control:
+	## 图标节点构建（组 4 接线口）：贴图在档 → 满格 Control 根（几何与降级
+	## Label 同构——格原点定位/满格 rect，refresh 的 position/modulate/visible
+	## 逻辑零改适用）+ 子 TextureRect（64 源渲染 48 居中）；空 id（如
+	## SECRET_DOOR）/缺件 → 现状 Label 居中字形降级（占位态视觉零回归）
+	## 参数 asset_id：图标资产 id（空 = 无贴图位）；glyph：降级字形
+	## 返回：图标节点（未挂树由调用方挂入）
+	if not String(asset_id).is_empty():
+		var texture: Texture2D = AssetTex.texture_of(asset_id, _game_data)
+		if texture != null:
+			var host := Control.new()
+			host.size = Vector2.ONE * float(CELL_SIZE)
+			host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			var rect := TextureRect.new()
+			rect.texture = texture
+			rect.stretch_mode = TextureRect.STRETCH_SCALE
+			rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			rect.size = Vector2.ONE * ICON_RENDER_SIZE
+			rect.position = Vector2.ONE * ((float(CELL_SIZE) - ICON_RENDER_SIZE) * 0.5)
+			rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			host.add_child(rect)
+			return host
+	return _MakeGlyphLabel(glyph)
+
 func _MakeGlyphLabel(glyph: String) -> Label:
-	## 图标标签构建（居中字形——占位视觉）
+	## 图标标签构建（居中字形——占位降级视觉，组 4 接线后仅供缺件分支）
 	## 参数 glyph：字形
 	## 返回：Label
 	var label := Label.new()

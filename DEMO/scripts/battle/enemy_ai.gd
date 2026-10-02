@@ -7,7 +7,10 @@
 ## 恢复射程+视线 → ②按四级链序换打当前位置可及的其他目标 → ③真待机，
 ## 消除「无法更近即完全瘫痪干站」缺陷；四级兜底（M3 试玩修复）：移动后主
 ## 目标仍不可及且无攻击安排时——移动后位置/当前位置存在可及目标必攻击
-## （攻击机会恒优先于纯走位），消除「眼前有可及目标却绕开不打」缺陷）。
+## （攻击机会恒优先于纯走位），消除「眼前有可及目标却绕开不打」缺陷；
+## 兜底 2.5（M5 后用户几何死锁修复）：①②皆空且曼哈顿贪心被凹形障碍卡死时
+## ——全场 Dijkstra 距离场下取「全局距离严格降」可达格沿真实路径绕行，
+## 消除「绕行距离 > 移动力即全体空决策稳态冻结」缺陷；仍无路才真待机）。
 ## 数据来源：案 9 §2.5（目标链第七轮口径 + 无可用目标兜底取最近）；17 案
 ## §3.8 敌方技能表 + 17-C16 P1（怒吼每场首次条件满足必用 1 次、此后穷追
 ## 猛打优先；条件首次满足但精力不足 → 义务作废不顺延）。
@@ -48,7 +51,9 @@ static func decide(self_unit: Object, grid: BattleGrid, player_units: Array,
 	## 敌方单回合决策主入口：技能选择 →（非怒吼）目标四级链 → 移动裁决
 	## （含四级兜底：无严格更近格时——等距侧移恢复攻击 → 换打当前位置
 	## 可及目标 → 真待机；M3 试玩修复——移动后主目标仍不可及时，移动后位置/
-	## 当前位置存在可及目标必攻击，不绕开眼前可打的目标干走位）
+	## 当前位置存在可及目标必攻击，不绕开眼前可打的目标干走位；兜底 2.5
+	## ——①②皆空时全场距离场取「全局距离严格降」格沿真实路径绕行，凹形
+	## 障碍贪心死锁解冻，仍无路才真待机）
 	## 参数 self_unit：决策单位（BattleUnit）；grid：战场；player_units：我方单位全集；
 	## ctx：{cfg, skill_lookup, status_manager（S3-06：期望伤害消费站位面板层，
 	## 缺省回退 1.0——headless 简化上下文兼容）}
@@ -125,6 +130,35 @@ static func decide(self_unit: Object, grid: BattleGrid, player_units: Array,
 			action.attack_cell = fallback.grid_pos
 			self_unit.ai_context[&"last_target_id"] = fallback.id
 			return action
+		# 兜底 2.5（全局路径跟随——M5 后用户几何死锁修复）：凹形障碍前贪心
+		# 「严格更近」（曼哈顿）无可达格——绕行真实距离 > 移动力时，兜底
+		# 1/2 双空（此前版本在此直接落兜底 3 真待机且为稳态：无任何严格
+		# 更近格的局面不随回合自解，后继敌人被前位互为障碍连锁冻结）。修复：
+		# 全场 Dijkstra 距离场（目标射程格集为源、含全部存活单位占位）下，
+		# 可达格中取「全局距离严格小于当前位置」者（最小优先，平局按
+		# reachable 既有 y/x 序取首保确定性）——每步严格降全局距离单调收敛
+		# 防振荡；多敌堵路时距离场每次决策现算（含前位新占位）自然分流
+		# 次优通道。仍无（真无路/目标围死）才落兜底 3（真待机语义保留）
+		var field: Dictionary = grid.distance_field_to_reach(self_unit,
+				target.grid_pos, range_final)
+		var here_dist: int = field.get(self_unit.grid_pos, -1)
+		if here_dist > 0:
+			var route_cell: Vector2i = NO_CELL
+			var route_dist: int = here_dist
+			for cell: Vector2i in reachable:
+				var cell_dist: int = field.get(cell, -1)
+				if cell_dist < 0 or cell_dist >= route_dist:
+					continue
+				route_cell = cell
+				route_dist = cell_dist
+			if route_cell != NO_CELL:
+				action.move_dest = route_cell
+				# 移动后进入射程（距离场 0 值格）且视线通 → 随手攻击
+				# （对齐主链「移动后进入射程才攻击」语义；近战免视线）
+				if route_dist == 0 and (not needs_los \
+						or grid.has_line_of_sight(route_cell, target.grid_pos)):
+					action.attack_cell = target.grid_pos
+				return action
 		# 兜底 3（真待机）：全场无射程内视线通目标——合理终态
 		return action
 	action.move_dest = best

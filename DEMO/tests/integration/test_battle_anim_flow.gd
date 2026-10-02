@@ -470,7 +470,10 @@ func test_round_settled_dot_hit_skips_dead() -> void:
 
 func test_turn_order_bar_uses_idle_first_frame_atlas() -> void:
 	## 序条头像契约（×2 断言组）：重建后每条目 icon = AtlasTexture（idle 竖条
-	## 首帧切片，region 128×128）——整竖条直显拦截
+	## 首帧切片，region 128×128）——整竖条直显拦截；循环盲审修复②（一帧
+	## 叠显，S4-R3-01 同式）：再次 rebuild（每回合初真实路径）——发起帧旧
+	## 条目立即隐藏（queue_free 延迟帧末，修复前旧/新条目一帧叠渲、序条
+	## 短暂双倍长度）；新条目计数正确
 	var battle: Control = await _EnterRandomBattle()
 	assert_object(battle).is_not_null()
 	battle.controller.delay_seconds = 0.0
@@ -484,4 +487,20 @@ func test_turn_order_bar_uses_idle_first_frame_atlas() -> void:
 		assert_int(int(atlas.region.size.x)).is_equal(SpriteResolver.ANIM_FRAME_SIZE)
 		assert_int(int(atlas.region.position.y)).is_equal(0)
 		assert_int(int(atlas.region.size.y)).is_equal(SpriteResolver.ANIM_FRAME_SIZE)
+	# 重建契约：发起帧旧条目隐藏 + 新条目计数/可见正确
+	var old_entries: Array[Node] = []
+	for entry: Node in bar.get_children():
+		old_entries.append(entry)
+	bar.rebuild([battle.context.allies[0], battle.context.allies[1]])
+	for old_entry: Node in old_entries:
+		assert_bool(old_entry.is_queued_for_deletion()) \
+				.override_failure_message("旧序条条目应已排队释放").is_true()
+		var old_visual: CanvasItem = old_entry as CanvasItem
+		if old_visual != null:
+			assert_bool(old_visual.visible) \
+					.override_failure_message("重建发起帧旧条目应立即隐藏（一帧叠显）").is_false()
+	assert_int(bar._entries.size()).is_equal(2)
+	for entry: PanelContainer in bar._entries.values():
+		assert_bool(entry.visible) \
+				.override_failure_message("重建后新条目应可见").is_true()
 	battle.controller.abort_battle()

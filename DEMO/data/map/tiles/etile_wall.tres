@@ -6,6 +6,7 @@
 script = ExtResource("1_a1dwf")
 id = &"etile_wall"
 display_name = "岩壁"
+asset_id = &"tile_mine_wall"
 walkable = false
 fill_color = Color(0.13, 0.13, 0.15, 1)
 accent_color = Color(0.05, 0.05, 0.06, 1)

@@ -24,6 +24,15 @@ enum BattleState {
 ## 回合数护栏（超出按战败收束并 push_warning——防异常局面死循环）。
 ## 工程护栏非玩法参数（批 B M3 架构师裁定：不入 cfg 表，留代码）
 const MAX_ROUNDS: int = 50
+## 演出延时墙钟护栏倍率（拍板 B 2026-10-01：_wait_delay 墙钟上限 = 本倍率 ×
+## 当前 delay_seconds——防环境性 delta 停更（窗口最小化/系统休眠/断点冻结）
+## 致逐帧累计永不达标、演出协程永挂；超限 push_warning 并强制返回。工程护栏
+## 非玩法数值，与 MAX_ROUNDS 同口径留代码不入 cfg 表）
+const DELAY_WALL_CLOCK_RATIO: int = 10
+## 敌方单轮看门狗墙钟上限（毫秒；拍板 B：单个敌方行动轮入口/出口记墙钟，
+## 超限 push_warning 一次留痕供排查——不中断不改动行为。工程护栏非玩法
+## 数值，同上留代码）
+const ENEMY_TURN_WATCHDOG_MSEC: int = 15000
 
 ## 战斗开始（装配完成后发出一次）
 signal battle_started
@@ -74,6 +83,9 @@ var _battle_over: bool = false
 var _downed_ids: Array[StringName] = []
 ## 演出延时跳过请求（skip_current_delay 置位，_wait_delay 轮询消费）
 var _delay_skip_requested: bool = false
+## 墙钟源（毫秒 Callable；默认引擎墙钟，测试注入假钟驱动墙钟护栏/敌方轮
+## 看门狗用例——与 BattleContext.skill_lookup 的 Callable 注入同式）
+var _wall_clock: Callable = func() -> int: return Time.get_ticks_msec()
 
 func prepare(context: BattleSetup.BattleContext) -> void:
 	## 挂接上下文（不启动状态机——单元/集成测试直调分项行动口用）
@@ -276,7 +288,22 @@ func _run_player_turn(unit: BattleUnit) -> void:
 		await get_tree().process_frame
 
 func _run_enemy_turn(unit: BattleUnit) -> void:
-	## 敌方行动轮：AI 决策 → 移动 → 技能（含演出延时）；移动后单位死亡
+	## 敌方行动轮（外层看门狗——拍板 B：入口/出口记墙钟，单轮超
+	## ENEMY_TURN_WATCHDOG_MSEC 即 push_warning 一次留痕，含单位 id/回合数/
+	## 耗时，不中断不改动行为）：主体迁 _RunEnemyTurnCore，本层只包裹计时
+	## 参数 unit：行动单位
+	## 返回：无（协程——含延时）
+	var watch_start_msec: int = _WallClockMsec()
+	await _RunEnemyTurnCore(unit)
+	var watched_msec: int = _WallClockMsec() - watch_start_msec
+	if watched_msec > ENEMY_TURN_WATCHDOG_MSEC:
+		push_warning("BattleController: 敌方轮看门狗超时（单位 %s / 第 %d 回合 / 耗时 %d ms 超上限 %d ms）——仅留痕不中断" % [
+				String(unit.unit_id), _context.round_no, watched_msec,
+				ENEMY_TURN_WATCHDOG_MSEC])
+
+func _RunEnemyTurnCore(unit: BattleUnit) -> void:
+	## 敌方行动轮主体（原 _run_enemy_turn 逻辑原样迁入——看门狗包裹层拆出后
+	## 的单一行动实现）：AI 决策 → 移动 → 技能（含演出延时）；移动后单位死亡
 	## （踩陷阱）即终止不再攻击（S3-01——尸体不攻击）；ctx 注入
 	## status_manager 供 AI 期望伤害消费站位面板层（S3-06）
 	## 参数 unit：行动单位
@@ -557,18 +584,36 @@ func is_battle_over() -> bool:
 	## 返回：true = 战局已收束（终局/中止）
 	return _battle_over
 
+func _WallClockMsec() -> int:
+	## 墙钟读取单源（生产走引擎墙钟；测试经 _wall_clock 注入假钟——
+	## 墙钟护栏/敌方轮看门狗共用本口）
+	## 参数：无
+	## 返回：当前墙钟毫秒
+	return int(_wall_clock.call())
+
 func _wait_delay() -> void:
 	## 演出延时（delay_seconds ≤0 跳过——headless 测试注入 0；逐帧累计 + 点按跳过；
-	## 离树即退——游离节点不再等待）
+	## 离树即退——游离节点不再等待；墙钟护栏——拍板 B：累计墙钟超
+	## DELAY_WALL_CLOCK_RATIO × 配置秒数即 push_warning 并强制返回，防环境性
+	## delta 停更致演出协程永挂；点按跳过/离树退出逻辑不变）
 	## 参数：无
 	## 返回：无（协程）
 	if delay_seconds <= 0.0:
 		return
 	_delay_skip_requested = false
 	var elapsed: float = 0.0
+	var wall_start_msec: int = _WallClockMsec()
+	var wall_limit_msec: int = int(delay_seconds * 1000.0 * DELAY_WALL_CLOCK_RATIO)
 	while elapsed < delay_seconds and not _delay_skip_requested and is_inside_tree():
 		await get_tree().process_frame
 		elapsed += get_process_delta_time()
+		var wall_elapsed_msec: int = _WallClockMsec() - wall_start_msec
+		if wall_elapsed_msec > wall_limit_msec:
+			var unit_desc: String = String(current_unit.unit_id) \
+					if current_unit != null else "无行动单位"
+			push_warning("BattleController: 演出延时墙钟护栏触发（单位 %s，已耗时 %d ms 超上限 %d ms）——强制返回防演出永挂" % [
+					unit_desc, wall_elapsed_msec, wall_limit_msec])
+			break
 	_delay_skip_requested = false
 
 func _CompareTurnOrder(a: BattleUnit, b: BattleUnit) -> bool:
