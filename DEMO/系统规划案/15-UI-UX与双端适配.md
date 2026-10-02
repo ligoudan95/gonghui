@@ -1,6 +1,6 @@
 # 案 15《UI/UX 与双端适配规划案》
 
-> 变更记录：2026-09-29 试玩反馈批（用户在线拍板全按推荐）——§2.2 探索层界面行补撤退确认弹窗登记（恒弹现状勘正+有倒地增强文案 Q-A）与毒瘴格视觉；§2.2 结算界面行 P1 修订（原「撤退无重伤」废止）+RETREAT/VICTORY 倒地分流文案与重伤行多队员口径；2026-10-01 M6 批 2 落地登记——§2.2 设置界面行补最小窗口 1280×720（project.godot window/size/minimum，极矮窗口组合拳之一，不与双档冲突）。
+> 变更记录：2026-09-29 试玩反馈批（用户在线拍板全按推荐）——§2.2 探索层界面行补撤退确认弹窗登记（恒弹现状勘正+有倒地增强文案 Q-A）与毒瘴格视觉；§2.2 结算界面行 P1 修订（原「撤退无重伤」废止）+RETREAT/VICTORY 倒地分流文案与重伤行多队员口径；2026-10-01 M6 批 2 落地登记——§2.2 设置界面行补最小窗口 1280×720（project.godot window/size/minimum，极矮窗口组合拳之一，不与双档冲突）；2026-10-01 M6 批 3.5a 落地登记——§2.2 表后补全局主题注册注记（main_theme.tres 经 project.godot [gui] theme/custom 挂载，Button 四态占位样式+文字色 AAA 级对比修正）；2026-10-01 M6 批 3.5b+四席盲审修复批落地登记——全局主题注记补文字色**六键全列**（含 font_hover_pressed_color 组合态与 font_focus_color 焦点态，S4 席对账补全）+面板九宫格双态/四档底图已接线实况+按钮三态延批 4 切换口径（D1）。
 
 ## 1. 系统定位与目标
 
@@ -36,6 +36,8 @@
 | 继续（自动读档） | 读取最简自动存档（城内时点存档位：日结算/委托结算回城后等，出征中不自动存档，#26） | 案 1 总控 | 含 |
 
 **存档/读档（已定稿，用户 2026-09-20 拍板）**：DEMO 采用**最简自动存档**（日结算/关键节点自动保存（城内时点，出征中不自动存档，#26——2026-09-23 第八轮盲审补全），入口最小化——「继续（自动读档）」见表末行），完整版立项时再系统设计存档结构，不设独立系统案。
+
+**全局主题注册（M6 批 3.5a 落地，2026-10-01；批 3.5b 接线实况与六键文字色登记同日补）**：`assets/ui/main_theme.tres` 经 project.godot `[gui] theme/custom` 全局挂载（全 UI 层主题单源先例）——Button 四态占位样式（normal/hover/pressed/disabled，占位母图=08 组 `ui_button_*` 同 id 件）+**文字色六键修正：常态 font_color/悬停 font_hover_color/按下 font_pressed_color=暖近黑 Color(0.18, 0.14, 0.09)（亮底按钮 AAA 级对比度）、组合态 font_hover_pressed_color 与焦点态 font_focus_color 同暖近黑（悬停按下叠加/键盘焦点不降对比）、禁用 font_disabled_color=冷灰 Color(0.62, 0.64, 0.67)；OptionButton/CheckBox 经 Button 主题继承链同受益**；默认字体未设（中文字体件归 art_spec 10 组、素材到位后接入——导出端中文字形合规为发布阻断项）。**批 3.5b 接线实况（2026-10-01）**：面板九宫格与四档标签底图已实施——make_dark_panel_style 扩 game_data 参双态（`ui_panel_ninepatch` 在档 → StyleBoxTexture 四边 24px 边距/缺件 Flat 兜底，深底面板单源）+四档反馈底图（event_panel 档位→`ui_label_result_*`，CenterContainer 底图 TextureRect+文字 Label 叠印）；**按钮三态延批 4（D1 口径）**——theme 资源内无法运行时经 AssetTex/AssetRegistry 解析贴图路径（铁律②），批 3.5 期维持占位 StyleBoxFlat 勿动，批 4 正式母图入库后 theme 内改引 `ui_button_*` 三键原位升级（main_theme.tres 头注已注）。
 
 ### 2.3 触控设计规范（推断建议，占位基准）
 
