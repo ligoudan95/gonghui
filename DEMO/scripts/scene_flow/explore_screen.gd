@@ -16,6 +16,11 @@
 ## UI_POPUP_Z_INDEX）> 战争迷雾（board Z_FOG）> 已显示内容（board Z_TILE/
 ## Z_CONTENT）；例外：委托目标点常显（+衬底）与视野内小队图标浮于迷雾上
 ## （board Z_OVERLAY/Z_PARTY——恒低于 UI 弹层）。
+## 三栏布局（三栏改版批，C1 拍板 A 三栏对称）：Layout HBox = 左栏
+## ExplorePartyPanel（冒险者信息）+ 中栏 GoalBanner/BoardHost（板面满高，
+## 提示行叠加板面底部不占布局高）+ 右栏 ExploreQuestPanel（委托信息/图例/
+## 撤退按钮）；顶栏与底栏拆除——原状态行字段拆入两栏组件。板面渲染上下
+## 镜像见 ExploreBoard（C2 拍板 (b)——数据 y=0〔北/村口〕绘于屏幕下方）。
 ## 弹层显隐契约（同日试玩反馈①）：PanelHost 初始隐藏，事件视图呈现时
 ## 显示、结算继续/路由战斗/会话终结时隐藏——弹窗会话结束即消失。
 ## 数据来源：M3 方案批 2/批 3；案 7《地图与探索》；案 8（事件引擎）；案 18。
@@ -59,12 +64,9 @@ const UI_TEXTS: Dictionary = {
 	&"target_done": "目标已达成——回村口出口交付。",
 	&"move_blocked": "那边过不去。",
 	&"path_blocked": "（此路当前不通。）",
-	&"status_line": "委托『%s』｜%s｜耗时 %d 天｜%s",
-	&"hp_downed": "倒地",
-	## 功能一批 2：染毒标记与毒瘴踏入提示
-	&"hp_poison_tag": "·中毒",
+	## 三栏改版批：status_line/hp_group_prefix/hp_downed/hp_poison_tag 四键
+	## 已迁左右栏组件文案表（ExplorePartyPanel/ExploreQuestPanel.UI_TEXTS）
 	&"poison_step_hint": "踏入毒瘴——队伍受到毒伤并染毒。",
-	&"hp_group_prefix": "HP：",
 	&"quest_granted": "新委托『%s』已加入挂单列表。",
 	&"quest_grant_dup": "这桩委托已经在挂单里了。",
 	&"treasure_opened": "撬开矿箱——+%d 金。",
@@ -139,6 +141,10 @@ var _rng := RandomNumberGenerator.new()
 var _runner: EventRunner = null
 ## 事件面板（可复用弹层——零修改内嵌）
 var _panel: EventPanel = null
+## 左栏冒险者信息面板（三栏改版批——%LeftHost 挂载）
+var _party_panel: ExplorePartyPanel = null
+## 右栏委托信息面板（三栏改版批——%RightHost 挂载；撤退按钮在面板内）
+var _quest_panel: ExploreQuestPanel = null
 ## 区域 -> 遭遇权重索引
 var _encw_by_region: Dictionary = {}
 ## 图板组件
@@ -198,14 +204,31 @@ func _ready() -> void:
 	_panel.option_chosen.connect(_OnOptionChosen)
 	_panel.continue_pressed.connect(_OnContinue)
 	_panel.battle_pressed.connect(_OnBattleIntroPressed)
-	%RetreatButton.text = UI_TEXTS[&"retreat_button"]
+	# ---- 三栏侧栏装配（三栏改版批：左右栏宽度/列间距 cfg 表驱动；组件挂载
+	## 先于战续跑分叉与图缺失降级早退——L8 口径下左右面板照常在场）----
+	var side_width: int = _cfg.ui_explore_side_panel_width \
+			if _cfg != null and _cfg.ui_explore_side_panel_width > 0 \
+			else UiTheme.EXPLORE_SIDE_PANEL_WIDTH
+	%LeftHost.custom_minimum_size = Vector2(side_width, 0)
+	%RightHost.custom_minimum_size = Vector2(side_width, 0)
+	var column_gap: int = _cfg.ui_explore_column_gap \
+			if _cfg != null and _cfg.ui_explore_column_gap > 0 \
+			else UiTheme.EXPLORE_COLUMN_GAP
+	%Layout.add_theme_constant_override("separation", column_gap)
+	_party_panel = ExplorePartyPanel.new()
+	_party_panel.setup(_cfg, _game_data)
+	%LeftHost.add_child(_party_panel)
+	_quest_panel = ExploreQuestPanel.new()
+	_quest_panel.setup(_cfg, _game_data)
+	_quest_panel.set_retreat_button_text(UI_TEXTS[&"retreat_button"])
+	_quest_panel.retreat_pressed.connect(_OnRetreatPressed)
+	%RightHost.add_child(_quest_panel)
 	# UI 弹层 z 单源落位（tscn 同值双保险——层级契约测试消费）
 	%PanelHost.z_index = UI_POPUP_Z_INDEX
 	%SettlementHost.z_index = UI_POPUP_Z_INDEX
 	%SettlementPanel.z_index = UI_POPUP_Z_INDEX
 	%SettlementButton.text = UI_TEXTS[&"settle_return"]
 	%GoalBanner.text = UI_TEXTS[&"goal_banner"]
-	%RetreatButton.pressed.connect(_OnRetreatPressed)
 	%RetreatConfirm.confirmed.connect(_OnRetreatConfirmConfirmed)
 	%SettlementButton.pressed.connect(_OnSettleReturnPressed)
 	gui_input.connect(_OnGuiInput)
@@ -326,10 +349,10 @@ func _MakeDefaultRun() -> ExpeditionRun:
 		[&"mage", &"cls_mage"], [&"priest", &"cls_priest"],
 	]
 	for entry: Array in roster:
-		var attrs: Dictionary = {
-			&"strength": 10, &"agility": 10, &"constitution": 10,
-			&"intelligence": 10, &"perception": 10, &"willpower": 10, &"luck": 10,
-		}
+		# A-6 单源：七属性键集 + 缺省值全走 AttrKeys（字面量收编，行为不变）
+		var attrs: Dictionary = {}
+		for attr_id: StringName in AttrKeys.seven_attrs():
+			attrs[attr_id] = AttrKeys.DEFAULT_ATTR_VALUE
 		var adv: AdventurerData = AdventurerData.create_debug(entry[0], entry[1],
 				attrs, _game_data)
 		run.party.append(adv)
@@ -345,16 +368,16 @@ func _MakeDefaultRun() -> ExpeditionRun:
 
 func _ApplyFontTiers() -> void:
 	## tscn 内嵌字号档位覆写（对齐 guild_shell/event_screen 惯例；X3-07：
-	## HintLabel 补齐）+ 判据横幅配色（cfg 表驱动）
+	## HintLabel 补齐）+ 判据横幅配色（cfg 表驱动）。三栏改版批精简：
+	## TitleLabel/StatusLabel/RetreatButton 三段随顶栏底栏拆除删除
+	## （字号档位随组件 setup 内落位），余 GoalBanner/HintLabel/Settlement*
+	## 保留
 	## 参数：无
 	## 返回：无
-	%TitleLabel.add_theme_font_size_override("font_size",
-			UiTheme.font_of(_cfg, &"ui_font_size_heading", UiTheme.FONT_HEADING))
-	%StatusLabel.add_theme_font_size_override("font_size",
-			UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 	%HintLabel.add_theme_font_size_override("font_size",
 			UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
-	# 提示行深色描边（叠加板面边缘时的对比保障——2026-09-25 层级修复顺手项）
+	# 提示行深色描边（叠加板面边缘时的对比保障——2026-09-25 层级修复顺手项；
+	## 三栏改版批：HintLabel 改 BoardHost 内叠加态仍保留描边）
 	%HintLabel.add_theme_color_override("font_outline_color", UiTheme.BADGE_OUTLINE)
 	%HintLabel.add_theme_constant_override("outline_size", HINT_OUTLINE_SIZE)
 	%GoalBanner.add_theme_font_size_override("font_size",
@@ -366,9 +389,7 @@ func _ApplyFontTiers() -> void:
 			UiTheme.font_of(_cfg, &"ui_font_size_heading", UiTheme.FONT_HEADING))
 	%SettlementBody.add_theme_font_size_override("font_size",
 			UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
-	# W3-08：按钮字号补齐（撤退/回城——三屏按钮统一 normal 档收口）
-	%RetreatButton.add_theme_font_size_override("font_size",
-			UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
+	# W3-08：回城按钮字号（撤退按钮字号随组件 setup 落位）
 	%SettlementButton.add_theme_font_size_override("font_size",
 			UiTheme.font_of(_cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 
@@ -435,7 +456,9 @@ func _QuestGoalDone() -> bool:
 	return _run.goal_kind != -1 and _goal.is_done()
 
 func _RefreshStatus() -> void:
-	## 顶部状态行（委托/判据/耗时/队伍 HP）
+	## 侧栏状态刷新（三栏改版批：原顶部状态行拆解——委托名/状态段解析逻辑
+	## 原样保留，队伍卡入左栏组件、委托字段入右栏组件；%GoalBanner 显隐
+	## 保留；函数名与调用点不动——测试直调口径）
 	## 参数：无
 	## 返回：无
 	_SyncRetreatButton()
@@ -449,35 +472,26 @@ func _RefreshStatus() -> void:
 			# L6（X3-10 同口径）：查无提示反馈——不静默
 			quest_name = String(_run.quest_template_id)
 			push_warning("explore_screen: 委托模板 '%s' 查无" % _run.quest_template_id)
-	var hp_parts: PackedStringArray = []
-	for adv: AdventurerData in _run.party:
-		var tag: String = str(int(_run.hp.get(adv, 0)))
-		if _run.downed.get(adv, false):
-			tag = String(UI_TEXTS[&"hp_downed"])
-		elif _run.poisoned.has(adv):
-			# 功能一批 2：染毒成员 HP 追加标记（未倒地才显——倒地语义优先）
-			tag += String(UI_TEXTS[&"hp_poison_tag"])
-		hp_parts.append("%s:%s" % [adv.display_name, tag])
-	# 状态行分组（2026-09-25 层级修复顺手项）：组间全角｜分隔、HP 组加前缀标签；
-	# W3-06：自由探索会话（goal_kind == -1）状态段显专属文案（不再借用
-	# 「判据已达成」——无判据会话谈达成语义错位）；
-	# S4-M4-4：格式串与分隔字面量入 UI_TEXTS 单源（本文件最后一个漏网内联串）；
-	# S4-R5-01②：hp_group_prefix 键消费（渲染不变——原格式串内联「HP：」收编；
-	## 死键 status_join 删除：键值「｜」与实际空格 join 不符，按现状渲染收口）
+	# 状态段解析（W3-06：自由探索会话显专属文案；S4-M4-4：文案键入 UI_TEXTS
+	## 单源）；正向态（出口可交付 = 判据达成或自由探索）右栏绿显
 	var status_segment: String = UI_TEXTS[&"free_status"] if _run.goal_kind == -1 \
 			else (UI_TEXTS[&"goal_done"] if _ExitActive() else UI_TEXTS[&"goal_pending"])
-	%StatusLabel.text = String(UI_TEXTS[&"status_line"]) % [quest_name,
-			status_segment, _run.total_days(),
-			String(UI_TEXTS[&"hp_group_prefix"]) + " ".join(hp_parts)]
+	if _party_panel != null:
+		_party_panel.refresh_party(_run)
+	if _quest_panel != null:
+		_quest_panel.refresh_quest(quest_name, status_segment, _ExitActive(), _run)
 	%GoalBanner.visible = _goal.is_done()
 
 func _SyncRetreatButton() -> void:
 	## 撤退钮可用态镜像（S4-R4-01：会话终结/移动演出/事件面板/续跑待处理
 	## 期视觉禁用——此前视觉可点但 _OnRetreatPressed 静默拦截零反馈；
-	## _RefreshStatus 与各标记翻转点统一走此口）
+	## _RefreshStatus 与各标记翻转点统一走此口）；三栏改版批：按钮已迁右栏
+	## 组件，经 set_retreat_interactable 口落位
 	## 参数：无
 	## 返回：无
-	%RetreatButton.disabled = _finished or _moving or _event_open or _resuming
+	if _quest_panel != null:
+		_quest_panel.set_retreat_interactable(
+				not (_finished or _moving or _event_open or _resuming))
 
 # --------------------------------------------------------------------------
 # 点按交互（移动 / TAP 点位）

@@ -1,5 +1,5 @@
 ## 探索屏集成测试（M3 批 2/批 3：渲染 + 移动交互 + 中断接线）
-## 覆盖：进图渲染（村子亮/矿洞雾/绑定目标高亮 5 灰显）/ 点格走格 /
+## 覆盖：进图渲染（村子亮/矿洞雾/绑定目标高亮·未绑定隐藏）/ 点格走格 /
 ## 三类移动中断（ENTER 事件点弹事件面板/暗门 NEAR 弹检定/随机遭遇路由战斗）
 ## 与恢复 / 公会壳出征按钮 → 探索屏 → 撤退往返 + 出征锁状态 / 触控热区 ≥48。
 ## 环境：gdUnit 帧内真 autoload（GameData/SaveManager/SceneManager）；
@@ -9,6 +9,10 @@ extends GdUnitTestSuite
 ## 场景路径
 const GUILD_SCENE: String = "res://scenes/guild/guild_shell.tscn"
 const EXPLORE_SCENE: String = "res://scenes/explore/explore_screen.tscn"
+
+## explore_screen 脚本常量引用（UI_TEXTS 文案单源锚点——三栏改版批用例消费）
+const ExploreScreenScript: GDScript = \
+		preload("res://scripts/scene_flow/explore_screen.gd")
 
 ## 探索屏 SceneId（SceneManager.SceneId.EXPLORE_SCREEN——M4 批 2 起
 ## EVENT_SCREEN 拆除后枚举重排：TITLE=0/GUILD_SHELL=1/BATTLE=2/EXPLORE=3）
@@ -119,7 +123,8 @@ func _HitEncounterSeed() -> int:
 
 func test_explore_screen_renders_fog_and_targets() -> void:
 	## 进图渲染：委托会话（q_lost）——村子段全亮（迷雾遮罩隐藏）/ 矿洞未探
-	## 浓雾（遮罩可见）/ 目标点 1 高亮（tp_old_well）+ 5 灰显
+	## 浓雾（遮罩可见）/ 目标点仅绑定 tp_old_well 渲染高亮（2026-10-03 试玩
+	## 反馈修订：未绑定 5 目标点完全隐藏——原灰显路径删除）
 	var scene_manager: Node = get_tree().root.get_node("SceneManager")
 	scene_manager.pending_params = {&"expedition_run": _MakeQuestRun(&"q_lost_miner_keepsake")}
 	var runner: GdUnitSceneRunner = scene_runner(EXPLORE_SCENE)
@@ -131,20 +136,25 @@ func test_explore_screen_renders_fog_and_targets() -> void:
 	## 两路泛化——贴图态父纯色隐藏、纯色态父显示，遮蔽在屏 = 两路任一可见）
 	assert_bool(_FogShown(screen._board, Vector2i(0, 0))).is_false()
 	assert_bool(_FogShown(screen._board, Vector2i(7, 10))).is_true()
-	# 小队图标落出生格
-	assert_bool(screen._board._party_icon.position == Vector2(7, 1) * float(ExploreBoard.CELL_SIZE)).is_true()
-	# 目标点：绑定 tp_old_well 高亮金 / 其余 5 灰显
+	# 小队图标落出生格（三栏改版批渲染镜像：绘制原点经 _cell_origin——
+	## 数据 (7,1) 绘于 y'=13 行）
+	assert_bool(screen._board._party_icon.position
+			== screen._board._cell_origin(Vector2i(7, 1))).is_true()
+	# 目标点：绑定 tp_old_well 唯一渲染（图标+衬底可见、高亮金）
 	var game_data: Node = _GameData()
 	var cfg: CoreConfig = game_data.get_record(&"cfg_main") as CoreConfig
 	var active: Color = UiTheme.color_of(cfg, &"ui_explore_target_active_color",
 			UiTheme.EXPLORE_TARGET_ACTIVE)
-	var dim: Color = UiTheme.color_of(cfg, &"ui_explore_target_dim_color",
-			UiTheme.EXPLORE_TARGET_DIM)
+	assert_bool(screen._board._target_icons[&"tp_old_well"].visible).is_true()
+	assert_bool(screen._board._target_backdrops[&"tp_old_well"].visible).is_true()
 	assert_bool(screen._board._target_icons[&"tp_old_well"].modulate.is_equal_approx(active)).is_true()
+	# 未绑定 5 目标点：图标+衬底完全隐藏
 	for tp_id: StringName in [&"tp_mine_east_gallery", &"tp_mine_north_wall",
 			&"tp_mine_south_shaft", &"tp_mine_west_camp", &"tp_mine_track_yard"]:
-		assert_bool(screen._board._target_icons[tp_id].modulate.is_equal_approx(dim)) \
-				.override_failure_message("%s 应灰显" % tp_id).is_true()
+		assert_bool(screen._board._target_icons[tp_id].visible).is_false() \
+				.override_failure_message("%s 未绑定目标点应隐藏" % tp_id)
+		assert_bool(screen._board._target_backdrops[tp_id].visible).is_false() \
+				.override_failure_message("%s 未绑定目标点衬底应隐藏" % tp_id)
 	# 暗门图标未揭示隐藏（隐藏内容不剧透）
 	assert_bool(screen._board._point_icons[&"evp_mine_secret"].visible).is_false()
 
@@ -321,8 +331,9 @@ func test_guild_expedition_roundtrip_lock() -> void:
 	assert_bool(explore._run.party_pos == Vector2i(7, 1)).is_true()
 	assert_int(explore._run.party.size()).is_equal(3)
 	# 撤退回城（确认弹窗 → 失败结算——GuildState 接管：释锁先行+日历推进+
-	# RETURN_SETTLED 存档 → 回城按钮 → 锁已释放 + 回公会壳
-	(explore.get_node("%RetreatButton") as Button).pressed.emit()
+	# RETURN_SETTLED 存档 → 回城按钮 → 锁已释放 + 回公会壳）
+	## 三栏改版批：撤退按钮已迁右栏组件（%RetreatButton 拆除）
+	explore._quest_panel._retreat_button.pressed.emit()
 	(explore.get_node("%RetreatConfirm") as ConfirmationDialog).confirmed.emit()
 	await _WaitFrames(2)
 	assert_bool(explore.get_node("%SettlementPanel").visible).is_true()
@@ -472,7 +483,8 @@ func test_touch_hotzone_at_least_48() -> void:
 	var screen: Control = runner.scene() as Control
 	await _WaitFrames(2)
 	assert_int(ExploreBoard.CELL_SIZE).is_greater_equal(48)
-	assert_float((screen.get_node("%RetreatButton") as Button).custom_minimum_size.y) \
+	# 三栏改版批：撤退按钮已迁右栏组件（%RetreatButton 拆除——热区口径不变）
+	assert_float(screen._quest_panel._retreat_button.custom_minimum_size.y) \
 			.is_greater_equal(48.0)
 
 # --------------------------------------------------------------------------
@@ -505,10 +517,11 @@ func test_w301_board_scale_engages_and_bottom_stays_onscreen() -> void:
 	assert_float(screen._board.scale.y).is_less(1.0) \
 			.override_failure_message("板面缩放未介入（scale.y 应 < 1.0——宿主可用高 < 设计高 900）")
 	var viewport_end: float = screen.get_viewport_rect().size.y
-	var bottom_box: Control = screen.get_node("Layout/BottomBox")
-	assert_float(bottom_box.global_position.y + bottom_box.size.y) \
+	# 三栏改版批：底栏拆除——底部出屏锚点改 %RightHost（右栏含撤退按钮贴底）
+	var right_host: Control = screen.get_node("%RightHost")
+	assert_float(right_host.global_position.y + right_host.size.y) \
 			.is_less_equal(viewport_end) \
-			.override_failure_message("底部操作区被顶出屏幕（BoardHost min 膨胀未修复）")
+			.override_failure_message("右栏底部操作区被顶出屏幕（BoardHost min 膨胀未修复）")
 
 func test_w301_refit_keeps_bottom_onscreen_with_banner() -> void:
 	## W3-01 横幅出现态：1080 布局下判据达成横幅弹入 → BoardHost 可用空间
@@ -525,10 +538,11 @@ func test_w301_refit_keeps_bottom_onscreen_with_banner() -> void:
 	screen.get_node("%GoalBanner").visible = true
 	await _WaitFrames(3)
 	var viewport_end: float = screen.get_viewport_rect().size.y
-	var bottom_box: Control = screen.get_node("Layout/BottomBox")
-	assert_float(bottom_box.global_position.y + bottom_box.size.y) \
+	# 三栏改版批：底栏拆除——横幅出现态底部出屏锚点改 %RightHost
+	var right_host: Control = screen.get_node("%RightHost")
+	assert_float(right_host.global_position.y + right_host.size.y) \
 			.is_less_equal(viewport_end) \
-			.override_failure_message("横幅出现态底部操作区出屏（resized 重算未生效）")
+			.override_failure_message("横幅出现态右栏底部出屏（resized 重算未生效）")
 	assert_float(screen._board.scale.y).is_less(1.0)
 	# 板面视觉区在宿主内居中（视觉中心 == 宿主中心——W3-01 手动居中落位）
 	var host: Control = screen.get_node("%BoardHost")
@@ -555,3 +569,245 @@ func test_settlement_body_autowrap_contract() -> void:
 	var panel: Control = (runner.scene() as Control).get_node("%SettlementPanel") as Control
 	assert_int(int(panel.grow_horizontal)).is_equal(GROW_CENTER)
 	assert_int(int(panel.grow_vertical)).is_equal(GROW_CENTER)
+
+# --------------------------------------------------------------------------
+# 三栏改版批（布局契约 + 渲染镜像 + 侧栏面板字段矩阵）
+# --------------------------------------------------------------------------
+
+func test_three_column_ratio_1440x900() -> void:
+	## 三栏比例 @1440×900（C1 拍板 A 三栏对称）：左右栏固定宽 280（cfg 表值）
+	## / 中栏吃满余量（画布宽占比 ≥ 0.57）/ 左右栏宽占画布宽 ∈[0.18,0.20]；
+	## 满高：BoardHost 上下边距 ≤24（GoalBanner 隐藏态——提示行叠加不占高）
+	var scene_manager: Node = get_tree().root.get_node("SceneManager")
+	scene_manager.pending_params = {&"expedition_run": _MakeQuestRun(&"q_lair_purge")}
+	var runner: GdUnitSceneRunner = scene_runner(EXPLORE_SCENE)
+	var screen: Control = runner.scene() as Control
+	await _WaitFrames(2)
+	screen.get_window().size = Vector2i(1440, 900)
+	await _WaitFrames(4)
+	var canvas: Vector2 = screen.get_viewport_rect().size
+	var left_host: Control = screen.get_node("%LeftHost")
+	var right_host: Control = screen.get_node("%RightHost")
+	var board_host: Control = screen.get_node("%BoardHost")
+	assert_int(int(left_host.size.x)).is_equal(280) \
+			.override_failure_message("左栏宽应 == cfg 表值 280")
+	assert_int(int(right_host.size.x)).is_equal(280) \
+			.override_failure_message("右栏宽应 == cfg 表值 280")
+	assert_float(board_host.size.x / canvas.x).is_greater(0.57) \
+			.override_failure_message("中栏应吃满余量（画布宽占比 ≥ 0.57）")
+	var side_ratio: float = left_host.size.x / canvas.x
+	assert_float(side_ratio).is_between(0.18, 0.20) \
+			.override_failure_message("左栏宽占画布宽应在 [0.18, 0.20]")
+	# 满高（GoalBanner 隐藏态）：板面上下边距 ≤24
+	assert_float(board_host.global_position.y).is_less_equal(24.0) \
+			.override_failure_message("板面顶边距应 ≤24（顶栏已拆除）")
+	assert_float(board_host.global_position.y + board_host.size.y) \
+			.is_greater_equal(canvas.y - 24.0) \
+			.override_failure_message("板面底边距应 ≤24（提示行叠加不占高）")
+
+func test_1080p_effective_cell_at_least_69_physical_px() -> void:
+	## 1080p（1920×1080）物理像素口径：effective_cell_size ×（窗/画布换算
+	## 系数）≥69——架构师裁定口径（逻辑 px × stretch 缩放系数 = 物理 px；
+	## fit 上限放宽 1.2 后满高放大生效）
+	var scene_manager: Node = get_tree().root.get_node("SceneManager")
+	scene_manager.pending_params = {&"expedition_run": _MakeQuestRun(&"q_lair_purge")}
+	var runner: GdUnitSceneRunner = scene_runner(EXPLORE_SCENE)
+	var screen: Control = runner.scene() as Control
+	await _WaitFrames(2)
+	screen.get_window().size = Vector2i(1920, 1080)
+	await _WaitFrames(4)
+	var physical: float = screen._board.effective_cell_size() \
+			* float(screen.get_window().size.y) / screen.get_viewport_rect().size.y
+	assert_float(physical).is_greater_equal(69.0) \
+			.override_failure_message("1080p 板面物理单格应 ≥69px（fit 上限 1.2 满高放大）")
+
+func test_720p_panels_stay_inside_canvas() -> void:
+	## 720p（1280×720）：左右面板与撤退按钮全局矩形不出画布（缩小窗下
+	## 侧栏不溢出）
+	var scene_manager: Node = get_tree().root.get_node("SceneManager")
+	scene_manager.pending_params = {&"expedition_run": _MakeQuestRun(&"q_lair_purge")}
+	var runner: GdUnitSceneRunner = scene_runner(EXPLORE_SCENE)
+	var screen: Control = runner.scene() as Control
+	await _WaitFrames(2)
+	screen.get_window().size = Vector2i(1280, 720)
+	await _WaitFrames(4)
+	var canvas: Vector2 = screen.get_viewport_rect().size
+	var left_host: Control = screen.get_node("%LeftHost")
+	var right_host: Control = screen.get_node("%RightHost")
+	assert_float(left_host.global_position.x).is_greater_equal(0.0)
+	assert_float(right_host.global_position.x + right_host.size.x) \
+			.is_less_equal(canvas.x) \
+			.override_failure_message("720p 右栏溢出画布右缘")
+	var button: Button = screen._quest_panel._retreat_button
+	var button_rect: Rect2 = button.get_global_rect()
+	assert_float(button_rect.position.x).is_greater_equal(0.0)
+	assert_float(button_rect.end.x).is_less_equal(canvas.x)
+	assert_float(button_rect.position.y).is_greater_equal(0.0)
+	assert_float(button_rect.end.y).is_less_equal(canvas.y) \
+			.override_failure_message("720p 撤退按钮溢出画布")
+
+func test_render_mirror_party_icon_bottom_half() -> void:
+	## 渲染镜像集成（C2 拍板 (b)）：小队图标绘制原点 == _cell_origin(party_pos)
+	## （正映射单源）；出生会话（数据 y=1 靠北）小队图标位于板面下半区
+	## （数据北 = 屏幕下方——玩家从下往上探索）
+	var scene_manager: Node = get_tree().root.get_node("SceneManager")
+	var run: ExpeditionRun = _MakeQuestRun(&"q_lair_purge")
+	scene_manager.pending_params = {&"expedition_run": run}
+	var runner: GdUnitSceneRunner = scene_runner(EXPLORE_SCENE)
+	var screen: Control = runner.scene() as Control
+	await _WaitFrames(2)
+	assert_float(screen._board._party_icon.position.y) \
+			.is_equal_approx(screen._board._cell_origin(run.party_pos).y, 0.01)
+	var board_design_mid: float = float(screen._board._map_def.size.y) \
+			* float(ExploreBoard.CELL_SIZE) * 0.5
+	assert_float(screen._board._party_icon.position.y) \
+			.is_greater(board_design_mid) \
+			.override_failure_message("出生会话小队图标应位于板面下半区（镜像）")
+
+func _MakeFourMemberRun() -> ExpeditionRun:
+	## 构建四人委托运行态（面板字段矩阵用——职业四类全覆盖）
+	## 参数：无
+	## 返回：ExpeditionRun
+	var game_data: Node = _GameData()
+	var cfg: CoreConfig = game_data.get_record(&"cfg_main") as CoreConfig
+	var run := ExpeditionRun.new()
+	var classes: Array[StringName] = [&"cls_warrior", &"cls_rogue",
+			&"cls_mage", &"cls_priest"]
+	for cls_id: StringName in classes:
+		var adv: AdventurerData = AdventurerData.create_debug(cls_id, cls_id, {
+				&"strength": 14, &"agility": 10, &"constitution": 14,
+				&"intelligence": 7, &"perception": 15, &"willpower": 9,
+				&"luck": 9}, game_data)
+		run.party.append(adv)
+		run.hp[adv] = 30
+	var map_def: ExploreMapDef = game_data.get_record(&"map_m1_village_mine") as ExploreMapDef
+	run.start_explore(map_def, game_data.get_record(&"q_lair_purge") \
+			as QuestTemplateDef, cfg.vision_radius)
+	return run
+
+func test_party_panel_member_cards_matrix() -> void:
+	## 左栏面板字段矩阵：4 人队 4 卡 / 倒地卡整卡灰显+HP 行「倒地」（优先于
+	## 中毒）/ 中毒未倒地姓名行缀「·中毒」/ 常态 HP 行「cur/max」
+	var scene_manager: Node = get_tree().root.get_node("SceneManager")
+	var run: ExpeditionRun = _MakeFourMemberRun()
+	scene_manager.pending_params = {&"expedition_run": run}
+	var runner: GdUnitSceneRunner = scene_runner(EXPLORE_SCENE)
+	var screen: Control = runner.scene() as Control
+	await _WaitFrames(2)
+	var game_data: Node = _GameData()
+	var cfg: CoreConfig = game_data.get_record(&"cfg_main") as CoreConfig
+	var dim: Color = UiTheme.color_of(cfg, &"ui_explore_target_dim_color",
+			UiTheme.EXPLORE_TARGET_DIM)
+	# 4 人队 4 卡
+	assert_int(screen._party_panel._cards_box.get_child_count()).is_equal(4)
+	# 常态卡：HP 行「30/90」（上限 = calc_hp 装配口径：20+14×5+0 = 90）
+	var normal_card: HBoxContainer = screen._party_panel._cards_box.get_child(0) as HBoxContainer
+	var normal_hp_label: Label = (normal_card.get_node("Info/HpRow/HpLabel")) as Label
+	assert_str(normal_hp_label.text).is_equal("30/90")
+	assert_bool(normal_card.modulate.is_equal_approx(Color.WHITE)).is_true()
+	# 倒地卡：整卡灰显 + HP 行「倒地」（第二人倒地且染毒——倒地优先）
+	run.downed[run.party[1]] = true
+	run.poisoned[run.party[1]] = &"DEBUFF_poison"
+	# 中毒未倒地：姓名行缀「·中毒」（第三人）
+	run.poisoned[run.party[2]] = &"DEBUFF_poison"
+	screen._RefreshStatus()
+	# 清建刷新：旧卡 queue_free 延迟帧末——等一帧后 children 即全新卡集
+	await _WaitFrames(1)
+	var downed_card: HBoxContainer = screen._party_panel._cards_box.get_child(1) as HBoxContainer
+	assert_bool(downed_card.modulate.is_equal_approx(dim)).is_true() \
+			.override_failure_message("倒地成员卡应整卡灰显")
+	var downed_hp_label: Label = (downed_card.get_node("Info/HpRow/HpLabel")) as Label
+	assert_str(downed_hp_label.text).is_equal(ExplorePartyPanel.UI_TEXTS[&"hp_downed"])
+	var downed_name: Label = (downed_card.get_node("Info/NameLabel")) as Label
+	assert_bool(downed_name.text.contains("·中毒")).is_false() \
+			.override_failure_message("倒地成员姓名行不应缀中毒（倒地优先）")
+	var poisoned_name: Label = ((screen._party_panel._cards_box.get_child(2) \
+			as HBoxContainer).get_node("Info/NameLabel")) as Label
+	assert_bool(poisoned_name.text.contains("·中毒")).is_true() \
+			.override_failure_message("中毒未倒地成员姓名行应缀「·中毒」")
+
+func test_quest_panel_fields_matrix() -> void:
+	## 右栏面板字段矩阵：委托名 / 状态行（goal_pending 无绿色覆写 →
+	## goal_done 绿显 / 自由探索 free_status）/ 耗时行 / 途中所得行（零增量
+	## 隐藏 → 非零出现）/ 图例 5 项
+	var scene_manager: Node = get_tree().root.get_node("SceneManager")
+	var run: ExpeditionRun = _MakeQuestRun(&"q_lair_purge")
+	scene_manager.pending_params = {&"expedition_run": run}
+	var runner: GdUnitSceneRunner = scene_runner(EXPLORE_SCENE)
+	var screen: Control = runner.scene() as Control
+	await _WaitFrames(2)
+	var game_data: Node = _GameData()
+	var cfg: CoreConfig = game_data.get_record(&"cfg_main") as CoreConfig
+	var banner: Color = UiTheme.color_of(cfg, &"ui_explore_goal_banner_color",
+			UiTheme.EXPLORE_GOAL_BANNER)
+	var quest_tpl: QuestTemplateDef = game_data.get_record(&"q_lair_purge") \
+			as QuestTemplateDef
+	# 委托名 + goal_pending（无绿色覆写）+ 耗时行 + 零增量隐藏 + 图例 5 项
+	assert_str(screen._quest_panel._quest_label.text).is_equal(quest_tpl.display_name)
+	assert_bool(screen._quest_panel._status_label.has_theme_color_override("font_color")) \
+			.is_false() \
+			.override_failure_message("goal_pending 状态行不应绿显")
+	assert_str(screen._quest_panel._days_label.text).is_equal(
+			String(ExploreQuestPanel.UI_TEXTS[&"days_format"]) % run.total_days())
+	assert_bool(screen._quest_panel._rewards_label.visible).is_false() \
+			.override_failure_message("零增量途中所得行应隐藏")
+	var legend_row: HFlowContainer = screen._quest_panel.get_node("Shell") \
+			.find_children("LegendRow", "HFlowContainer", true, false)[0] as HFlowContainer
+	assert_int(legend_row.get_child_count()).is_equal(5) \
+			.override_failure_message("图例行应 5 条目")
+	# 途中所得出现（开宝箱效果同构：增量入账 + 状态刷新）
+	run.add_reward(5, 10, 0)
+	screen._RefreshStatus()
+	assert_bool(screen._quest_panel._rewards_label.visible).is_true()
+	assert_str(screen._quest_panel._rewards_label.text).is_equal("+5 经验 +10 金")
+	# goal_done：状态行绿显（判据达成）
+	screen._goal.setup(run.goal_kind, run.goal_param)
+	screen._goal.restore_done(true)
+	run.goal_done = true
+	screen._RefreshStatus()
+	assert_bool(screen._quest_panel._status_label.has_theme_color_override("font_color")) \
+			.is_true() \
+			.override_failure_message("goal_done 状态行应绿显")
+	assert_bool(screen._quest_panel._status_label.get_theme_color("font_color") \
+			.is_equal_approx(banner)).is_true()
+
+func test_quest_panel_free_explore_status() -> void:
+	## 右栏自由探索会话：free_status 状态文案（正向态绿显）+ 委托名占位
+	var scene_manager: Node = get_tree().root.get_node("SceneManager")
+	var game_data: Node = _GameData()
+	var cfg: CoreConfig = game_data.get_record(&"cfg_main") as CoreConfig
+	var run := ExpeditionRun.new()
+	var adv: AdventurerData = AdventurerData.create_debug(&"t", &"cls_warrior", {
+			&"strength": 14, &"agility": 10, &"constitution": 14,
+			&"intelligence": 7, &"perception": 15, &"willpower": 9, &"luck": 9},
+			game_data)
+	run.party.append(adv)
+	run.hp[adv] = 30
+	run.start_explore(game_data.get_record(&"map_m1_village_mine") as ExploreMapDef,
+			null, cfg.vision_radius)
+	scene_manager.pending_params = {&"expedition_run": run}
+	var runner: GdUnitSceneRunner = scene_runner(EXPLORE_SCENE)
+	var screen: Control = runner.scene() as Control
+	await _WaitFrames(2)
+	assert_str(screen._quest_panel._quest_label.text) \
+			.is_equal(String(ExploreScreenScript.UI_TEXTS[&"no_quest"]))
+	assert_str(screen._quest_panel._status_label.text) \
+			.is_equal(String(ExploreScreenScript.UI_TEXTS[&"free_status"]))
+
+func test_retreat_button_disabled_four_flags_matrix() -> void:
+	## 撤退钮禁用四标记矩阵（S4-R4-01 组件口改道）：_moving/_event_open/
+	## _resuming/_finished 任一标记期视觉禁用，全清后恢复
+	var scene_manager: Node = get_tree().root.get_node("SceneManager")
+	scene_manager.pending_params = {&"expedition_run": _MakeQuestRun(&"q_lair_purge")}
+	var runner: GdUnitSceneRunner = scene_runner(EXPLORE_SCENE)
+	var screen: Control = runner.scene() as Control
+	await _WaitFrames(2)
+	assert_bool(screen._quest_panel._retreat_button.disabled).is_false()
+	for flag: String in ["_moving", "_event_open", "_resuming", "_finished"]:
+		screen.set(flag, true)
+		screen._SyncRetreatButton()
+		assert_bool(screen._quest_panel._retreat_button.disabled).is_true() \
+				.override_failure_message("%s 期撤退钮应禁用" % flag)
+		screen.set(flag, false)
+	screen._SyncRetreatButton()
+	assert_bool(screen._quest_panel._retreat_button.disabled).is_false()

@@ -5,8 +5,11 @@
 ## UNSEEN 浓雾/DIM 记忆贴图染色态 modulate=cfg 色（净 α=cfg 调定值——中2：
 ## 贴图与纯色兜底同格二选一显示，不再叠加），LIT 透——缺件纯色现状）、
 ## 交互点图标（组 4：icon_pt_* 贴图 48 居中，缺件降级字形；已消耗灰态、
-## 暗门未揭示隐藏）、目标点常显（icon_pt_target，绑定目标金色高亮/非绑定
-## 灰显——绘制在迷雾层之上）、小队图标（icon_explore_party）、出口达成态。
+## 暗门未揭示隐藏）、目标点常显（icon_pt_target，仅当前会话绑定委托的
+## 目标点渲染金色高亮——2026-10-03 试玩反馈修订：未绑定目标点完全隐藏、
+## 自由探索不显示任何目标点，绘制在迷雾层之上）、小队图标
+## （icon_explore_party）、出口达成态、矿洞段可通行格淡鹅黄染色（同批
+## 反馈 B——modulate 承载，村子段全亮行与不可通行格不染）。
 ## 显示层级（2026-09-25 用户拍板）：底格(Z_TILE) < 已探索内容图标(Z_CONTENT)
 ## < 迷雾遮罩(Z_FOG——画在图标之后：DIM 半透明压暗已探索图标) <
 ## 常显目标点+衬底(Z_OVERLAY) < 小队图标(Z_PARTY)；UI 弹层（事件面板等）
@@ -28,6 +31,11 @@ signal cell_pressed(cell: Vector2i)
 
 ## 单格边长（设计 px——缩放前基准；触控热区按 effective_cell_size 复验）
 const CELL_SIZE: int = 60
+## 渲染上下镜像总开关（三栏改版批 C2 拍板 (b) 渲染镜像）：数据 y=0
+## 〔北/村口〕绘制于屏幕**下方**——玩家从下往上探索（案 7 方向注记锚点）。
+## 逐图差异字段化时的单点替换位——本批不加 ExploreMapDef 字段，镜像为
+## 渲染层口径（数据格坐标/迷雾/寻路/邻接判定零改，仅绘制落位翻转）
+const RENDER_FLIP_VERTICAL: bool = true
 ## 绘制层 z 值单源（层级契约锚点——test_explore_layering 消费；
 ## 语义见文件头「显示层级」）：底格 < 已探索内容 < 迷雾 < 常显目标点 < 小队
 const Z_TILE: int = 0
@@ -140,7 +148,8 @@ func setup(cfg: CoreConfig, map_def: ExploreMapDef, state: ExploreMapState,
 
 func fit_to(available: Vector2) -> void:
 	## 板面适配（X3-02；V-1 修复 2026-09-26 审计；W3-01 高危 2026-09-26）：
-	## 按宿主可用空间等比缩放（宽高取窄，上限 1.0——放大不做）；缩放经 scale
+	## 按宿主可用空间等比缩放（宽高取窄；上限表驱动 ui_explore_board_fit_max_scale
+	## ——三栏改版批 C7 放宽 1.2，cfg 缺省回退 UiTheme 兜底）；缩放经 scale
 	## 变换（子节点设计坐标不变，点按命中经引擎逆变换仍按设计格换算）。
 	## V-1 命中区一致性：custom_minimum_size 恒保持 design 不随 fit 收缩——
 	## 控件命中区 = rect × scale == 视觉区（此前 min 同缩 → 命中区 = 视觉 × fit，
@@ -156,7 +165,12 @@ func fit_to(available: Vector2) -> void:
 	if _map_def == null:
 		return
 	var design: Vector2 = Vector2(_map_def.size) * float(CELL_SIZE)
-	var fit: float = minf(minf(1.0, available.x / design.x), available.y / design.y)
+	# 缩放上限参数化（三栏改版批 C7：放宽 1.0 → cfg 表驱动，缺省/≤0 回退
+	## UiTheme 兜底——探索界面满高放大口径）
+	var fit_cap: float = _cfg.ui_explore_board_fit_max_scale \
+			if _cfg != null and _cfg.ui_explore_board_fit_max_scale > 0.0 \
+			else UiTheme.EXPLORE_BOARD_FIT_MAX
+	var fit: float = minf(minf(fit_cap, available.x / design.x), available.y / design.y)
 	if fit <= 0.0 or is_nan(fit):
 		return
 	_fit_scale = fit
@@ -263,12 +277,28 @@ func refresh(party_pos: Vector2i, fog: FogOfWar, consumed: Dictionary,
 			# 未消耗常态白（X3-06 豁免登记：占位视觉中性色，非业务口径——
 			# 与 EventPanel.ATTR_NAMES 同先例不入表）
 			icon.modulate = dim_glyph if is_consumed else Color(1, 1, 1)
-	# 目标点常显：绑定目标金色高亮 / 非绑定灰显（衬底恒定深色不随刷新）
+	# 目标点常显（2026-10-03 试玩反馈批 A 口径修订——推翻案 7 §2.1/案 20
+	# §3.1「非绑定灰显」：灰色委托交互点误导玩家）：仅当前会话绑定委托的
+	# 目标点渲染（金色高亮口径不变）；未绑定目标点完全隐藏（图标+衬底——
+	# 原非绑定灰显渲染路径删除）；自由探索（active_tp_id 空）不显示任何目标点
 	for tp_id: StringName in _target_icons:
-		_target_icons[tp_id].modulate = _ActiveColor() if tp_id == active_tp_id \
-				else dim_glyph
+		var is_bound: bool = tp_id == active_tp_id
+		_target_icons[tp_id].visible = is_bound
+		_target_backdrops[tp_id].visible = is_bound
+		if is_bound:
+			_target_icons[tp_id].modulate = _ActiveColor()
 	# 小队图标
-	_party_icon.position = Vector2(party_pos) * float(CELL_SIZE)
+	_party_icon.position = _cell_origin(party_pos)
+
+func _cell_origin(cell: Vector2i) -> Vector2:
+	## 数据格 → 板面绘制原点（渲染镜像单一映射——全部绘制落位唯一走本口）：
+	## 镜像态 y' = size.y-1-cell.y（数据 y=0〔北〕绘于屏幕最下行，玩家从下
+	## 往上探索）；非镜像态恒等。命中反解（cell_from_local）与本口互逆
+	## 参数 cell：数据格坐标
+	## 返回：绘制原点（px）
+	if RENDER_FLIP_VERTICAL:
+		return Vector2(cell.x, _map_def.size.y - 1 - cell.y) * float(CELL_SIZE)
+	return Vector2(cell) * float(CELL_SIZE)
 
 func _BuildTileLayer() -> void:
 	## 底格层：按地格表逐格构建（M6 批 3.5b 组 2——贴图分支在前：etile 表
@@ -295,7 +325,8 @@ func _MakeTileVisual(cell: Vector2i, tile: ExploreTileDef) -> Control:
 	## 构建单个底格视觉（组 2 接线口）：贴图分支在前——pick_variant（同格
 	## 恒定/异格打散）→ AssetTex.texture_of 有 → TextureRect（STRETCH_SCALE
 	## 满格、z=Z_TILE）；无/空 asset_id → 现状 Panel + _TileStyleOf 占位色块
-	## 降级（缺件态视觉零回归）
+	## 降级（缺件态视觉零回归）；两分支同落矿洞段可通行格染色（试玩反馈批 B
+	## ——modulate 承载，缺件降级态视觉口径一致）
 	## 参数 cell：格坐标；tile：地格定义（null = 解析失败走占位）
 	## 返回：格视觉根（未挂树由调用方挂入）
 	if tile != null and not String(tile.asset_id).is_empty():
@@ -310,18 +341,35 @@ func _MakeTileVisual(cell: Vector2i, tile: ExploreTileDef) -> Control:
 			# size 赋值（Godot Control 坑——顺序反了格子尺寸漂移成纹理原尺寸）
 			rect.stretch_mode = TextureRect.STRETCH_SCALE
 			rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			rect.position = Vector2(cell) * float(CELL_SIZE)
+			rect.position = _cell_origin(cell)
 			rect.size = Vector2.ONE * float(CELL_SIZE)
 			rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			rect.z_index = Z_TILE
+			rect.modulate = _MineWalkTintOf(cell, tile)
 			return rect
 	var panel := Panel.new()
-	panel.position = Vector2(cell) * float(CELL_SIZE)
+	panel.position = _cell_origin(cell)
 	panel.size = Vector2.ONE * float(CELL_SIZE)
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.z_index = Z_TILE
 	panel.add_theme_stylebox_override("panel", _TileStyleOf(tile))
+	panel.modulate = _MineWalkTintOf(cell, tile)
 	return panel
+
+func _MineWalkTintOf(cell: Vector2i, tile: ExploreTileDef) -> Color:
+	## 矿洞段可通行格染色取值（2026-10-03 试玩反馈批 B）：矿洞段可通行格
+	## modulate 淡鹅黄（cfg 表驱动——迷雾/染色类 modulate 承载同构口径，
+	## 不改素材文件）；村子段与不可通行格不染（WHITE 等价原色）。村子段
+	## 判据 = fog_lit_rows 全亮行单源（ExploreMapDef 类头惯例序 [0] 段——
+	## 图定义无独立「段」字段，全亮行口径即现有唯一段定义）
+	## 参数 cell：格坐标；tile：地格定义（null = 解析失败占位——保守不染）
+	## 返回：modulate 染色（WHITE = 不染）
+	if tile == null or not tile.walkable:
+		return Color.WHITE
+	if _map_def.fog_lit_rows.has(cell.y):
+		return Color.WHITE
+	return UiTheme.color_of(_cfg, &"ui_explore_mine_walk_tint_color",
+			UiTheme.EXPLORE_MINE_WALK_TINT)
 
 func _BuildFogLayer() -> void:
 	## 迷雾遮罩层（Z_FOG——画在已探索内容图标之后：DIM 半透明压暗记忆格图标 /
@@ -340,7 +388,7 @@ func _BuildFogLayer() -> void:
 		for x: int in _map_def.size.x:
 			var cell: Vector2i = Vector2i(x, y)
 			var overlay := ColorRect.new()
-			overlay.position = Vector2(cell) * float(CELL_SIZE)
+			overlay.position = _cell_origin(cell)
 			overlay.size = Vector2.ONE * float(CELL_SIZE)
 			overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			overlay.z_index = Z_FOG
@@ -350,7 +398,7 @@ func _BuildFogLayer() -> void:
 				var fog_tex := TextureRect.new()
 				fog_tex.stretch_mode = TextureRect.STRETCH_SCALE
 				fog_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-				fog_tex.position = Vector2(cell) * float(CELL_SIZE)
+				fog_tex.position = _cell_origin(cell)
 				fog_tex.size = Vector2.ONE * float(CELL_SIZE)
 				fog_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 				fog_tex.z_index = Z_FOG
@@ -390,7 +438,7 @@ func _BuildIconLayers() -> void:
 		var icon: Control = _MakeIconNode(
 				KIND_ICONS.get(point.kind, &"") as StringName,
 				String(KIND_GLYPHS.get(point.kind, "?")))
-		icon.position = Vector2(point.cell) * float(CELL_SIZE)
+		icon.position = _cell_origin(point.cell)
 		icon.z_index = Z_CONTENT
 		add_child(icon)
 		_point_icons[point.id] = icon
@@ -400,14 +448,18 @@ func _BuildIconLayers() -> void:
 			continue
 		# 衬底先入树（同 z 按树序后画在上——衬底垫图标之下）
 		var backdrop := _MakeBackdrop()
-		backdrop.position = Vector2(target.cell) * float(CELL_SIZE) \
+		backdrop.position = _cell_origin(target.cell) \
 				+ Vector2.ONE * float(BACKDROP_INSET)
 		backdrop.z_index = Z_OVERLAY
+		# 试玩反馈批 A：目标点默认隐藏——绑定判定归 refresh（首帧 refresh
+		# 前不闪现未绑定图标/衬底）
+		backdrop.visible = false
 		add_child(backdrop)
 		_target_backdrops[target.id] = backdrop
 		var icon: Control = _MakeIconNode(TARGET_ASSET_ID, TARGET_GLYPH)
-		icon.position = Vector2(target.cell) * float(CELL_SIZE)
+		icon.position = _cell_origin(target.cell)
 		icon.z_index = Z_OVERLAY
+		icon.visible = false
 		add_child(icon)
 		_target_icons[target.id] = icon
 	_party_icon = _MakeIconNode(PARTY_ASSET_ID, PARTY_GLYPH)
@@ -528,13 +580,16 @@ func _gui_input(event: InputEvent) -> void:
 		accept_event()
 
 func cell_from_local(local_pos: Vector2) -> Vector2i:
-	## 本地坐标 → 格坐标（界外返回 (-1,-1)）
+	## 本地坐标 → 格坐标（界外返回 (-1,-1)；镜像态与 _cell_origin 互逆——
+	## 界内返回 (raw.x, size.y-1-raw.y)，点按命中与绘制落位同口径翻转）
 	## 参数 local_pos：板面本地坐标
 	## 返回：命中格；界外 (-1,-1)
 	if local_pos.x < 0.0 or local_pos.y < 0.0:
 		return Vector2i(-1, -1)
-	var cell: Vector2i = Vector2i(local_pos / float(CELL_SIZE))
-	if cell.x < 0 or cell.x >= _map_def.size.x \
-			or cell.y < 0 or cell.y >= _map_def.size.y:
+	var raw: Vector2i = Vector2i(local_pos / float(CELL_SIZE))
+	if raw.x < 0 or raw.x >= _map_def.size.x \
+			or raw.y < 0 or raw.y >= _map_def.size.y:
 		return Vector2i(-1, -1)
-	return cell
+	if RENDER_FLIP_VERTICAL:
+		return Vector2i(raw.x, _map_def.size.y - 1 - raw.y)
+	return raw

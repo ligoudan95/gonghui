@@ -1,7 +1,8 @@
 ## 探索层全链集成测试（M3 批 3——验收 5 条全链 + 锁全通道遍历）
 ## 覆盖：①进图→迷雾揭示→事件→必然战→判据→出口交付全链；②暗门成功揭示
-## 捷径 / 失败可绕双分支（定种子检定——无概率窗）；③非绑定目标点灰显不可
-## 交互；④撤退（未达成弹窗确认）/达成后回城直走完成结算/宝箱消耗后新出征
+## 捷径 / 失败可绕双分支（定种子检定——无概率窗）；③非绑定目标点隐藏不可
+## 交互（2026-10-03 试玩反馈修订：未绑定目标点不再渲染）；④撤退（未达成
+## 弹窗确认）/达成后回城直走完成结算/宝箱消耗后新出征
 ## 实例重置；⑤随机遭遇
 ## 上限 1（战后续走不再触发）；锁通道遍历：交付/撤退/战败/全倒地四通道
 ## 解锁断言。
@@ -270,18 +271,18 @@ func test_chain2_secret_door_success_and_failure_branches() -> void:
 	var detour: Array[Vector2i] = fail_screen._state.find_path(Vector2i(12, 4), Vector2i(12, 7))
 	assert_int(detour.size()).is_equal(6)
 
-func test_chain3_unbound_target_dim_and_not_interactable() -> void:
-	## 验收③非绑定目标点：CLEAR 委托会话——六目标点全灰显；走到北壁勘查点
-	## (9,4)（M1 拍板 B 后老井暗窖已移位——就近取矿洞目标点）点按 → 提示
-	## 「其他委托的目标点」且判据不达成
-	var game_data: Node = _GameData()
-	var cfg: CoreConfig = game_data.get_record(&"cfg_main") as CoreConfig
-	var dim: Color = UiTheme.color_of(cfg, &"ui_explore_target_dim_color",
-			UiTheme.EXPLORE_TARGET_DIM)
+func test_chain3_unbound_target_hidden_and_not_interactable() -> void:
+	## 验收③非绑定目标点（2026-10-03 试玩反馈修订——原「灰显常显」推翻）：
+	## CLEAR 委托会话（无绑定目标）——六目标点图标+衬底全隐藏；走到北壁
+	## 勘查点 (9,4)（M1 拍板 B 后老井暗窖已移位——就近取矿洞目标点）点按 →
+	## 提示「其他委托的目标点」且判据不达成
 	var run := _MakeQuestRun(&"q_lair_purge")
 	var screen: Control = await _OpenExplore(run)
 	for tp_id: StringName in screen._board._target_icons:
-		assert_bool(screen._board._target_icons[tp_id].modulate.is_equal_approx(dim)) 				.override_failure_message("%s 应灰显" % tp_id).is_true()
+		assert_bool(screen._board._target_icons[tp_id].visible).is_false() \
+				.override_failure_message("%s 未绑定目标点应隐藏" % tp_id)
+		assert_bool(screen._board._target_backdrops[tp_id].visible).is_false() \
+				.override_failure_message("%s 未绑定目标点衬底应隐藏" % tp_id)
 	# 就位北廊西段（距勘查点 (9,4) 四格——邻接判定外）→ 点按走入目标格 → 再点按交互
 	run.party_pos = Vector2i(5, 4)
 	run.visited_cells[Vector2i(5, 4)] = true
@@ -314,7 +315,7 @@ func test_chain4_retreat_discards_and_new_session_resets() -> void:
 	screen._goal.setup(QuestTemplateDef.GoalType.CLEAR, &"enc_m1_lair_pack")
 	screen._goal.on_battle_victory(&"enc_m1_lair_pack")
 	run.goal_done = true
-	(screen.get_node("%RetreatButton") as Button).pressed.emit()
+	(screen._quest_panel._retreat_button as Button).pressed.emit()
 	await _WaitFrames(2)
 	assert_bool(screen.get_node("%SettlementPanel").visible).is_true()
 	assert_str(screen.get_node("%SettlementTitle").text).contains("委托达成")
@@ -344,7 +345,7 @@ func test_retreat_done_state_direct_success_and_pending_keeps_confirm() -> void:
 	var run := _MakeQuestRun(&"q_vein_survey")
 	var screen: Control = await _OpenExplore(run)
 	# 未达成：撤退确认弹窗照旧——会话不终结
-	(screen.get_node("%RetreatButton") as Button).pressed.emit()
+	(screen._quest_panel._retreat_button as Button).pressed.emit()
 	await _WaitFrames(2)
 	assert_bool(screen.get_node("%RetreatConfirm").visible).is_true()
 	assert_bool(screen.get_node("%SettlementPanel").visible).is_false()
@@ -358,7 +359,7 @@ func test_retreat_done_state_direct_success_and_pending_keeps_confirm() -> void:
 	# 达成（目标点交互判据通道）：回城即交付——零弹窗直接完成结算
 	assert_bool(screen._goal.on_target_interacted(run.goal_param)).is_true()
 	run.goal_done = true
-	(screen.get_node("%RetreatButton") as Button).pressed.emit()
+	(screen._quest_panel._retreat_button as Button).pressed.emit()
 	await _WaitFrames(2)
 	assert_bool(screen.get_node("%SettlementPanel").visible).is_true()
 	assert_str(screen.get_node("%SettlementTitle").text).contains("委托达成")
@@ -380,7 +381,7 @@ func test_retreat_free_explore_keeps_confirm_dialog() -> void:
 	run.start_explore(game_data.get_record(&"map_m1_village_mine") as ExploreMapDef,
 			null, cfg.vision_radius)
 	var screen: Control = await _OpenExplore(run)
-	(screen.get_node("%RetreatButton") as Button).pressed.emit()
+	(screen._quest_panel._retreat_button as Button).pressed.emit()
 	await _WaitFrames(2)
 	assert_bool(screen.get_node("%RetreatConfirm").visible).is_true()
 	assert_bool(screen.get_node("%SettlementPanel").visible).is_false()
@@ -709,7 +710,7 @@ func test_m5_retreat_cancelled_does_not_finish() -> void:
 	## 不关窗会撞板面点格闸门，此处同步关窗模拟完整取消链
 	var run := _MakeQuestRun(&"q_lair_purge")
 	var screen: Control = await _OpenExplore(run)
-	(screen.get_node("%RetreatButton") as Button).pressed.emit()
+	(screen._quest_panel._retreat_button as Button).pressed.emit()
 	var dialog: ConfirmationDialog = screen.get_node("%RetreatConfirm") as ConfirmationDialog
 	dialog.visible = false
 	dialog.canceled.emit()
@@ -778,10 +779,11 @@ func test_x3_02_board_fits_design_space_with_banner() -> void:
 	assert_float(board.effective_cell_size()).is_greater_equal(48.0)
 
 func test_x3_02_board_fit_math_reduced_and_capped() -> void:
-	## X3-02 适配数学：窄空间等比恰好放入（不溢出）；超大空间上限 1.0 不放大
-	## （720p 窗口语义 = 项目级 canvas_items stretch 全局等比——板面同口径，
-	## 不单独承担窗口级 48px 保底——类头注释登记）；V-1 起「放入」按视觉
-	## 占位（= rect × scale）断言，min 恒 design 不随 fit 收缩
+	## X3-02 适配数学：窄空间等比恰好放入（不溢出）；超大空间上限 cfg 表值
+	## 1.2 放大（三栏改版批 C7 放宽——原上限 1.0 不放大；720p 窗口语义 =
+	## 项目级 canvas_items stretch 全局等比——板面同口径，不单独承担窗口级
+	## 48px 保底——类头注释登记）；V-1 起「放入」按视觉占位（= rect × scale）
+	## 断言，min 恒 design 不随 fit 收缩
 	var run := _MakeQuestRun(&"q_lair_purge")
 	var screen: Control = await _OpenExplore(run)
 	await _WaitFrames(2)
@@ -794,8 +796,9 @@ func test_x3_02_board_fit_math_reduced_and_capped() -> void:
 	assert_float(visual.size.y).is_less_equal(508.5)
 	assert_float(visual.size.x).is_less_equal(508.5)
 	board.fit_to(Vector2(4096, 4096))
-	assert_float(board.scale.x).is_equal(1.0)
-	assert_float(board.effective_cell_size()).is_equal(60.0)
+	assert_float(board.scale.x).is_equal_approx(UiTheme.EXPLORE_BOARD_FIT_MAX, 0.001) \
+			.override_failure_message("C7：超大空间应放大至 cfg 上限 1.2")
+	assert_float(board.effective_cell_size()).is_equal(60.0 * UiTheme.EXPLORE_BOARD_FIT_MAX)
 
 func test_v1_fit_scaled_bottom_row_click_hits_cell() -> void:
 	## V-1（2026-09-26 审计①修复回归锚）：fit<1 强制缩放下命中区 == 视觉区
@@ -816,13 +819,15 @@ func test_v1_fit_scaled_bottom_row_click_hits_cell() -> void:
 	assert_bool(hit.size.is_equal_approx(visual.size)).is_true() \
 			.override_failure_message("V-1：命中区应与视觉区严格一致")
 	# 契约二（坐标级）：底部行末格视觉中心点落命中区内且反解命中该格
-	var last_cell: Vector2i = board._map_def.size - Vector2i.ONE
-	var point: Vector2 = visual.position \
-			+ (Vector2(last_cell) + Vector2.ONE * 0.5) * board.effective_cell_size()
+	## 三栏改版批渲染镜像：屏幕底部行 = 数据 y=0 行——「底部行末格」取
+	## 数据 (size.x-1, 0)（镜像后贴屏底），视觉中心经 _cell_origin 单源换算
+	var bottom_cell: Vector2i = Vector2i(board._map_def.size.x - 1, 0)
+	var point: Vector2 = board.get_global_transform() * (board._cell_origin(bottom_cell)
+			+ Vector2.ONE * float(ExploreBoard.CELL_SIZE) * 0.5)
 	assert_bool(hit.has_point(point)).is_true() \
 			.override_failure_message("V-1：底部行末格视觉中心应可命中（不穿透）")
 	var local: Vector2 = board.get_global_transform().affine_inverse() * point
-	assert_vector(board.cell_from_local(local)).is_equal(last_cell)
+	assert_vector(board.cell_from_local(local)).is_equal(bottom_cell)
 	# 契约三（信号级）：gui_input 派发（本地坐标）→ cell_pressed 上报底部行格
 	var emitted: Array[Vector2i] = []
 	var collector: Callable = func(cell: Vector2i) -> void: emitted.append(cell)
@@ -834,7 +839,7 @@ func test_v1_fit_scaled_bottom_row_click_hits_cell() -> void:
 	board._gui_input(event)
 	board.cell_pressed.disconnect(collector)
 	assert_int(emitted.size()).is_equal(1)
-	assert_vector(emitted[0]).is_equal(last_cell)
+	assert_vector(emitted[0]).is_equal(bottom_cell)
 
 # --------------------------------------------------------------------------
 # 第四轮审计中危补测（2026-09-26：W2-2 单点 B 出口锚点 / W2-14 空 post_battle）
@@ -987,7 +992,7 @@ func test_s4r401_retreat_button_disabled_after_finish() -> void:
 	var screen: Control = await _ResumeExplore(run,
 			_MakeResult(BattleResult.ResultKind.DEFEAT, 0, true))
 	assert_bool(screen.get_node("%SettlementPanel").visible).is_true()
-	assert_bool((screen.get_node("%RetreatButton") as Button).disabled).is_true()
+	assert_bool((screen._quest_panel._retreat_button as Button).disabled).is_true()
 
 func test_s2r501_route_fail_rollback_rechecks_standing_enter() -> void:
 	## S2-R5-01：随机遭遇路由失败回滚后就地复查当前格未消耗 ENTER——

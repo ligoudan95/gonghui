@@ -231,6 +231,17 @@ enum Mode {
 ## 战场徽章移动演出步数上限（盲审低15：远距 tween 总时长钳制护栏——
 ## 「总时长 = 步长 × min(路径步数, 本值)」）
 @export var ui_battle_move_max_steps: int = 0
+## 战场路径闪烁高光色（试玩反馈批：路径箭头改闪烁高光标记——金色系与
+## 范围染蓝/染红区分；预览与移动过程共用）
+@export var ui_battle_path_highlight_color: Color = Color(0, 0, 0, 0)
+## 战场路径闪烁高光呼吸峰值 alpha（0-1）
+@export var ui_battle_path_highlight_peak_alpha: float = 0.0
+## 战场路径闪烁高光呼吸周期（秒——一完整明暗循环）
+@export var ui_battle_path_highlight_flash_seconds: float = 0.0
+## 战场路径闪烁高光呼吸渐变形态（Tween.TransitionType 枚举值——1 = SINE
+## 正弦呼吸；0 = 未回填哨兵（LINEAR 同值被牺牲不用——>0 判据惯例）；预览
+## 与移动过程共用）
+@export var ui_battle_path_highlight_trans: int = 0
 
 # ---- UI 徽章配色（B-1/B-2/B-3：unit_badge 全部内联色入表；默认透明 = 未回填）----
 @export var ui_badge_hp_low_color: Color = Color(0, 0, 0, 0)
@@ -309,6 +320,16 @@ enum Mode {
 ## 探索常显图标衬底色（目标点在迷雾之上的对比底——席4 L3 回填，
 ## 消除纯代码兜底）
 @export var ui_explore_icon_backdrop_color: Color = Color(0, 0, 0, 0)
+## 探索屏左右侧栏宽度（px——三栏布局左右栏固定宽，HBox 给 min 宽）
+@export var ui_explore_side_panel_width: int = 0
+## 探索屏三栏列间距（px——Layout HBox separation 表驱动）
+@export var ui_explore_column_gap: int = 0
+## 探索板面等比缩放上限（放宽 >1.0——探索界面满高放大口径）
+@export var ui_explore_board_fit_max_scale: float = 0.0
+## 矿洞段可通行格染色（试玩反馈批 B：淡鹅黄 ≈ #E8D9A8——与不可通行区域
+## 做区分；村子段全亮行不染、不可通行格不染；ExploreBoard 贴图/占位降级
+## 同染——modulate 承载，不改素材文件）
+@export var ui_explore_mine_walk_tint_color: Color = Color(0, 0, 0, 0)
 ## 探索图计数带（M3：DEMO 总图 1 恒定断言）
 @export var content_map_count_min: int = 0
 @export var content_map_count_max: int = 0

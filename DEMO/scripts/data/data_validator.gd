@@ -689,6 +689,10 @@ static func _CheckMapSpawns(report: ValidationReport, game_data: Node) -> void:
 					report.add_error("V-M1-map-spawns", map_def.id,
 							"出生位 (%d, %d) 越界" % [cell.x, cell.y])
 					continue
+				# S1-02：行数错位保护——rows 实际行数少于 size.y 声明时 cell.y 可能
+				# 越出 rows 下标域（取格前防护），行数合法域归 V-M1-map-layout 拦截
+				if cell.y >= map_def.rows.size():
+					continue
 				# S1-02：行长错位保护（对齐连通性检查 mini 口径）——行短于 size.x 的
 				# 错位数据跳过取格判定，行长合法域归 V-M1-map-layout 拦截
 				if cell.x >= map_def.rows[cell.y].length():
@@ -1215,7 +1219,8 @@ static func _CheckCfgDomains(report: ValidationReport, game_data: Node) -> void:
 		report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID, "招募带 min > max")
 	for rate_name: String in ["hit_base", "dodge_base", "attr_hit_weight",
 			"attr_dodge_weight", "status_resist_base", "status_resist_weight",
-			"resist_weight", "crit_base", "crit_luck_weight", "crit_agility_weight"]:
+			"resist_weight", "crit_base", "crit_luck_weight", "crit_agility_weight",
+			"ui_battle_path_highlight_peak_alpha"]:
 		var rate_value: float = float(cfg.get(rate_name))
 		if rate_value <= 0.0 or rate_value > 1.0:
 			report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
@@ -1227,10 +1232,21 @@ static func _CheckCfgDomains(report: ValidationReport, game_data: Node) -> void:
 	# 冻结/瞬移，生产表值非法；测试注 0 属运行态改写不进表）
 	for anim_positive: String in ["ui_anim_idle_fps", "ui_anim_move_fps",
 			"ui_anim_attack_fps", "ui_anim_hit_fps", "ui_anim_downed_fps",
-			"ui_battle_move_step_seconds", "ui_hit_flash_seconds"]:
+			"ui_battle_move_step_seconds", "ui_hit_flash_seconds",
+			"ui_battle_path_highlight_flash_seconds"]:
 		if float(cfg.get(anim_positive)) <= 0.0:
 			report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
 					"%s ≤ 0（演出参数非法）" % anim_positive)
+	# 试玩反馈批：路径闪烁高光呼吸渐变形态——Tween.TransitionType 合法值集
+	#（0 = 未回填哨兵与 LINEAR 同值故一并禁用；运行时回退兜底 SINE，表侧
+	# 拦非法定值——合法集单源 UiTheme.BATTLE_PATH_HIGHLIGHT_TRANS_VALID）
+	if cfg.ui_battle_path_highlight_trans <= Tween.TransitionType.TRANS_LINEAR \
+			or not UiTheme.BATTLE_PATH_HIGHLIGHT_TRANS_VALID.has(
+					cfg.ui_battle_path_highlight_trans):
+		report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_path_highlight_trans %d 越界（合法值集 %s）" % [
+						cfg.ui_battle_path_highlight_trans,
+						str(UiTheme.BATTLE_PATH_HIGHLIGHT_TRANS_VALID)])
 	for band_name: String in ["content_skill_attacks", "content_class_skills",
 			"content_enemy_skills", "content_enemy_common", "content_status",
 			"content_enemies", "content_packs", "content_maps", "content_tiles",
@@ -1322,6 +1338,9 @@ static func _CheckCfgFallbacks(report: ValidationReport, game_data: Node) -> voi
 		["luck_floor_z_divisor", CheckRoller.LUCK_FLOOR_Z_DIVISOR_FALLBACK],
 		# M6 盲审低15：移动演出步数上限护栏入表锚定（调表须同步 UiTheme 兜底）
 		["ui_battle_move_max_steps", UiTheme.BATTLE_MOVE_MAX_STEPS],
+		# 探索屏三栏布局批：侧栏宽度/列间距入表锚定（调表须同步 UiTheme 兜底）
+		["ui_explore_side_panel_width", UiTheme.EXPLORE_SIDE_PANEL_WIDTH],
+		["ui_explore_column_gap", UiTheme.EXPLORE_COLUMN_GAP],
 	]
 	for pair: Array in int_pairs:
 		var raw_int: Variant = cfg.get(pair[0])
@@ -1359,6 +1378,11 @@ static func _CheckCfgFallbacks(report: ValidationReport, game_data: Node) -> voi
 		["ui_anim_downed_fps", UiTheme.ANIM_DOWNED_FPS],
 		["ui_battle_move_step_seconds", UiTheme.BATTLE_MOVE_STEP_SECONDS],
 		["ui_hit_flash_seconds", UiTheme.HIT_FLASH_SECONDS],
+		# 试玩反馈批：路径闪烁高光参数锚定（调表须同步 UiTheme 兜底）
+		["ui_battle_path_highlight_peak_alpha", UiTheme.BATTLE_PATH_HIGHLIGHT_PEAK_ALPHA],
+		["ui_battle_path_highlight_flash_seconds", UiTheme.BATTLE_PATH_HIGHLIGHT_FLASH_SECONDS],
+		# 探索屏三栏布局批：板面缩放上限入表锚定（调表须同步 UiTheme 兜底）
+		["ui_explore_board_fit_max_scale", UiTheme.EXPLORE_BOARD_FIT_MAX],
 	]
 	for pair: Array in float_pairs:
 		var raw_float: Variant = cfg.get(pair[0])
@@ -1375,6 +1399,8 @@ static func _CheckCfgFallbacks(report: ValidationReport, game_data: Node) -> voi
 		["ui_tile_fallback_color", UiTheme.TILE_FALLBACK],
 		# M6 盲审低14：受击白闪峰值色入表锚定（调表须同步 UiTheme 兜底）
 		["ui_hit_flash_peak_color", UiTheme.HIT_FLASH_PEAK],
+		# 试玩反馈批：路径闪烁高光色锚定（调表须同步 UiTheme 兜底）
+		["ui_battle_path_highlight_color", UiTheme.BATTLE_PATH_HIGHLIGHT_COLOR],
 		["ui_result_defeat_color", UiTheme.RESULT_DEFEAT],
 		["ui_result_retreat_color", UiTheme.RESULT_RETREAT],
 		["ui_event_grade_crit_success_color", UiTheme.EVENT_GRADE_CRIT_SUCCESS],
@@ -1427,6 +1453,8 @@ static func _CheckCfgFallbacks(report: ValidationReport, game_data: Node) -> voi
 		["ui_explore_goal_banner_color", UiTheme.EXPLORE_GOAL_BANNER],
 		# 席4 L3：常显图标衬底色入校验清单（回填消除纯代码兜底）
 		["ui_explore_icon_backdrop_color", UiTheme.EXPLORE_ICON_BACKDROP],
+		# 试玩反馈批 B：矿洞段可通行格染色锚定（调表须同步 UiTheme 兜底）
+		["ui_explore_mine_walk_tint_color", UiTheme.EXPLORE_MINE_WALK_TINT],
 	]
 	for pair: Array in color_pairs:
 		var raw_color: Variant = cfg.get(pair[0])
@@ -2096,6 +2124,10 @@ static func _CheckExplorePointCell(report: ValidationReport, game_data: Node,
 	if not in_bounds_cell(map_def, cell):
 		report.add_error("V-M3-map-points", owner_id,
 				"坐标 (%d, %d) 越界" % [cell.x, cell.y])
+		return
+	# S1-02：行数错位保护——rows 实际行数少于 size.y 声明时 cell.y 可能越出
+	# rows 下标域（取格前防护），行数合法域归 V-M3-map-layout 拦截
+	if cell.y >= map_def.rows.size():
 		return
 	# S1-02：行长错位保护（对齐连通性检查 mini 口径）——行短于 size.x 的错位
 	# 数据跳过取格判定，行长合法域归 V-M3-map-layout 拦截

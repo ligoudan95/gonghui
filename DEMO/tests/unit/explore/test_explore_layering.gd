@@ -2,7 +2,8 @@
 ## 覆盖：UI 弹层 z 高于 board 全部绘制层（事件面板不再被迷雾穿透——z_index
 ## 在 CanvasLayer 内跨子树全局生效的回归锚点）/ PanelHost 树序与类型（全屏
 ## 居中容器、EventPanel 挂其下且限宽弹窗化）/ board 内部 z 序（迷雾盖已探索
-## 内容图标、常显目标点+衬底与小队在迷雾之上）/ 底部间距 ≥12。
+## 内容图标、常显目标点+衬底与小队在迷雾之上）/ 中栏行距 ≥12（三栏改版批
+## 改道 %CenterColumn——提示行叠加态不再占布局高）。
 ## 环境：gdUnit 帧内真 autoload（GameData/SaveManager/SceneManager）。
 extends GdUnitTestSuite
 
@@ -117,7 +118,9 @@ func test_board_overlay_and_party_above_fog() -> void:
 			.is_less(ExploreScreenScript.UI_POPUP_Z_INDEX)
 
 func test_bottom_vertical_spacing_at_least_12() -> void:
-	## 底部三元素间距：Layout 行距 ≥12（板面底缘/提示行/撤退按钮互不黏连）
+	## 中栏行距 ≥12（三栏改版批：原 Layout VBox 行距断言改道 %CenterColumn
+	## ——板面满高列内 GoalBanner/BoardHost 互不黏连；提示行已改板面叠加态
+	## 不占布局高）
 	var screen: Control = await _OpenExploreScreen()
-	var layout: VBoxContainer = screen.get_node("Layout") as VBoxContainer
-	assert_int(layout.get_theme_constant("separation")).is_greater_equal(12)
+	var center: VBoxContainer = screen.get_node("%CenterColumn") as VBoxContainer
+	assert_int(center.get_theme_constant("separation")).is_greater_equal(12)

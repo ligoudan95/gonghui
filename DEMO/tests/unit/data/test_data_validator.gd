@@ -1051,3 +1051,43 @@ func test_v_m6_fac_bg_ref_guard() -> void:
 	var report_after: ValidationReport = DataValidator.run_all(_game_data)
 	assert_int(report_after.errors.size()).is_equal(0)
 
+# --------------------------------------------------------------------------
+# 校验器健壮性回归（2026-10-03 审计修复：行数缺口防护——rows 行数 < size.y
+# 且出生位/点位 cell.y 落在缺口区间的坏地图须产出报告条目，不得越界崩溃）
+# --------------------------------------------------------------------------
+
+func test_rows_count_gap_battle_spawn_guard() -> void:
+	## 行数缺口防护（V-M1-map-spawns 侧）：rows 截断至 2 行（< size.y 8）后
+	## 我方出生位 y=7 落在缺口区间 → run_all 完整跑完不崩溃，坏数据产出
+	## V-M1-map-layout 行数报告条目；恢复后归零
+	var map_def: BattleMapDef = _game_data.get_record(&"btm_m1_random_8x8") as BattleMapDef
+	assert_object(map_def).is_not_null()
+	assert_int(map_def.size.y).is_greater(2)
+	var original_rows: Array[String] = map_def.rows.duplicate()
+	map_def.rows.resize(2)
+	var report: ValidationReport = DataValidator.run_all(_game_data)
+	map_def.rows = original_rows
+	assert_bool(_HasError(report, "V-M1-map-layout", "rows 行数")) \
+			.override_failure_message("行数缺口应产出 layout 报告条目而非校验器崩溃").is_true()
+	var report_after: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(report_after.errors.size()).is_equal(0)
+
+func test_rows_count_gap_explore_point_guard() -> void:
+	## 行数缺口防护（V-M3-map-points 侧）：rows 截断至 3 行（< size.y 15）且
+	## start_cell 改指缺口区间 (2, 10) → run_all 完整跑完不崩溃，坏数据产出
+	## V-M3-map-layout 行数报告条目；恢复后归零
+	var map_def: ExploreMapDef = _game_data.get_record(&"map_m1_village_mine") as ExploreMapDef
+	assert_object(map_def).is_not_null()
+	assert_int(map_def.size.y).is_greater(10)
+	var original_rows: Array[String] = map_def.rows.duplicate()
+	var original_start: Vector2i = map_def.start_cell
+	map_def.rows.resize(3)
+	map_def.start_cell = Vector2i(2, 10)
+	var report: ValidationReport = DataValidator.run_all(_game_data)
+	map_def.rows = original_rows
+	map_def.start_cell = original_start
+	assert_bool(_HasError(report, "V-M3-map-layout", "rows 行数")) \
+			.override_failure_message("行数缺口应产出 layout 报告条目而非校验器崩溃").is_true()
+	var report_after: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(report_after.errors.size()).is_equal(0)
+
