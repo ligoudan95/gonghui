@@ -142,8 +142,14 @@ func play_action(action: int) -> bool:
 	## 低12（盲审）：纹理缺失（占位色块回退态）时状态机**仍进态**——逻辑
 	## 表现生效（DOWNED 尸态锁定/is_downed_pose 查询不因缺件失效；「逻辑
 	## 进态、视觉缺省」一致性推及一切动作），无帧可驱动时告警
+	## 末帧保护窗（M6 修复二段）：单次动作末帧停留未满一个动画帧时长时，
+	## 低优先级外部请求被拒——移动 tween 完成回调/回合流转的 IDLE 恰在末帧
+	## 刚落位时到达（is_once_finished 后 transient_playing=false 不再压制），
+	## 末帧 5ms 级被打断吞帧（两帧动作的挥砍帧不可见即此路径）
 	## 参数 action：UnitAnimState.Action
-	## 返回：true = 受理（状态机切换；纹理缺失时无视觉）
+	## 返回：true = 受理（状态机切换；纹理缺失时无视觉；保护窗拒 false）
+	if _OnceHoldBlocking(action):
+		return false
 	var strip: Texture2D = _anim_textures.get(action, null) as Texture2D
 	var frames: int = SpriteResolver.frame_count_of(strip)
 	if not anim.request(action as UnitAnimState.Action, frames):
@@ -155,6 +161,25 @@ func play_action(action: int) -> bool:
 	_last_frame_index = -1
 	_ApplyAnimFrame()
 	return true
+
+func _OnceHoldBlocking(action: int) -> bool:
+	## 末帧保护窗判定：当前为单次动作且已停末帧、停留计时未满一个动画帧
+	## 时长、且来请动作优先级低于当前——拒绝（受击 HIT/倒地 DOWNED 更高
+	## 优先级照常打断；DOWNED 自身经倒地锁不经此路径）
+	## 参数 action：来请动作
+	## 返回：true = 保护窗拦截（play_action 返 false）
+	if anim.is_downed_locked():
+		return false
+	if UnitAnimState.is_loop(anim.current as UnitAnimState.Action):
+		return false
+	if not anim.is_once_finished():
+		return false
+	var fps: float = _AnimFpsOf(anim.current)
+	if fps <= 0.0:
+		return false
+	return _once_hold_elapsed < 1.0 / fps \
+			and UnitAnimState.priority_of(action as UnitAnimState.Action) \
+			< UnitAnimState.priority_of(anim.current as UnitAnimState.Action)
 
 func current_action() -> int:
 	## 当前动作查询（测试契约口）
@@ -399,18 +424,36 @@ func _process(delta: float) -> void:
 	for edge: Control in _bewitch_ring:
 		edge.visible = visible_phase
 
+## 单次动作末帧停留计时（秒——M6 修复：advance 推到末帧与 is_once_finished
+## 回落同帧发生时，末帧从未渲染即被吞（frame_index 净变化 0 → region 不重设，
+## 竖条还停在首帧）——末帧落位后至少停留一个动画帧时长再回落，两帧动作的
+## 末帧（如挥砍）才可见；回落本身亦属动作切换，_last_frame_index 置 -1
+## 强制重设 region（否则回落帧位恰与首帧同号时 atlas 不切回 idle 竖条）
+var _once_hold_elapsed: float = 0.0
+
 func _AdvanceAnim(delta: float) -> void:
 	## 动作帧推进：advance → 跨帧落位；单次动作（非 DOWNED）播完回落 IDLE
-	## （HIT/攻击类停末帧等 finish_check 的消费侧——回落即此口）
+	## （HIT/攻击类停末帧等 finish_check 的消费侧——回落即此口；末帧停留
+	## ≥ 一个动画帧时长，见 _once_hold_elapsed 注）
 	## 参数 delta：帧间隔
 	## 返回：无
 	if _anim_textures.is_empty() or _anim_atlas == null:
 		return
 	anim.advance(delta, _AnimFpsOf(anim.current))
 	if anim.is_once_finished() and not anim.is_downed_locked():
-		anim.request(UnitAnimState.Action.IDLE,
-				SpriteResolver.frame_count_of(
-						_anim_textures.get(UnitAnimState.Action.IDLE, null) as Texture2D))
+		if anim.frame_index != _last_frame_index:
+			# 本帧刚推到末帧：先落位显示（尾部统一 _ApplyAnimFrame）
+			_once_hold_elapsed = 0.0
+		else:
+			_once_hold_elapsed += delta
+			if _once_hold_elapsed >= 1.0 / maxf(_AnimFpsOf(anim.current), 0.001):
+				_once_hold_elapsed = 0.0
+				anim.request(UnitAnimState.Action.IDLE,
+						SpriteResolver.frame_count_of(
+								_anim_textures.get(UnitAnimState.Action.IDLE, null) as Texture2D))
+				_last_frame_index = -1
+	else:
+		_once_hold_elapsed = 0.0
 	if anim.frame_index != _last_frame_index:
 		_ApplyAnimFrame()
 

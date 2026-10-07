@@ -92,3 +92,90 @@ func test_play_action_without_texture_hit_priority_arbitration() -> void:
 	assert_bool(badge.play_action(UnitAnimState.Action.MELEE_ATTACK)).is_false()
 	assert_bool(badge.play_action(UnitAnimState.Action.DOWNED)).is_true()
 	assert_bool(badge.is_downed_pose()).is_true()
+
+func test_once_action_last_frame_visible_then_fallback_swaps_atlas() -> void:
+	## M6 修复契约：单次动作末帧可见性——advance 推到末帧的当帧末帧 region
+	## 落位（修复前推到末帧与回落同帧发生，末帧被吞：frame_index 净变化 0 →
+	## region 不重设，两帧动作的挥砍帧从未渲染）；末帧停留满一个动画帧时长
+	## 才回落 IDLE，且回落时 atlas 切回 idle 竖条（修复前 region 残留上一动作
+	## 首帧、竖条不切）
+	var badge: UnitBadge = _MakeAnimBadge()
+	assert_bool(badge.play_action(UnitAnimState.Action.MELEE_ATTACK)).is_true()
+	var atlas: AtlasTexture = badge.get("_anim_atlas") as AtlasTexture
+	# 逐半帧步推进直到末帧落位（cfg 未注入 → fps 兜底 UiTheme.ANIM_IDLE_FPS）
+	var frame_time: float = 1.0 / UiTheme.ANIM_IDLE_FPS
+	for i: int in 20:
+		badge.call("_AdvanceAnim", frame_time * 0.5)
+		if int(badge.get("_last_frame_index")) == 1:
+			break
+	assert_int(badge.anim.frame_index).is_equal(1) \
+			.override_failure_message("未推进到末帧")
+	assert_float(atlas.region.position.y).is_equal(128.0) \
+			.override_failure_message("末帧未落位（挥砍帧被吞）")
+	assert_int(atlas.atlas.get_height()).is_equal(256)
+	# 末帧停留期间不回落（半帧 < 帧时长）
+	badge.call("_AdvanceAnim", frame_time * 0.5)
+	assert_int(badge.current_action()).is_equal(UnitAnimState.Action.MELEE_ATTACK) \
+			.override_failure_message("末帧停留期提前回落")
+	# 停满一个帧时长 → 回落 IDLE：帧位归零 + atlas 切回 idle 竖条
+	badge.call("_AdvanceAnim", frame_time)
+	assert_int(badge.current_action()).is_equal(UnitAnimState.Action.IDLE)
+	assert_int(badge.anim.frame_index).is_equal(0)
+	assert_float(atlas.region.position.y).is_equal(0.0)
+	assert_int(atlas.atlas.get_height()).is_equal(256)
+
+func test_once_hold_window_blocks_low_priority_external_request() -> void:
+	## M6 修复二段契约：末帧保护窗——单次动作末帧停留未满一个动画帧时长时，
+	## 低优先级外部请求（移动 tween 完成回调/回合流转的 IDLE——末帧停住后
+	## is_once_finished 使 transient_playing=false 失去压制）被拒；高优先级
+	## （HIT 受击）照常打断；自然回落仍按停留计时走（保护窗拒后停留满即回落）
+	var badge: UnitBadge = _MakeAnimBadge()
+	assert_bool(badge.play_action(UnitAnimState.Action.MELEE_ATTACK)).is_true()
+	var frame_time: float = 1.0 / UiTheme.ANIM_IDLE_FPS
+	for i: int in 20:
+		badge.call("_AdvanceAnim", frame_time * 0.5)
+		if int(badge.get("_last_frame_index")) == 1:
+			break
+	assert_int(badge.anim.frame_index).is_equal(1)
+	# 保护窗内（停留仅半帧时长）：外部 IDLE（移动 tween 回调）被拒
+	badge.call("_AdvanceAnim", frame_time * 0.5)  # 停留累计 0.5 帧时长（推进计时）
+	assert_int(badge.current_action()).is_equal(UnitAnimState.Action.MELEE_ATTACK)
+	assert_bool(badge.play_action(UnitAnimState.Action.IDLE)).is_false() \
+			.override_failure_message("保护窗内低优先级请求未被拦截——末帧会被外部回调吞帧")
+	assert_int(badge.current_action()).is_equal(UnitAnimState.Action.MELEE_ATTACK)
+	# 保护窗内高优先级（HIT prio 3 > MELEE 2）照常打断
+	assert_bool(badge.play_action(UnitAnimState.Action.HIT)).is_true()
+	assert_int(badge.current_action()).is_equal(UnitAnimState.Action.HIT)
+	# HIT 播完回落前 IDLE 同受保护窗（同一收口对 HIT 亦生效）
+	for i: int in 20:
+		badge.call("_AdvanceAnim", frame_time * 0.5)
+		if int(badge.get("_last_frame_index")) == 1:
+			break
+	badge.call("_AdvanceAnim", frame_time * 0.5)
+	assert_bool(badge.play_action(UnitAnimState.Action.IDLE)).is_false()
+	assert_int(badge.current_action()).is_equal(UnitAnimState.Action.HIT)
+	# 停留满一个帧时长后自然回落（不被保护窗无限拦——回落走 _AdvanceAnim）
+	badge.call("_AdvanceAnim", frame_time)
+	assert_int(badge.current_action()).is_equal(UnitAnimState.Action.IDLE)
+
+func _MakeAnimBadge() -> UnitBadge:
+	## 构建带六动作假竖条纹理的挂树徽章（128×256 两帧竖条 ×2——动画链路
+	## 用例夹具；非空纹理表走 sprite 分支建 _anim_atlas）
+	## 参数：无
+	## 返回：已 setup 的徽章（auto_free 释放）
+	var unit := BattleUnit.new()
+	unit.unit_id = &"test_anim_unit"
+	unit.current_hp = 50
+	unit.max_hp = 100
+	var badge := UnitBadge.new()
+	add_child(badge)
+	auto_free(badge)
+	var strip: ImageTexture = ImageTexture.create_from_image(Image.create(
+			SpriteResolver.ANIM_FRAME_SIZE, SpriteResolver.ANIM_FRAME_SIZE * 2,
+			false, Image.FORMAT_RGBA8))
+	var textures: Dictionary = {
+		UnitAnimState.Action.IDLE: strip,
+		UnitAnimState.Action.MELEE_ATTACK: strip,
+	}
+	badge.setup(unit, 72.0, null, textures)
+	return badge
