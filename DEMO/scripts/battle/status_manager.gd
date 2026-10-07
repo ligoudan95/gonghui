@@ -121,7 +121,10 @@ func apply(target: Object, status: StatusDef, source_kind: int, source_id: Strin
 				status.id, source_token, str(status.allowed_sources)])
 			_last_reject_reason = &"source_not_allowed"
 			return false
-	# ①同名刷新（取大 + 条件重起算——S2-3：>= 门控含等值；DOT 快照随重施加刷新）；
+	# ①同名刷新（取大 + 条件重起算——S2-3：>= 门控含等值；DOT 快照随重施加
+	# 刷新且与重起算同门控——弱重施加（新 < 旧）整体不生效：持续/锚点/快照
+	# 全保持旧实例，案 11 §2.3 同名取大锚点 2 语义，2026-10-03 审计·漏洞2：
+	# 修复前快照在门控外被低值覆盖，形成「持续取旧、伤害取新」混合态）；
 	# S2-M2-3-b 纯防御：重算 duration_zero——即时类被常规刷新后转为常规语义、
 	# 常规实例被即时施加（effective ≤ 0）时 remaining 钳 0 保持不倒扣
 	for instance: StatusInstance in target_statuses:
@@ -141,8 +144,9 @@ func apply(target: Object, status: StatusDef, source_kind: int, source_id: Strin
 			# 控制锁刷新纳入同一门控（S2-3：等值重施加同样刷新锁窗）
 			if status.control_kind != StatusDef.ControlKind.NONE:
 				instance.control_locks = maxi(instance.control_locks, effective)
-		if dot_source_snapshot > 0.0:
-			instance.dot_source_snapshot = dot_source_snapshot
+			# DOT 快照刷新与重起算同门控（漏洞2）：仅新 ≥ 旧重施加时定格新源
+			if dot_source_snapshot > 0.0:
+				instance.dot_source_snapshot = dot_source_snapshot
 		_last_reject_reason = &""
 		return true
 	# ②互斥组覆盖：同组前者移除（17 案 §3.9 同组后施加覆盖前者）；

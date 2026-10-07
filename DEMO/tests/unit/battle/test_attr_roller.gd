@@ -1,7 +1,8 @@
 ## AttrRoller 单元测试（M1 批 1）
 ## 覆盖：初始 4 人固定掷值域 ∈ [区间中值, 区间上限]（17-C7 中值偏上、固定种子）；
 ## 招募钳制带 70-80 越界整组重掷（17-C17 固定种子复现 + 总和入带断言）；
-## 不可达带循环上限保护（1000 次后返回末次掷值不死循环）。
+## 不可达带循环上限保护（1000 次后回退区间中值定值组不死循环——2026-10-03
+## 审计·漏洞7：兼容带回退组收敛入带/结构性不可达止步区间内组）。
 extends GdUnitTestSuite
 
 ## 职业表路径
@@ -66,8 +67,10 @@ func test_roll_recruit_custom_band() -> void:
 	assert_int(total).is_between(72, 74)
 
 func test_roll_recruit_impossible_band_loop_guard() -> void:
-	## 不可达带循环保护：带 [1000, 1001] 永不命中 → 1000 次上限后返回末次掷值
-	## （带外值、不越界区间、不死循环）
+	## 不可达带循环保护：带 [1000, 1001] 永不命中 → 1000 次上限后回退区间
+	## 中值定值组（2026-10-03 审计·漏洞7：不再返回末次带外随机掷值——回退组
+	## 按带中心缩放后钳回区间；结构性不可达（区间上限总和 81 < 带下限 1000）
+	## 止步于最接近带的区间内组：不越界区间、不死循环、确定性输出）
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 1
 	var attrs: Dictionary[StringName, int] = AttrRoller.roll_recruit(_warrior, rng, 1000, 1001)
@@ -77,3 +80,30 @@ func test_roll_recruit_impossible_band_loop_guard() -> void:
 		assert_int(attrs[attr_id]).is_between(bounds.x, bounds.y)
 		total += attrs[attr_id]
 	assert_int(total).is_less(1000)
+
+func test_roll_recruit_unreachable_band_falls_back_in_band() -> void:
+	## 漏洞7 主用例：注入与钳制带不兼容的职业区间（全属性 [10,99]——七属性
+	## 掷值随机落 [70,80] 带概率 ~1e-9，1000 次必超限）→ 回退区间中值定值组：
+	## 比例缩放 + 逐点微调收敛入带，各属性仍在职业区间内（中值 54×7=378 →
+	## 缩放向带心 75 → 各 11 → 总 77 ∈ [70,80]）；确定性输出（同表同带同结果）
+	var cls := ClassDef.new()
+	cls.id = &"cls_test_wide"
+	var ranges: Dictionary[StringName, Vector2i] = {}
+	for attr_id: StringName in _warrior.attr_ranges:
+		ranges[attr_id] = Vector2i(10, 99)
+	cls.attr_ranges = ranges
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1
+	var attrs: Dictionary[StringName, int] = AttrRoller.roll_recruit(cls, rng)
+	var total: int = 0
+	for attr_id: StringName in cls.attr_ranges:
+		assert_int(attrs[attr_id]).is_between(10, 99)
+		total += attrs[attr_id]
+	assert_int(total).is_between(70, 80) \
+			.override_failure_message("超限回退组总和须收敛入带 [70,80]")
+	# 确定性：同表同带重跑同结果（不携带随机掷值）
+	var rng2 := RandomNumberGenerator.new()
+	rng2.seed = 999
+	var attrs2: Dictionary[StringName, int] = AttrRoller.roll_recruit(cls, rng2)
+	for attr_id: StringName in cls.attr_ranges:
+		assert_int(attrs2[attr_id]).is_equal(attrs[attr_id])

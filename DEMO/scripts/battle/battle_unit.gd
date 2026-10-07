@@ -74,7 +74,10 @@ var role_tag: StringName = &""
 # ---- 敌方表定防御（flat 口径）----
 ## 敌方 flat 防御标记：true 时护甲不叠属性调、抗性直取 fixed_resist（17 案 §3.8）
 var flat_defense: bool = false
-## 表定抗性（flat_defense=true 时生效；-1 = 未设）
+## 表定抗性（flat_defense=true 时生效）。口径注记（2026-10-03 审计·漏洞4）：
+## 敌方三抗恒表定——EnemyDef.resist_pct 默认 0.0 且 build_enemy 直赋，
+## 无「未设回退属性派生」路径（17 案 §3.8 口径=敌方抗性表定）；-1 默认值
+## 与派生分支仅为内部防御残留，生产不可达
 var fixed_resist: float = -1.0
 
 # ---- 战斗态 ----

@@ -173,7 +173,26 @@ func test_w17_out_of_bounds_cell_not_lit_by_row_lookup() -> void:
 	## 无撞不显缺陷，构造负行号同格语义验证界外恒 UNSEEN）
 	var fog := _MakeFog(3, [0, 1], Vector2i(10, 10))
 	assert_int(fog.state_of(Vector2i(20, 0), Vector2i(5, 5))).is_equal(
-			FogOfWar.CellState.UNSEEN) \
-			.override_failure_message("界外格应恒 UNSEEN（不查全亮行）")
+		FogOfWar.CellState.UNSEEN) \
+		.override_failure_message("界外格应恒 UNSEEN（不查全亮行）")
 	assert_int(fog.state_of(Vector2i(5, 15), Vector2i(5, 5))).is_equal(
-			FogOfWar.CellState.UNSEEN)
+		FogOfWar.CellState.UNSEEN)
+
+func test_out_of_bounds_party_pos_returns_unseen() -> void:
+	## 2026-10-03 审计·漏洞5：小队格 pos 界内前置——pos=NO_CELL(-1,-1) 时
+	## 左上角格因欧氏距离 ≤ 半径被误判 LIT（生产装配顺序下不可达、防御补口）
+	## → 恒 UNSEEN；正向越界同口径；界内 pos 对照恒 LIT（正常路径不受影响）
+	var fog := _MakeFog(3, [], Vector2i(10, 10))
+	fog.on_moved(Vector2i(0, 0))
+	# 前提锚点：(0,0)/(0,1) 与 (-1,-1) 的欧氏距离 ≤ 3（修复前此处 LIT）
+	assert_int(fog.state_of(Vector2i(0, 0), Vector2i(-1, -1))).is_equal(
+		FogOfWar.CellState.UNSEEN) \
+		.override_failure_message("NO_CELL 小队格下左上角格不得误判 LIT")
+	assert_int(fog.state_of(Vector2i(0, 1), Vector2i(-1, -1))).is_equal(
+		FogOfWar.CellState.UNSEEN)
+	assert_int(fog.state_of(Vector2i(0, 0), Vector2i(10, 10))).is_equal(
+		FogOfWar.CellState.UNSEEN) \
+		.override_failure_message("正向越界小队格同口径 UNSEEN")
+	# 界内对照：正常位置左上角格照常 LIT
+	assert_int(fog.state_of(Vector2i(0, 0), Vector2i(0, 0))).is_equal(
+		FogOfWar.CellState.LIT)

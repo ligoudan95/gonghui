@@ -562,3 +562,45 @@ func test_s2r402_mutex_erase_rollback_on_stack_reject() -> void:
 	assert_bool(ids.has(&"DEBUFF_mutex_stat")).is_false()
 	assert_bool(ids.has(&"DEBUFF_slow")).is_true()
 	assert_bool(ids.has(&"DEBUFF_exposed")).is_true()
+
+func test_weak_refresh_keeps_dot_snapshot_and_remaining() -> void:
+	## 2026-10-03 审计·漏洞2：弱重施加（新持续 < 旧剩余）整体不生效——
+	## DOT 快照与重起算同门控（案 11 §2.3 同名取大锚点 2 语义）。修复前
+	## 快照在门控外被低值覆盖：意志 20 的诅咒 3 回合被意志 8 的 1 回合
+	## 重施加后每跳伤害从 10 降为 4（「持续取旧、伤害取新」混合态）
+	var target := FakeUnit.new()
+	# 强源施加（意志 20 快照、3 回合，回合 1）：first_tick = 2
+	assert_bool(_manager.apply(target, _statuses[&"DEBUFF_curse"],
+			StatusInstance.SourceKind.SKILL, &"skl_curse", 3, 1, false, 20.0)).is_true()
+	var instance: StatusInstance = _manager.get_statuses(target)[0]
+	assert_int(instance.remaining).is_equal(3)
+	assert_float(instance.dot_source_snapshot).is_equal(20.0)
+	# 弱重施加（1 < 3）：持续/锚点/快照全保持旧实例（不生效）
+	assert_bool(_manager.apply(target, _statuses[&"DEBUFF_curse"],
+			StatusInstance.SourceKind.SKILL, &"skl_curse", 1, 2, false, 8.0)).is_true()
+	instance = _manager.get_statuses(target)[0]
+	assert_int(instance.remaining).is_equal(3)
+	assert_int(instance.first_tick_round).is_equal(2)
+	assert_float(instance.dot_source_snapshot) \
+			.override_failure_message("弱重施加不得覆盖 DOT 施方快照").is_equal(20.0)
+	# 跳伤口径保持强源：20 × 0.5 = 10/跳（弱源口径为 4）
+	_manager.end_of_round_tick(2, [target], _rng)
+	assert_int(target.damage_log.size()).is_equal(1)
+	assert_int(target.damage_log[0]).is_equal(10)
+
+func test_strong_refresh_renews_dot_snapshot_and_duration() -> void:
+	## 漏洞2 对照：强源重施加（新 ≥ 旧剩余）——快照与持续正常刷新（与重
+	## 起算同门控内），回归锚防修复过紧
+	var target := FakeUnit.new()
+	assert_bool(_manager.apply(target, _statuses[&"DEBUFF_curse"],
+			StatusInstance.SourceKind.SKILL, &"skl_curse", 2, 1, false, 20.0)).is_true()
+	# 回合 1 末递减后剩余 1；回合 2 强源重施加 3 回合（3 ≥ 1）：全刷新
+	_manager.end_of_round_tick(1, [target], _rng)
+	assert_bool(_manager.apply(target, _statuses[&"DEBUFF_curse"],
+			StatusInstance.SourceKind.SKILL, &"skl_curse", 3, 2, false, 16.0)).is_true()
+	var instance: StatusInstance = _manager.get_statuses(target)[0]
+	assert_int(instance.remaining).is_equal(3)
+	assert_int(instance.first_tick_round).is_equal(3)
+	assert_float(instance.dot_source_snapshot).is_equal(16.0)
+	_manager.end_of_round_tick(2, [target], _rng)
+	assert_int(target.damage_log.size()).is_equal(0)

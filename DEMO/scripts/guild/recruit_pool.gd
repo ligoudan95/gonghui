@@ -60,6 +60,11 @@ func refresh(roster_class_ids: Array[StringName]) -> void:
 	for class_id: StringName in all_class_ids:
 		if plan.size() >= cfg.recruit_pool_capacity:
 			break
+		# 去重（漏洞3 修复）：偏缺职业已先入 plan，补全段不得重复装填——
+		# 名册缺 1 职业时该职业约 1/3 概率被补全段再次抽入，池中占两位、
+		# 容量 3 仅覆盖 2 职业，弱化案 5 §2.4「六职业均可体验」
+		if plan.has(class_id):
+			continue
 		plan.append(class_id)
 	for class_id: StringName in plan:
 		candidates.append(generate_candidate(class_id))

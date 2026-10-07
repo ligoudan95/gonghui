@@ -87,13 +87,17 @@ func on_moved(pos: Vector2i) -> Array[Vector2i]:
 	return newly
 
 func state_of(cell: Vector2i, pos: Vector2i) -> CellState:
-	## 格子可见态判定：界内前置（W1-7/W2-4：界外格不查全亮行——越界行号
-	## 误撞全亮集会白得 LIT）→ 全亮行恒 LIT → 当前视野内（圆形 + 遮挡视线
-	## ——几何现算，先于记忆集，已探索格回到视野内须回亮）→ 已探索 DIM
-	## （记忆不受遮挡影响——曾从别处看过的格保持暗态）→ UNSEEN
+	## 格子可见态判定：双界内前置（W1-7/W2-4：界外格不查全亮行——越界行号
+	## 误撞全亮集会白得 LIT；2026-10-03 审计·漏洞5：小队格 pos 亦须界内——
+	## pos=NO_CELL(-1,-1) 时左上角格因欧氏距离在半径内会被误判 LIT，生产
+	## 装配顺序下不可达、纯防御补口）→ 全亮行恒 LIT → 当前视野内（圆形 +
+	## 遮挡视线——几何现算，先于记忆集，已探索格回到视野内须回亮）→
+	## 已探索 DIM（记忆不受遮挡影响——曾从别处看过的格保持暗态）→ UNSEEN
 	## 参数 cell：查询格；pos：小队当前格
 	## 返回：CellState
 	if not _InBounds(cell):
+		return CellState.UNSEEN
+	if not _InBounds(pos):
 		return CellState.UNSEEN
 	if _lit_rows.has(cell.y):
 		return CellState.LIT

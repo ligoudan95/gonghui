@@ -63,6 +63,23 @@ var _rng: RandomNumberGenerator = null
 ## 装配期 new），无跨 run 复用——终局集随屏实例销毁释放，不存在永不清理
 ## 的增长泄漏；键为 int（instance_id）不持 run 强引用
 var _finalized_events: Dictionary = {}
+## 链事件会话游标（2026-10-03 审计·漏洞1a）：键 = run instance_id →
+## {event_id: 当前节点 id}——choose_option 选项归属校验单源（option_id 须 ∈
+## 游标节点 option_ids，防任意 option 经全局 lookup 被结算）。**运行态不进
+## 存档、不改 ExpeditionRun 序列化**（run 本身不入档——出征中不自动存档
+## #26，会话随屏重建）；游标缺失时按降级放行（见 _OptionBelongsToCursor），
+## 读档重建 run 后不误拒合法续跑。生命周期同 _finalized_events（随屏销毁）
+var _node_cursors: Dictionary = {}
+## 已消费选项集（2026-10-03 审计·漏洞1a）：键 = run instance_id →
+## {event_id: {option_id: true}}——同 (run, event, option) 重复调用拒收：
+## 链内选项去向非终端节点时 _MarkFinalized 不落标（引擎允许中间节点，DEMO
+## 三链数据现全为终端去向），重复调用会二次掷骰/累加 extra_days/沿链重走
+## 重复入账；终局后由 E7 先拦。生命周期同 _finalized_events
+var _consumed_options: Dictionary = {}
+## 战后出口一次性消费标记（2026-10-03 审计·漏洞1b）：键 = run instance_id →
+## {出口 instance_id: true}——resolve_outcome 同 run 同源重复调用拒收，
+## 防宿主侧重放 post_battle 重复 add_reward 入账；生命周期同 _finalized_events
+var _consumed_outcomes: Dictionary = {}
 
 func setup(cfg: CoreConfig, lookup: Callable, rng: RandomNumberGenerator) -> void:
 	## 装配引擎（依赖注入——headless 可测）
@@ -85,6 +102,10 @@ func start_event(event_id: StringName, run: ExpeditionRun) -> EventView:
 		if chain == null:
 			return view
 		_FillNodeView(view, chain.entry_node_id, run)
+		# 游标登记（漏洞1a）：入口节点解析成功才建游标（解析失败视图为空，
+		# consumed 不落标本事件不可再入）
+		if view.node_id != &"":
+			_SetNodeCursor(run, event_id, view.node_id)
 	elif String(event_id).begins_with("sp_"):
 		var single: SingleEventDef = _Lookup(event_id) as SingleEventDef
 		if single == null:
@@ -119,7 +140,8 @@ func choose_option(event_id: StringName, option_id: StringName, actor: Adventure
 	## 参数 event_id：事件 id；option_id：选项 id（单点为空）；actor：施检者
 	## （可空=空名单——检定走 FAILURE 分支防死锁）；run：运行态
 	## 返回：去向视图（B 出口视图 pending_outcome 带 battle——宿主路由战斗）；
-	## 已终局事件（E7）或查无配置返回空视图
+	## 已终局事件（E7）、查无配置、选项不归属游标节点或同选项已消费
+	## （漏洞1a——均 push_warning 留痕）返回空视图
 	var view := EventView.new()
 	if _IsFinalized(run, event_id):
 		# E7 会话防重：终局后同 run 同事件重复调用拒绝（防重复入账）
@@ -134,6 +156,21 @@ func choose_option(event_id: StringName, option_id: StringName, actor: Adventure
 		single = _Lookup(event_id) as SingleEventDef
 		if single == null:
 			return view
+	# 选项归属校验（漏洞1a，仅链内选项）：option_id 须归属游标节点——不匹配
+	# 拒收（此前任意 option 可经全局 lookup 被结算）；游标缺失（读档重建 run /
+	# 未走 start_event 直入）自然降级放行，保持 legacy 行为防误拒
+	if option != null and not _OptionBelongsToCursor(run, event_id, option_id):
+		push_warning("EventRunner: 选项 '%s' 不属于事件 '%s' 当前节点——拒收" % [
+			option_id, event_id])
+		return view
+	# 选项消费防重（漏洞1a）：同 (run, event, option) 已消费拒收——链中间
+	# 节点未终局时防二次掷骰/extra_days/奖励重复入账；首次调用结果不变
+	if option != null and _IsOptionConsumed(run, event_id, option_id):
+		push_warning("EventRunner: 选项 '%s'（事件 '%s'）本 run 已消费——重复调用拒收" % [
+			option_id, event_id])
+		return view
+	if option != null:
+		_MarkOptionConsumed(run, event_id, option_id)
 	# 耗时（选项侧申报）
 	if option != null and option.cost_days > 0:
 		run.extra_days += option.cost_days
@@ -192,16 +229,29 @@ func choose_option(event_id: StringName, option_id: StringName, actor: Adventure
 		# is_success 同传——S2-M1 fallback 分流依据）
 		_FillNodeView(view, next_node_id, run, is_crit_success, is_crit_failure,
 				is_success, modifier)
+		# 游标推进（漏洞1a）：去向节点解析成功才前移——后续选项归属校验
+		# 以新节点 option_ids 为准
+		if view.node_id != &"":
+			_SetNodeCursor(run, event_id, view.node_id)
 	if view.options.is_empty():
 		_MarkFinalized(run, event_id)
 	return view
 
 func resolve_outcome(outcome: EventOutcomeDef, run: ExpeditionRun) -> EventView:
 	## 出口直解（战后 post_battle 消费口）：A 结算 + 文本视图（战胜语境——
-	## is_success=true，fallback 取 success 文案）
+	## is_success=true，fallback 取 success 文案）；一次性消费（漏洞1b）——
+	## 同 run 同源出口重复调用拒收（空视图），防宿主侧重放 post_battle 重复
+	## add_reward 入账；运行态标记不进存档
 	## 参数 outcome：出口（通常 post_battle）；run：运行态
-	## 返回：结算视图（narrative = 结算文本）
+	## 返回：结算视图（narrative = 结算文本；重复调用/出口为空返回空视图）
 	var view := EventView.new()
+	if outcome == null:
+		return view
+	if _IsOutcomeConsumed(run, outcome):
+		push_warning("EventRunner: 战后出口（instance %d）本 run 已消费——重复结算拒收" %
+				outcome.get_instance_id())
+		return view
+	_MarkOutcomeConsumed(run, outcome)
 	_ResolveOutcome(view, outcome, false, false, true, null, run)
 	return view
 
@@ -239,12 +289,14 @@ func build_battle_params(outcome: EventOutcomeDef, run: ExpeditionRun) -> Battle
 
 func _RollCheck(actor: AdventurerData, attr_id: StringName,
 		tier_name: String) -> CheckResult:
-	## 检定掷骰（actor 可空——空名单走大失败档防死锁）
+	## 检定掷骰（actor 可空——空名单走 FAILURE 分支防死锁，案 8 口径：
+	## 普通失败不触发 crit_fail_modifier 加罚档；该分支生产不可达——
+	## 纯防御对齐，2026-10-03 审计·漏洞3）
 	## 参数 actor：施检者（null = 空名单）；attr_id/tier_name：检定配置
 	## 返回：CheckResult
 	if actor == null:
 		var failed := CheckResult.new()
-		failed.grade = CheckResult.Grade.CRIT_FAILURE
+		failed.grade = CheckResult.Grade.FAILURE
 		# 骰面明细自洽兜底（无 actor 无调整值：掷出 1 ＋ 0 ＝ 1——空名单防死锁
 		# 档，UI 反馈行算式不破）
 		failed.effective_die = 1
@@ -281,6 +333,72 @@ func _MarkFinalized(run: ExpeditionRun, event_id: StringName) -> void:
 	if not _finalized_events.has(run_key):
 		_finalized_events[run_key] = {}
 	_finalized_events[run_key][event_id] = true
+
+func _OptionBelongsToCursor(run: ExpeditionRun, event_id: StringName,
+		option_id: StringName) -> bool:
+	## 选项归属校验（漏洞1a 内部口）：option_id ∈ 游标节点 option_ids 才放行；
+	## 游标缺失（读档重建 run / 直入 choose_option 未走 start_event）或游标
+	## 节点解析失败时降级放行——防误拒合法调用，legacy 行为兜底
+	## 参数 run：出征运行态；event_id：链事件 id；option_id：待校验选项 id
+	## 返回：true = 归属当前节点或降级放行
+	var run_key: int = run.get_instance_id()
+	if not _node_cursors.has(run_key) or not _node_cursors[run_key].has(event_id):
+		return true
+	var node: EventNodeDef = _Lookup(_node_cursors[run_key][event_id]) as EventNodeDef
+	if node == null:
+		return true
+	return node.option_ids.has(option_id)
+
+func _SetNodeCursor(run: ExpeditionRun, event_id: StringName,
+		node_id: StringName) -> void:
+	## 游标写入（漏洞1a 内部口——start_event 入口 / choose_option 去向节点
+	## 解析成功后调用，键 = run instance_id）
+	## 参数 run：出征运行态；event_id：链事件 id；node_id：当前节点 id
+	## 返回：无
+	var run_key: int = run.get_instance_id()
+	if not _node_cursors.has(run_key):
+		_node_cursors[run_key] = {}
+	_node_cursors[run_key][event_id] = node_id
+
+func _IsOptionConsumed(run: ExpeditionRun, event_id: StringName,
+		option_id: StringName) -> bool:
+	## 选项消费查询（漏洞1a 内部口——run 隔离，键 = instance_id）
+	## 参数 run：出征运行态；event_id：链事件 id；option_id：选项 id
+	## 返回：true = 该 run 内该事件的该选项已消费
+	var run_key: int = run.get_instance_id()
+	return _consumed_options.has(run_key) \
+			and _consumed_options[run_key].has(event_id) \
+			and _consumed_options[run_key][event_id].has(option_id)
+
+func _MarkOptionConsumed(run: ExpeditionRun, event_id: StringName,
+		option_id: StringName) -> void:
+	## 选项消费写入（漏洞1a 内部口——校验通过即落标，掷骰/耗时/结算
+	## 只跑一次；键 = run instance_id）
+	## 参数 run：出征运行态；event_id：链事件 id；option_id：选项 id
+	## 返回：无
+	var run_key: int = run.get_instance_id()
+	if not _consumed_options.has(run_key):
+		_consumed_options[run_key] = {}
+	if not _consumed_options[run_key].has(event_id):
+		_consumed_options[run_key][event_id] = {}
+	_consumed_options[run_key][event_id][option_id] = true
+
+func _IsOutcomeConsumed(run: ExpeditionRun, outcome: EventOutcomeDef) -> bool:
+	## 战后出口消费查询（漏洞1b 内部口——run 隔离，键 = instance_id 双层）
+	## 参数 run：出征运行态；outcome：待结算出口
+	## 返回：true = 该 run 内该出口实例已消费
+	var run_key: int = run.get_instance_id()
+	return _consumed_outcomes.has(run_key) \
+			and _consumed_outcomes[run_key].has(outcome.get_instance_id())
+
+func _MarkOutcomeConsumed(run: ExpeditionRun, outcome: EventOutcomeDef) -> void:
+	## 战后出口消费写入（漏洞1b 内部口——结算前置落标，键 = instance_id）
+	## 参数 run：出征运行态；outcome：出口
+	## 返回：无
+	var run_key: int = run.get_instance_id()
+	if not _consumed_outcomes.has(run_key):
+		_consumed_outcomes[run_key] = {}
+	_consumed_outcomes[run_key][outcome.get_instance_id()] = true
 
 func _ResolveOutcome(view: EventView, outcome: EventOutcomeDef, is_crit_success: bool,
 		is_crit_failure: bool, is_success: bool, modifier: EventModifierDef,

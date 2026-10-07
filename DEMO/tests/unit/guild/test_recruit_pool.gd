@@ -123,3 +123,26 @@ func test_refresh_replaces_pool() -> void:
 	assert_int(new_ids.size()).is_equal(3)
 	for old_id: StringName in old_ids:
 		assert_bool(new_ids.has(old_id)).is_false()
+
+func test_refresh_no_duplicate_class_when_one_missing() -> void:
+	## 漏洞3 修复锚定：名册缺 1 职业（5/6）时，偏缺职业先入 plan 后补全段
+	## 不得重复装填同职业（修复前缺失职业约 1/3 概率在池中占两位、容量 3
+	## 仅覆盖 2 职业——弱化案 5 §2.4「六职业均可体验」）；固定 rng 连续
+	## 50 轮刷新覆盖多种洗牌序（修复前高概率触发重复，修复后恒无重复），
+	## 同时锚定容量语义不变（恒 == recruit_pool_capacity）
+	var roster_class_ids: Array[StringName] = []
+	for class_id: StringName in _game_data.get_domain_ids(&"class/classes"):
+		if class_id != &"cls_arcanist":
+			roster_class_ids.append(class_id)
+	assert_int(roster_class_ids.size()).is_equal(5)
+	for round_no: int in 50:
+		_core.recruit_pool.refresh(roster_class_ids)
+		assert_int(_core.recruit_pool.candidates.size()) \
+				.override_failure_message("第 %d 轮池容量漂移" % round_no) \
+				.is_equal(_Cfg().recruit_pool_capacity)
+		var seen: Array[StringName] = []
+		for candidate: AdventurerData in _core.recruit_pool.candidates:
+			assert_bool(seen.has(candidate.class_id)) \
+					.override_failure_message("第 %d 轮池内职业重复：%s" % [
+							round_no, String(candidate.class_id)]).is_false()
+			seen.append(candidate.class_id)

@@ -750,3 +750,27 @@ func test_s2r9_adventurer_negative_values_rejected() -> void:
 		var loaded: AdventurerData = AdventurerData.from_dict(adv_data)
 		assert_bool(loaded == null) \
 				.override_failure_message("负值键 %s 应拒载" % negative_key).is_true()
+
+func test_new_game_missing_cfg_aborts_cleanly() -> void:
+	## 审计修复回归（2026-10-03）：cfg_main 查无时 new_game 干净中止——
+	## push_error + return，core 未半初始化（cfg 仍空）且 SaveManager 不被
+	## 清空建档（current 仍 null——无「存档已初始化但随后中止」半途态）
+	var save_manager: Node = load(SAVE_MANAGER_SCRIPT).new()
+	add_child(save_manager)
+	# 套件隔离同上：局部 GuildState 不 add_child 手动初始化
+	var state: Node = load(GUILD_STATE_SCRIPT).new()
+	state.core = GuildCore.new()
+	state._rng = _MakeRng(507)
+	state.bind(save_manager, _game_data)
+	# 注入：摘除 cfg_main 记录（_ResolveCfg 查无 → null）
+	var records: Dictionary = _game_data.get("_records") as Dictionary
+	assert_object(records).is_not_null()
+	var cfg_record: Resource = records[CoreConfig.CFG_MAIN_ID]
+	records.erase(CoreConfig.CFG_MAIN_ID)
+	state.new_game()
+	# 立即恢复（gdUnit 断言失败不中断函数——还原必达，不污染套件共享实例）
+	records[CoreConfig.CFG_MAIN_ID] = cfg_record
+	assert_object(state.core.cfg).is_null()
+	assert_object(save_manager.current).is_null()
+	state.free()
+	save_manager.free()

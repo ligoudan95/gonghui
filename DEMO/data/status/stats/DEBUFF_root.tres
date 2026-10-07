@@ -11,4 +11,4 @@ control_kind = 1
 stack_rule = &"no_stack_take_larger"
 mutex_group_id = &"mgrp_control"
 allowed_sources = Array[StringName]([&"SKILL"])
-comment = "【占位·试玩校准】硬控制：无法移动，1 回合（17 案 §3.9）"
+comment = "【占位·试玩校准】硬控制：锁定行动轮（无法移动/行动）1 回合（案 11 §2.3 即时控制口径；17 案 §3.9）"

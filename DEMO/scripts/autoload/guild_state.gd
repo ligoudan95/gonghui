@@ -80,14 +80,19 @@ func _OnSaveLoaded(save_data: SaveData) -> void:
 func new_game() -> void:
 	## 新档入口（批 2 接 title「开始新游戏」；本批先落方法）：SaveManager 建档
 	## → GuildCore.setup（初始资金/种子名册/委托板预生成/招募池首刷）→
-	## 同步天数 → autosave(NEW_GAME)
+	## 同步天数 → autosave(NEW_GAME)；cfg_main 查无时干净中止（判空先于
+	## SaveManager.new_game——不留「存档已清空建档但 core 未装配」半途态）
 	## 参数：无
 	## 返回：无
 	if _save_manager == null or _game_data == null:
 		push_error("GuildState: 依赖未装配（SaveManager/GameData），new_game 中止")
 		return
+	var cfg: CoreConfig = _ResolveCfg()
+	if cfg == null:
+		push_error("GuildState: 总控配置 '%s' 查无，new_game 中止" % CoreConfig.CFG_MAIN_ID)
+		return
 	_save_manager.new_game()
-	core.setup(_ResolveCfg(), _game_data, _rng)
+	core.setup(cfg, _game_data, _rng)
 	_has_guild_snapshot = true
 	_SyncDay()
 	last_autosave_failed = _save_manager.autosave(SaveData.SavePoint.NEW_GAME) != OK

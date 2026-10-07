@@ -3,7 +3,9 @@
 ## 大失败 −5 HP + 下限）/ 耗时 +1 / 单次消耗 / C8 授予+防重反馈字段 /
 ## C-D 拦截（intercepted 标记）/ B 出口参数组装（先手/分布/初始状态/HP
 ## 覆写/倒地跳过）/ E1 四档经节点去向透传 / E5 反馈字段回带 / E7 会话
-## 防重 / E2-8 B 奖励战后入账 / E6 去向节点 id 单源回带 / E2 终端叙述追加。
+## 防重 / E2-8 B 奖励战后入账 / E6 去向节点 id 单源回带 / E2 终端叙述追加 /
+## 2026-10-03 审计·漏洞1（链中间节点选项防重 + 选项归属校验 + 战后出口
+## 一次性消费——合成链驱动）。
 ## 骰值控制：FixedDieRunner 子类覆写 _RollCheck → CheckRoller.roll_with_die
 ## 固定骰值（roll_with_die 为引擎内部确定路径——骰 1 恒大失败、骰 ≥ 线
 ## 恒大成功），档位断言确定不依赖概率窗。
@@ -435,3 +437,139 @@ func test_s2_02_positive_hp_delta_rejected() -> void:
 	assert_int(view_negative.hp_delta).is_equal(-5)
 	assert_int(int(run.hp[run.party[0]])).is_equal(35)
 	assert_int(int(run.hp[run.party[1]])).is_equal(25)
+
+# --------------------------------------------------------------------------
+# 2026-10-03 审计·漏洞1：链中间节点防重 / 选项归属校验 / 战后出口一次性消费
+# --------------------------------------------------------------------------
+
+## 合成链三节点（c1 检定入口 → c2 纯选择中间 → c3 终端 A 出口）——引擎允许
+## 选项去向非终端节点，DEMO 三链数据现全为终端去向，须合成链驱动该路径
+func _SyntheticTable() -> Dictionary:
+	## 构建合成链定义表（chain/node/option/outcome 全手工构造，不触真表）
+	## 参数：无
+	## 返回：{StringName: Resource} 合成域 + 真域兜底由包装闭包处理
+	var table: Dictionary = {}
+	var chain := EventChainDef.new()
+	chain.id = &"chain_test_cursor"
+	chain.entry_node_id = &"evn_test_c1"
+	table[chain.id] = chain
+	var c1 := EventNodeDef.new()
+	c1.id = &"evn_test_c1"
+	c1.narrative_text = "合成链入口节点"
+	c1.option_ids = [&"opt_test_c1a"]
+	table[c1.id] = c1
+	var c2 := EventNodeDef.new()
+	c2.id = &"evn_test_c2"
+	c2.narrative_text = "合成链中间节点"
+	c2.option_ids = [&"opt_test_c2a"]
+	table[c2.id] = c2
+	var c3 := EventNodeDef.new()
+	c3.id = &"evn_test_c3"
+	c3.narrative_text = "合成链终端节点"
+	var outcome := EventOutcomeDef.new()
+	outcome.exit_kind = EventOutcomeDef.ExitKind.A
+	var reward := RewardDef.new()
+	reward.exp = 10
+	outcome.reward = reward
+	outcome.texts = {&"success": "终端结算文本", &"failure": "终端失败文本"}
+	c3.outcome = outcome
+	table[c3.id] = c3
+	var opt_c1a := EventOptionDef.new()
+	opt_c1a.id = &"opt_test_c1a"
+	opt_c1a.kind = EventOptionDef.OptionKind.CHECK
+	opt_c1a.check_attr_id = &"strength"
+	opt_c1a.difficulty_tier = "极易"
+	opt_c1a.success_to = &"evn_test_c2"
+	opt_c1a.failure_to = &"evn_test_c2"
+	opt_c1a.cost_days = 1
+	table[opt_c1a.id] = opt_c1a
+	var opt_c2a := EventOptionDef.new()
+	opt_c2a.id = &"opt_test_c2a"
+	opt_c2a.kind = EventOptionDef.OptionKind.PURE
+	opt_c2a.success_to = &"evn_test_c3"
+	table[opt_c2a.id] = opt_c2a
+	return table
+
+func _SyntheticRunner(die: int) -> EventRunner:
+	## 合成域 runner 装配（FixedDie 注入骰值 + 包装 lookup：合成 id 优先、
+	## 真域兜底）
+	## 参数 die：注入骰值
+	## 返回：装配完成的 FixedDieRunner
+	var table: Dictionary = _SyntheticTable()
+	var wrapped: Callable = func(record_id: StringName) -> Resource:
+		if table.has(record_id):
+			return table[record_id]
+		return _lookup.call(record_id)
+	var runner := FixedDieRunner.new()
+	runner.forced_die = die
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	runner.setup(_cfg, wrapped, rng)
+	return runner
+
+func test_chain_mid_option_duplicate_call_rejected() -> void:
+	## 漏洞1a·用例①：链选项去向非终端节点（事件未终局）时，同 (run, event,
+	## option) 重复调用拒收——不二次掷骰、不重复累加 extra_days、不沿链重走
+	## 重复入账；后续节点照常可达（注：E1 修饰仅单跳透传至直接终端——
+	## 中间节点场景修饰不落地，HP 无变化即正确语义）
+	var runner: EventRunner = _SyntheticRunner(1)
+	var run := _FreshRun()
+	runner.start_event(&"chain_test_cursor", run)
+	var first: EventRunner.EventView = runner.choose_option(&"chain_test_cursor",
+			&"opt_test_c1a", _run.party[0], run)
+	# 大失败（骰 1）→ c2（中间节点，选项非空 → 事件未终局）
+	assert_str(String(first.node_id)).is_equal("evn_test_c2")
+	assert_int(first.options.size()).is_equal(1)
+	assert_int(run.extra_days).is_equal(1)
+	# 重复调用同选项：拒收（空视图）——无二次掷骰/耗时/入账
+	var dup: EventRunner.EventView = runner.choose_option(&"chain_test_cursor",
+			&"opt_test_c1a", _run.party[0], run)
+	assert_bool(dup.narrative.is_empty()).is_true()
+	assert_int(dup.options.size()).is_equal(0)
+	assert_int(run.extra_days).is_equal(1)
+	assert_int(int(run.rewards[&"exp"])).is_equal(0)
+	assert_int(int(run.hp[_run.party[0]])).is_equal(40)
+	# 游标已前移：下一节点选项照常结算（c3 终端 A 出口 10 经验单次入账）
+	var next: EventRunner.EventView = runner.choose_option(&"chain_test_cursor",
+			&"opt_test_c2a", null, run)
+	assert_str(String(next.node_id)).is_equal("evn_test_c3")
+	assert_int(int(run.rewards[&"exp"])).is_equal(10)
+	# 终局后重复调用：E7 拦截（奖励不二次累计）
+	var after: EventRunner.EventView = runner.choose_option(&"chain_test_cursor",
+			&"opt_test_c2a", null, run)
+	assert_bool(after.narrative.is_empty()).is_true()
+	assert_int(int(run.rewards[&"exp"])).is_equal(10)
+
+func test_chain_foreign_option_rejected() -> void:
+	## 漏洞1a·用例②：非当前节点选项拒收——游标在 c1 时传 c2 的选项被拒
+	## （此前任意 option 可经全局 lookup 被结算）；拒收不破坏会话（同选项
+	## 树内合法调用照常走）
+	var runner: EventRunner = _SyntheticRunner(20)
+	var run := _FreshRun()
+	runner.start_event(&"chain_test_cursor", run)
+	var rejected: EventRunner.EventView = runner.choose_option(&"chain_test_cursor",
+			&"opt_test_c2a", null, run)
+	assert_bool(rejected.narrative.is_empty()).is_true()
+	assert_int(rejected.options.size()).is_equal(0)
+	assert_int(int(run.rewards[&"exp"])).is_equal(0)
+	# 会话未受损：c1 合法选项照常结算（骰 20 大成功 → c2）
+	var legit: EventRunner.EventView = runner.choose_option(&"chain_test_cursor",
+			&"opt_test_c1a", _run.party[0], run)
+	assert_str(String(legit.node_id)).is_equal("evn_test_c2")
+
+func test_resolve_outcome_duplicate_consumed_once() -> void:
+	## 漏洞1b·用例③：resolve_outcome 同 run 同源出口重复调用只入账一次
+	## （首调结果与既有口径一致）；按 run 隔离（新 run 同出口照常结算）
+	var node: EventNodeDef = _lookup.call(&"evn_camp_n2") as EventNodeDef
+	var run := _FreshRun()
+	var first: EventRunner.EventView = _runner.resolve_outcome(node.outcome, run)
+	assert_bool(first.narrative.is_empty()).is_false()
+	assert_int(int(run.rewards[&"exp"])).is_equal(20)
+	var dup: EventRunner.EventView = _runner.resolve_outcome(node.outcome, run)
+	assert_bool(dup.narrative.is_empty()).is_true()
+	assert_int(int(run.rewards[&"exp"])).is_equal(20)
+	# 按 run 隔离：新 run 同出口照常结算（单次）
+	var run2 := _FreshRun()
+	var other: EventRunner.EventView = _runner.resolve_outcome(node.outcome, run2)
+	assert_bool(other.narrative.is_empty()).is_false()
+	assert_int(int(run2.rewards[&"exp"])).is_equal(20)

@@ -142,7 +142,12 @@ static func decide(self_unit: Object, grid: BattleGrid, player_units: Array,
 		var field: Dictionary = grid.distance_field_to_reach(self_unit,
 				target.grid_pos, range_final)
 		var here_dist: int = field.get(self_unit.grid_pos, -1)
-		if here_dist > 0:
+		# 门槛含 0 值（2026-10-03 审计·漏洞6）：0 = 当前格已在目标射程格集
+		# ——「射程内但视线断」不再被挡在绕行裁决外（>0 会把 0 值误归
+		# 「无路」直接真待机）。0 值时绕行目标仍取**距离严格降格**
+		# （cell_dist < route_dist=0 无候选）→ 自然落兜底 3 真待机，行为
+		# 收敛不振荡（等距有视线的侧移恢复已由兜底 1 side_cell 先行覆盖）
+		if here_dist >= 0:
 			var route_cell: Vector2i = NO_CELL
 			var route_dist: int = here_dist
 			for cell: Vector2i in reachable:
