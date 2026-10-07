@@ -96,6 +96,23 @@ const HIT_FLASH_PEAK: Color = Color(4.0, 4.0, 4.0)
 ## 战场徽章移动演出步数上限兜底（低15：远距 tween 总时长钳制护栏——
 ## D6 语义「总时长 = 步长 × 步数」的步数封顶，入表可调）
 const BATTLE_MOVE_MAX_STEPS: int = 6
+## 战场路径闪烁高光色兜底（试玩反馈批：路径箭头改闪烁高光——金色系与
+## 范围染蓝/染红区分；cfg ui_battle_path_highlight_* 表驱动）
+const BATTLE_PATH_HIGHLIGHT_COLOR: Color = Color(1.0, 0.85, 0.35, 1.0)
+## 路径高光呼吸峰值 alpha 兜底
+const BATTLE_PATH_HIGHLIGHT_PEAK_ALPHA: float = 0.55
+## 路径高光呼吸周期兜底（秒——一完整明暗循环）
+const BATTLE_PATH_HIGHLIGHT_FLASH_SECONDS: float = 0.8
+## 路径高光呼吸渐变形态兜底（Tween.TransitionType——SINE 正弦呼吸）
+const BATTLE_PATH_HIGHLIGHT_TRANS: int = Tween.TransitionType.TRANS_SINE
+## 路径高光呼吸渐变形态合法值集（LINEAR=0 作未回填哨兵弃用外全集；4.7.2
+## 实测值序非字母序：QUART=3/EXPO=5/ELASTIC=6/CUBIC=7/CIRC=8/BOUNCE=9/
+## BACK=10——枚举静态本体不可 find_key，以常量名引用列集合自适应序变）
+const BATTLE_PATH_HIGHLIGHT_TRANS_VALID: Array[int] = [
+	Tween.TRANS_SINE, Tween.TRANS_QUINT, Tween.TRANS_QUART, Tween.TRANS_EXPO,
+	Tween.TRANS_ELASTIC, Tween.TRANS_CUBIC, Tween.TRANS_BOUNCE,
+	Tween.TRANS_CIRC, Tween.TRANS_BACK,
+]
 ## 结算战败/撤退色兜底（R3-08）
 const RESULT_DEFEAT: Color = Color(0.95, 0.4, 0.35)
 const RESULT_RETREAT: Color = Color(0.7, 0.8, 0.95)
@@ -119,6 +136,15 @@ const EXPLORE_GOAL_BANNER: Color = Color(0.35, 0.85, 0.4)
 ## cfg 字段 ui_explore_icon_backdrop_color 已回填 cfg_main 同值——席4 L3，
 ## 本常量为未注入/丢表时的兜底）
 const EXPLORE_ICON_BACKDROP: Color = Color(0.02, 0.02, 0.03, 0.62)
+## 探索屏左右侧栏宽度兜底（px——三栏布局；cfg ui_explore_side_panel_width）
+const EXPLORE_SIDE_PANEL_WIDTH: int = 280
+## 探索屏三栏列间距兜底（px——cfg ui_explore_column_gap）
+const EXPLORE_COLUMN_GAP: int = 12
+## 探索板面等比缩放上限兜底（放宽 >1.0——cfg ui_explore_board_fit_max_scale）
+const EXPLORE_BOARD_FIT_MAX: float = 1.2
+## 矿洞段可通行格染色兜底（淡鹅黄 ≈ #E8D9A8；cfg ui_explore_mine_walk_tint_color
+## ——试玩反馈批 B：可通行/不可通行区域区分，村子段全亮行不染）
+const EXPLORE_MINE_WALK_TINT: Color = Color(0.91, 0.851, 0.659)
 
 # ---- 字号档位（B-7 兜底；cfg 字段 ui_font_size_*）----
 const FONT_DISPLAY: int = 64

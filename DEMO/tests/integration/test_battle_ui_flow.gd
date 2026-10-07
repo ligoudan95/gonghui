@@ -758,6 +758,48 @@ func test_move_range_restored_after_cancel_taps() -> void:
 	battle.controller.abort_battle()
 
 
+func test_move_tap_preview_matches_find_path() -> void:
+	## 试玩反馈批二轮修复锚定（预览与移动裁决同源）：首点可达格 → 预览高光
+	## 格集 == find_path（controller._move_unit 移动同款寻路函数）结果逐格
+	## 一一对应——废除箭头时代直线近似（lerp 插值穿障碍）；优先挑绕障碍格
+	##（路径长 > 曼哈顿距离 = 存在绕行），随机图无绕行格时退化任意可达格
+	##（同源断言本身不依赖绕行——绕行场景单元层
+	## test_show_path_preview_matches_find_path_around_obstacles 已锚定）
+	await _EnterRandomBattle()
+	var battle: Control = get_tree().root.find_child("BattleScreen", true, false) as Control
+	assert_object(battle).is_not_null()
+	battle.controller.delay_seconds = 0.0
+	var unit: BattleUnit = await _AwaitFirstCommandWindow(battle)
+	assert_object(unit).is_not_null()
+	var board: BattleBoard = battle.get_node("%BoardLayer") as BattleBoard
+	var grid: BattleGrid = battle.context.grid
+	var reachable: Array[Vector2i] = grid.find_reachable(unit, unit.move_final())
+	assert_int(reachable.size()).is_greater(0)
+	# 挑绕行目标（路径长 > 曼哈顿 = 障碍/占位致绕），无则退化首格
+	var target: Vector2i = reachable[0]
+	for cell: Vector2i in reachable:
+		var probe: Array[Vector2i] = grid.find_path(unit, unit.grid_pos, cell,
+				unit.move_final())
+		var manhattan: int = absi(cell.x - unit.grid_pos.x) + absi(cell.y - unit.grid_pos.y)
+		if probe.size() > manhattan:
+			target = cell
+			break
+	battle._HandleMoveTap(target)
+	assert_vector(battle._pending_cell).is_equal(target)
+	# 同源断言：再调同一 find_path，板层高光格集与结果逐格一致（含终点不含起点）
+	var expected: Array[Vector2i] = grid.find_path(unit, unit.grid_pos, target,
+			unit.move_final())
+	assert_int(expected.size()).is_greater(0)
+	assert_int(board._path_highlight_cells.size()).is_equal(expected.size()) \
+			.override_failure_message("预览高光格数应 == 寻路路径格数（同源逐格）")
+	for cell: Vector2i in expected:
+		assert_bool(board._path_highlight_cells.has(cell)) \
+				.override_failure_message("预览高光缺途经格 %s（直线近似穿障碍？）" % str(cell)).is_true()
+	assert_bool(board._path_highlight_cells.has(unit.grid_pos)).is_false() \
+			.override_failure_message("预览高光不含起点格")
+	battle.controller.abort_battle()
+
+
 func test_degraded_exit_releases_expedition_lock() -> void:
 	## X2-M1（M3 质检；M4 批 2 起会话宿主唯一=EXPLORE_SCREEN——原 EVENT_SCREEN
 	## 用例随演示宿主拆除改挂探索回向）：return_to=EXPLORE_SCREEN 但装配降级

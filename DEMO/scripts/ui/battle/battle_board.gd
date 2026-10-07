@@ -6,8 +6,11 @@
 ## （特殊/障碍格 PASS + tooltip_text，文案取 tile 表 description——UI 零硬编码；
 ## 2026-09-24 试玩反馈）、动态地格标记（陷阱点——贴图态整格半透明/缺件角块）、
 ## 覆盖层（移动范围高亮+亮边框/技能范围红显——组 8 fx_battle_range 染色态/
-## 路径预览（A8 箭头）/二次确认提示）、单位徽章池、飘字伤害数字；
-## 提供本地坐标 → 格坐标换算（点击命中入口）。
+## 路径预览高光与移动燃线（试玩反馈批：A8 箭头表现改呼吸式高光标记——D4
+## 契约修订，移动过程真实路径逐格熄灭；漏洞1 修复：燃线挂独立生命周期——
+## 与 clear_overlays/_ClearSelection 解耦，由逐格熄灭回调与移动 tween
+## finished 自然烧完自清，行动轮切换不截断在途燃线）/二次确认提示）、
+## 单位徽章池、飘字伤害数字；提供本地坐标 → 格坐标换算（点击命中入口）。
 ## 数据来源：M1 批 3 方案 §7.1；格子尺寸自适应版面（40-88px 钳制）。
 ## 输入口径：本层 gui_input 统一接点按（battle_screen 分发两段式确认）；
 ## 徽章与覆盖块均不消费鼠标；地格块 PASS 参与命中后冒泡回本层（点击链路不变）。
@@ -55,6 +58,8 @@ const UI_TEXTS: Dictionary = {
 }
 ## 路径箭头资产 id（M6 批 3.5a A8：右向基准素材——上/下 rotate ±90°、
 ## 左 rotate 180° 复用单件，不出多朝向素材）
+## 试玩反馈批（D4 契约修订）：路径箭头表现被推翻改闪烁高光——本消费点
+## 已拆除，素材键保留 registry 登记不删（零改表原则，未来可用）
 const PATH_ARROW_ASSET_ID: StringName = &"fx_battle_path_arrow"
 ## 范围覆盖贴图资产 id（M6 批 3.5b 组 8：_ShowOverlay 填充块贴图态——
 ## modulate = cfg 填充色染蓝/染红；缺件回退现状 ColorRect）
@@ -62,13 +67,11 @@ const RANGE_OVERLAY_ASSET_ID: StringName = &"fx_battle_range"
 ## 陷阱格贴图态整格透明度（组 3——贴图自带纹样，半透明显「区域」而非「实心」）
 const TRAP_TILE_ALPHA: float = 0.55
 ## 方向 → 箭头旋转角（度；右向基准：右 0 / 下 90 / 左 180 / 上 270——
-## 09 组规格 v1.1 勘正口径）
-const PATH_ARROW_ROTATIONS: Dictionary = {
-	Vector2i.RIGHT: 0.0,
-	Vector2i.DOWN: 90.0,
-	Vector2i.LEFT: 180.0,
-	Vector2i.UP: 270.0,
-}
+## 09 组规格 v1.1 勘正口径）——试玩反馈批 D4 契约修订：箭头渲染拆除，
+## 常量一并移除（素材键保留见 PATH_ARROW_ASSET_ID 注）
+## 路径高光呼吸谷值比（闪烁渐变形态的一部分：谷值 = 峰值 × 本值——
+## 公式形态代码化；峰值/周期/曲线经 cfg ui_battle_path_highlight_* 表驱动）
+const PATH_HIGHLIGHT_TROUGH_RATIO: float = 0.3
 ## 移动演出步数上限口径注（D6：tween 总时长 = 步长 × min(路径步数, 上限)——
 ## 远距移动时长钳制防长路径演出拖沓；低15 盲审修复：上限值入表
 ## cfg.ui_battle_move_max_steps（UiTheme.BATTLE_MOVE_MAX_STEPS 兜底 +
@@ -87,10 +90,26 @@ var _cells: Dictionary = {}
 ## 在飞飘字 tween 池（S4-R2-03：resize 全量重建前 kill——防 tween 对已
 ## queue_free 的 label 继续插值报错刷屏；正常播完自行出池）
 var _float_tweens: Array[Tween] = []
-## 覆盖层池（三层；每格一个容器 Control——填充 + 可选边框）
+## 覆盖层池（选择态生命周期——clear_overlays 统一清理）：移动范围/技能范围/
+## 路径预览高光（show_path_preview——首点未确认时的预览，维持现有清理路径
+## 不变）；_path_overlays 池另承载技能目标确认框（show_target_confirm——同随
+## 选择态生灭）
 var _move_overlays: Array[Control] = []
 var _skill_overlays: Array[Control] = []
 var _path_overlays: Array[Control] = []
+## 路径预览高光格映射（Vector2i -> 高光 holder——预览层索引视图；随
+## _path_overlays 池同步生灭）
+var _path_highlight_cells: Dictionary = {}
+## 移动燃线池（漏洞1 修复：独立演出生命周期）：move_badge 确认移动后按真实
+## 路径建的闪烁高光——与 clear_overlays/_ClearSelection **解耦**，由逐格熄灭
+## 回调与移动 tween finished 自然烧完自清（或再次移动重建/resize 全量重建时
+## 清）；turn_started 等行动轮切换不再截断在途燃线（漏洞2 随之统一解决——
+## 敌方长距移动「人还在走、线已消失」消除）；holder 挂 _overlay_layer 随板
+## 释放无泄漏（战斗结束亦不强制清——自然烧完，终局面板窗口 <0.9s）
+var _burning_overlays: Array[Control] = []
+## 移动燃线格映射（Vector2i -> holder——逐格熄灭查表；随 _burning_overlays
+## 池同步生灭）
+var _burning_highlight_cells: Dictionary = {}
 ## 表驱动覆盖层色读取（B-5：cfg ui_overlay_* 优先、UiTheme 兜底）
 func _OverlayColor(field: StringName, fallback: Color) -> Color:
 	## 参数 field：cfg 字段名；fallback：UiTheme 兜底常量
@@ -213,6 +232,10 @@ func _ApplyResizeRebuild() -> void:
 	_ClearOverlay(_move_overlays)
 	_ClearOverlay(_skill_overlays)
 	_ClearOverlay(_path_overlays)
+	_path_highlight_cells.clear()
+	# 漏洞1 修复边界：重建前移动 tween 已全 kill（上方循环）——燃线熄灭回调
+	# 随 tween 失效不再触发，在途燃线必须在此显式清（否则随新层永久残留）
+	_ClearBurningPathHighlights()
 	_overlay_layer = null
 	_tips_panel = null
 	_tips_line1 = null
@@ -278,71 +301,125 @@ func show_skill_range(cells: Array[Vector2i], caster_pos: Vector2i,
 			RANGE_BORDER_WIDTH)
 	_ShowBlockedOverlay(blocked, _skill_overlays)
 
-func show_path_preview(from_cell: Vector2i, to_cell: Vector2i) -> void:
-	## 路径预览（M6 批 3.5a A8 箭头形态：逐格方向推导（cells[i+1]-cells[i]，末格
-	## 沿用前方向）+ 每格 TextureRect（fx_battle_path_arrow 右向基准按方向旋转）；
-	## 缺件降级 = 逐格高亮 overlay（占位先行口径）；直线近似口径不变（cells
-	## 生成零改，确认执行后以实际移动为准）
-	## 参数 from_cell/to_cell：起终格
+func show_path_preview(path_cells: Array[Vector2i]) -> void:
+	## 路径预览（试玩反馈批修复：预览高光与移动裁决**同源**——调用方用
+	## BattleGrid.find_path（controller._move_unit 移动同款寻路函数）算出
+	## 真实路径逐格传入，本层零路径计算纯渲染，杜绝箭头时代直线近似
+	##（lerp 插值穿障碍）与真实寻路的偏差；路径含终点不含起点，与
+	## move_badge 燃线口径一致——确认移动后同一路径衔接重建+逐格熄灭，
+	## 全程严格一一对应；空路径（不可达/退化）= 清旧预览不画高光
+	##（调用方可达性过滤外的双保险）；画入**预览池**（_path_overlays——
+	## 选择态生命周期，clear_overlays 可清；与移动燃线池分层互不串扰）
+	## 参数 path_cells：真实寻路路径（find_path 结果——含终点不含起点）
 	## 返回：无
-	var cells: Array[Vector2i] = []
-	var steps: int = maxi(absi(to_cell.x - from_cell.x), absi(to_cell.y - from_cell.y))
-	for index: int in range(1, steps + 1):
-		var t: float = float(index) / float(steps)
-		cells.append(Vector2i(roundi(lerpf(from_cell.x, to_cell.x, t)),
-				roundi(lerpf(from_cell.y, to_cell.y, t))))
-	var arrow: Texture2D = AssetTex.texture_of(PATH_ARROW_ASSET_ID, _game_data)
-	if arrow != null:
-		_ShowPathArrows(cells, arrow)
-	else:
-		_ShowOverlay(cells, _OverlayColor(&"ui_overlay_path_color", UiTheme.OVERLAY_PATH), _path_overlays)
+	_ShowPathHighlights(path_cells, _path_overlays, _path_highlight_cells)
 
-static func path_arrow_rotation(cells: Array[Vector2i], index: int) -> float:
-	## 单格箭头方向角推导（A8 可测纯函数）：direction = cells[index+1] -
-	## cells[index]，末格沿用前方向（末格取倒数第二格的推导方向）；单格路径
-	## 回退 0°（右）；对角步（直线近似的斜向跳格）水平分量优先（dx != 0 取
-	## 水平、否则取垂直——确定性映射，不随坐标值抖动）
-	## 参数 cells：路径格列表；index：格下标
-	## 返回：旋转角（度——右 0 / 下 90 / 左 180 / 上 270）
-	var delta: Vector2i = Vector2i.ZERO
-	if index + 1 < cells.size():
-		delta = cells[index + 1] - cells[index]
-	elif index >= 1:
-		delta = cells[index] - cells[index - 1]
-	if delta == Vector2i.ZERO:
-		return 0.0
-	var unit_dir: Vector2i = Vector2i.RIGHT if delta.x != 0 else Vector2i.DOWN
-	if delta.x < 0 or (delta.x == 0 and delta.y < 0):
-		unit_dir = -unit_dir
-	return float(PATH_ARROW_ROTATIONS.get(unit_dir, 0.0))
-
-func _ShowPathArrows(cells: Array[Vector2i], arrow: Texture2D) -> void:
-	## 路径箭头渲染（A8 内部口）：清池重画——每格一个居中 TextureRect（右向
-	## 基准素材按方向旋转，pivot 居中）；holder 入 _path_overlays 池
-	## （clear 链路零改——clear_overlays/_ClearOverlay 原口径直接复用）
-	## 参数 cells：路径格列表；arrow：箭头纹理（已解析非空）
+func _ShowPathHighlights(cells: Array[Vector2i], pool: Array[Control],
+		cell_map: Dictionary) -> void:
+	## 路径闪烁高光渲染（试玩反馈批内部口——预览/燃线共用渲染体）：清指定
+	## 池重画——每格一个满格 ColorRect（cfg 高光色 + alpha 峰值起步）+ 呼吸
+	## 循环 tween（峰值 ⇄ 谷值，周期/曲线 cfg 表驱动）；holder 入 pool 并登记
+	## cell_map（逐格熄灭查表用）；闪烁 tween 用 holder.create_tween() 绑定
+	## 节点——holder 释放（clear/熄灭/重建）时 tween 自动失效，无需独立
+	## kill 池（区别于飘字 tween 挂 board 的先例）
+	## 参数 cells：路径格列表；pool：目标覆盖层池；cell_map：格 → holder 映射
 	## 返回：无
-	_ClearOverlay(_path_overlays)
+	_ClearOverlay(pool)
+	cell_map.clear()
 	_EnsureOverlayLayer()
-	for index: int in cells.size():
+	var peak: float = _PathHighlightPeakAlpha()
+	var trough: float = peak * PATH_HIGHLIGHT_TROUGH_RATIO
+	var half_cycle: float = _PathHighlightFlashSeconds() * 0.5
+	var trans: int = _PathHighlightTrans()
+	for cell: Vector2i in cells:
 		var holder := Control.new()
-		holder.position = origin + Vector2(cells[index]) * cell_size
+		holder.position = origin + Vector2(cell) * cell_size
 		holder.size = Vector2(cell_size, cell_size)
 		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var sprite := TextureRect.new()
-		sprite.texture = arrow
-		# 属性序契约（高1 修复——_MakeTileVisual/_MakeTexturedCell 同款）：stretch/
-		## expand 必须先于 size/pivot——expand 默认 KEEP_SIZE 时纹理 min-size
-		##（128×128）钳住 size 赋值，箭头恒纹理原尺寸溢出格且 pivot 随之偏移
-		sprite.stretch_mode = TextureRect.STRETCH_SCALE
-		sprite.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		sprite.size = holder.size
-		sprite.pivot_offset = sprite.size * 0.5
-		sprite.rotation_degrees = path_arrow_rotation(cells, index)
-		sprite.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		holder.add_child(sprite)
+		var glow := ColorRect.new()
+		glow.color = _PathHighlightColor()
+		glow.size = holder.size
+		glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		glow.modulate.a = peak
+		holder.add_child(glow)
+		# 呼吸循环：峰值 → 谷值 → 峰值（一完整明暗循环 = cfg 周期；曲线 cfg 表驱动）
+		var flash: Tween = holder.create_tween()
+		flash.set_loops()
+		flash.tween_property(glow, "modulate:a", trough, half_cycle).set_trans(trans)
+		flash.tween_property(glow, "modulate:a", peak, half_cycle).set_trans(trans)
 		_overlay_layer.add_child(holder)
-		_path_overlays.append(holder)
+		pool.append(holder)
+		cell_map[cell] = holder
+
+func _ExtinguishPathHighlight(cell: Vector2i) -> void:
+	## 熄灭单格移动燃线（试玩反馈批：移动过程「走过的格熄灭」——move_badge
+	## 逐格链每段到达回调消费；漏洞1 修复：熄灭对象为燃线池（独立生命周期
+	## ——预览层不走熄灭，二次预览由 show_path_preview 清池重画）；holder
+	## 释放时其呼吸 tween 随节点绑定自动失效）
+	## 参数 cell：已走过的格
+	## 返回：无
+	var holder: Control = _burning_highlight_cells.get(cell, null)
+	_burning_highlight_cells.erase(cell)
+	if holder == null or not is_instance_valid(holder):
+		return
+	_burning_overlays.erase(holder)
+	holder.queue_free()
+
+func _ClearBurningPathHighlights() -> void:
+	## 清空全部移动燃线（漏洞1 修复边界 c 收口单源）：在途移动 tween 被 kill
+	## 时（resize 全量重建 / move_badge 直落·瞬移分支中断演出）逐格熄灭回调
+	## 随 tween 失效——燃线必须显式清，否则失去唯一清理者残留；幂等（空池
+	## 无操作），_ShowPathHighlights 重建燃线池时开头的清池不走本口（参数化
+	## 双池共用渲染体）
+	## 参数：无
+	## 返回：无
+	_ClearOverlay(_burning_overlays)
+	_burning_highlight_cells.clear()
+
+func _PathHighlightColor() -> Color:
+	## 路径高光色读取（cfg ui_battle_path_highlight_color 表驱动——
+	## UiTheme.BATTLE_PATH_HIGHLIGHT_COLOR 兜底）
+	## 参数：无
+	## 返回：生效颜色
+	return _OverlayColor(&"ui_battle_path_highlight_color",
+			UiTheme.BATTLE_PATH_HIGHLIGHT_COLOR)
+
+func _PathHighlightPeakAlpha() -> float:
+	## 路径高光呼吸峰值 alpha 读取（cfg 表驱动，值域 (0, 1]——非法回退兜底）
+	## 参数：无
+	## 返回：峰值 alpha
+	var raw: float = UiTheme.BATTLE_PATH_HIGHLIGHT_PEAK_ALPHA
+	if context != null and context.cfg != null:
+		raw = context.cfg.ui_battle_path_highlight_peak_alpha
+	if raw <= 0.0 or raw > 1.0:
+		return UiTheme.BATTLE_PATH_HIGHLIGHT_PEAK_ALPHA
+	return raw
+
+func _PathHighlightFlashSeconds() -> float:
+	## 路径高光呼吸周期读取（cfg 表驱动，≤ 0 非法回退兜底）
+	## 参数：无
+	## 返回：呼吸周期（秒）
+	var raw: float = UiTheme.BATTLE_PATH_HIGHLIGHT_FLASH_SECONDS
+	if context != null and context.cfg != null:
+		raw = context.cfg.ui_battle_path_highlight_flash_seconds
+	if raw <= 0.0:
+		return UiTheme.BATTLE_PATH_HIGHLIGHT_FLASH_SECONDS
+	return raw
+
+func _PathHighlightTrans() -> int:
+	## 路径高光呼吸渐变形态读取（cfg 表驱动；Tween.TransitionType 值——
+	## 0 = 未回填哨兵（同 ui_battle_move_max_steps 的 >0 判据惯例，
+	## LINEAR 形态被牺牲不用），非合法值集成员同回退兜底 SINE——合法集单源
+	## UiTheme.BATTLE_PATH_HIGHLIGHT_TRANS_VALID（V-M0 校验同引））
+	## 参数：无
+	## 返回：Tween.TransitionType 枚举值
+	var raw: int = UiTheme.BATTLE_PATH_HIGHLIGHT_TRANS
+	if context != null and context.cfg != null:
+		raw = context.cfg.ui_battle_path_highlight_trans
+	if raw <= Tween.TransitionType.TRANS_LINEAR \
+			or not UiTheme.BATTLE_PATH_HIGHLIGHT_TRANS_VALID.has(raw):
+		return UiTheme.BATTLE_PATH_HIGHLIGHT_TRANS
+	return raw
 
 func show_target_confirm(cell: Vector2i) -> void:
 	## 二次确认提示（目标格亮框）
@@ -352,13 +429,18 @@ func show_target_confirm(cell: Vector2i) -> void:
 	_ShowOverlay(cells, _OverlayColor(&"ui_overlay_confirm_color", UiTheme.OVERLAY_CONFIRM), _path_overlays)
 
 func clear_overlays() -> void:
-	## 清空全部覆盖层 + 伤害预览 + 目标确认 tips（预览/tips 生命周期与覆盖层
-	## 一致——确认/取消/行动轮开始/技能执行后均经此清理，防残留）
+	## 清空选择态覆盖层 + 伤害预览 + 目标确认 tips（预览/tips 生命周期与覆盖层
+	## 一致——确认/取消/行动轮开始/技能执行后均经此清理，防残留）；路径预览
+	## 高光映射随池同步清空（holder 由池统一释放，呼吸 tween 随节点绑定失效）；
+	## **移动燃线池不在此列**（漏洞1 修复：燃线独立演出生命周期——由逐格熄灭
+	## 回调与移动 tween finished 自然烧完自清，clear_overlays/_ClearSelection
+	## 均不得触及在途燃线，行动轮切换不再截断）
 	## 参数：无
 	## 返回：无
 	_ClearOverlay(_move_overlays)
 	_ClearOverlay(_skill_overlays)
 	_ClearOverlay(_path_overlays)
+	_path_highlight_cells.clear()
 	clear_damage_previews()
 	hide_target_tips()
 
@@ -477,6 +559,14 @@ func refresh_all_badges() -> void:
 	for badge: UnitBadge in _badges.values():
 		badge.refresh()
 
+static func facing_flip_of(from_x: int, to_x: int) -> bool:
+	## 移动朝向相位判定（批次 A 纯函数——移动演出随步设朝向与攻击翻面
+	## 共用单源）：下一格 x 更小 → 面左（flip）；更大 → 面右（默认）；
+	## x 相等（竖直步）→ 回正默认朝向（与攻击同列回正同口径）
+	## 参数 from_x：当前格 x；to_x：下一格 x
+	## 返回：true = 水平翻转面左
+	return to_x < from_x
+
 func _MoveTweenMaxSteps(cfg: CoreConfig) -> int:
 	## 移动演出步数上限读取（低15：cfg.ui_battle_move_max_steps 表驱动——
 	## UiTheme.BATTLE_MOVE_MAX_STEPS 兜底；D6 语义 = tween 总时长钳制护栏）
@@ -486,16 +576,28 @@ func _MoveTweenMaxSteps(cfg: CoreConfig) -> int:
 		return cfg.ui_battle_move_max_steps
 	return UiTheme.BATTLE_MOVE_MAX_STEPS
 
+func _FaceBadgeOnStep(badge: UnitBadge, from_x: int, to_x: int) -> void:
+	## 徽章迈步入格瞬间设朝向（批次 A 私有助手——move_badge 逐段链前回调
+	## 与瞬移一次判定共用；纯表现层，grid_pos 位置权威不受影响）
+	## 参数 badge：移动单位徽章；from_x：本步起点格 x；to_x：本步终点格 x
+	## 返回：无
+	badge.set_flip(facing_flip_of(from_x, to_x))
+
 func move_badge(unit: BattleUnit, from_pos: Vector2i = Vector2i(-9999, -9999),
 		path_cells: Array = []) -> void:
 	## 徽章位置跟随单位（M6 D6=A：from_pos 有效时播移动演出——tween 滑动 +
 	## MOVE 动作，tween 完回落 IDLE；步长 = cfg.ui_battle_move_step_seconds，
 	## ≤ 0 瞬移直落后**立即回落 IDLE**【低6：与 tween 分支对称——cfg 置 0 不再
 	## 走步动画常驻】；低9 盲审修复：path_cells 携带 controller 寻路真实踏过
-	## 格序（unit_moved 信号扩 4 参）——拐点链逐格 tween 不再穿障碍格直插，
+	## 格序（unit_moved 信号扩 4 参）——逐格序列 tween 不再穿障碍格直插，
 	## 步数按真实路径长计（无路径数据回退曼哈顿直线兜底）；总时长 =
 	## 步长 × min(步数, cfg.ui_battle_move_max_steps)（钳制语义保留）；
-	## grid_pos 仍为位置权威——动画纯视觉不阻塞
+	## grid_pos 仍为位置权威——动画纯视觉不阻塞；
+	## 试玩反馈批：tween 分支同时按真实路径建闪烁高光并逐格熄灭（走过的
+	## 格熄灭——直落/瞬移分支无演出过程不建高光）；漏洞1 修复：高光入独立
+	## 燃线池——不随 clear_overlays/_ClearSelection 清理，自然烧完自清；
+	## 批次 A：移动演出全程随步设朝向——每迈入下一格按 x 相位翻转/回正
+	##（facing_flip_of 单源；无位移分支不触发；瞬移起终点一次判定；敌我同权）
 	## 参数 unit：单位；from_pos：移动起点格（无效哨兵 = 直落不演出）；
 	## path_cells：踏过格序（含终点不含起点；空 = 曼哈顿直线兜底）
 	## 返回：无
@@ -503,44 +605,75 @@ func move_badge(unit: BattleUnit, from_pos: Vector2i = Vector2i(-9999, -9999),
 	if badge == null:
 		return
 	var dest: Vector2 = origin + Vector2(unit.grid_pos) * cell_size
+	# 在途演出中断标记（漏洞1 修复边界 c 收口）：本分支若 kill 了该单位在途
+	# 移动 tween（直落/瞬移不重建燃线），逐格熄灭回调随 kill 失效——在途
+	# 燃线必须随之清，否则失去唯一清理者残留至 resize 重建；had_tween 守卫
+	# 保证多单位并发在途（他单位燃线）不被误清
+	var had_move_tween: bool = _move_tweens.has(unit.unit_id)
 	_KillMoveTween(unit.unit_id)
 	if from_pos == Vector2i(-9999, -9999) or from_pos == unit.grid_pos:
 		badge.position = dest
+		if had_move_tween:
+			_ClearBurningPathHighlights()
 		return
 	var step_seconds: float = UiTheme.BATTLE_MOVE_STEP_SECONDS
 	var max_steps: int = UiTheme.BATTLE_MOVE_MAX_STEPS
 	if context != null and context.cfg != null:
 		step_seconds = context.cfg.ui_battle_move_step_seconds
 		max_steps = _MoveTweenMaxSteps(context.cfg)
-	# 拐点链整理：滤起点/去重 + 保证末点 == 目的地（信号侧坏数据不把徽章
-	# 留在半途；空链退化为单段直插 = 旧直线行为）
-	var waypoints: Array[Vector2i] = []
+	# 逐格序列整理（试玩反馈批修复注：path_cells 来自 find_path/stepped_cells
+	# 本就是**逐格序列**——无拐点压缩，中途格全在列；滤起点/去重仅防御信号
+	# 侧坏数据，保证末点 == 目的地不把徽章留在半途；空链退化为单段直插
+	# = 旧直线行为兜底）
+	var path_sequence: Array[Vector2i] = []
 	for cell: Vector2i in path_cells:
-		if cell != from_pos and not waypoints.has(cell):
-			waypoints.append(cell)
-	if waypoints.is_empty() or waypoints[waypoints.size() - 1] != unit.grid_pos:
-		waypoints.append(unit.grid_pos)
-	# 计步：有路径数据按真实拐点数；无路径回退曼哈顿（旧口径）
-	var raw_steps: int = waypoints.size()
+		if cell != from_pos and not path_sequence.has(cell):
+			path_sequence.append(cell)
+	if path_sequence.is_empty() or path_sequence[path_sequence.size() - 1] != unit.grid_pos:
+		path_sequence.append(unit.grid_pos)
+	# 计步：有路径数据按真实踏过格数；无路径回退曼哈顿（旧口径）
+	var raw_steps: int = path_sequence.size()
 	if path_cells.is_empty():
 		raw_steps = maxi(absi(unit.grid_pos.x - from_pos.x)
 				+ absi(unit.grid_pos.y - from_pos.y), 1)
 	var total_steps: int = mini(maxi(raw_steps, 1), max_steps)
 	if step_seconds <= 0.0:
 		# 瞬移（测试注 0 / 生产 cfg 置 0）：位置直落；动作走一遍 MOVE 再立即
-		# 回落 IDLE（低6 对称修复；攻击演出中两请求均被压制属预期优先级语义）
+		# 回落 IDLE（低6 对称修复；攻击演出中两请求均被压制属预期优先级语义）；
+		# 瞬移无演出过程不建燃线——若 kill 了在途 tween（had_move_tween）其
+		# 燃线随 kill 失去熄灭回调，一并清（漏洞1 修复边界 c 收口）；
+		# 批次 A：朝向退化起终点一次判定（无逐步演出过程）
 		badge.position = dest
 		badge.play_action(UnitAnimState.Action.MOVE)
 		badge.play_action(UnitAnimState.Action.IDLE)
+		_FaceBadgeOnStep(badge, from_pos.x, unit.grid_pos.x)
+		if had_move_tween:
+			_ClearBurningPathHighlights()
 		return
 	badge.position = origin + Vector2(from_pos) * cell_size
 	badge.play_action(UnitAnimState.Action.MOVE)
-	# 逐拐点等分时长链式 tween（总时长 = 步长 × 钳制步数——D6 语义不变）
-	var leg_seconds: float = step_seconds * float(total_steps) / float(waypoints.size())
+	# 试玩反馈批：移动过程路径闪烁高光——按真实路径逐格建**燃线**（预览高光
+	## 已被 unit_moved 前置 clear_overlays 清空；预览与移动消费同一 find_path
+	## 结果——首尾严格一一对应），每格到达即熄灭该格高光（「走过的格熄灭」
+	## ——燃线式进度感，与逐格 tween 时序天然对齐）；漏洞1 修复：燃线画入
+	## 独立燃线池（不随 clear_overlays/_ClearSelection/turn_started 清理——
+	## 由本熄灭回调与 tween finished 自然烧完自清）；再次移动杀旧 tween 时
+	## 高光由 _ShowPathHighlights 开头清池重建，无泄漏路径
+	_ShowPathHighlights(path_sequence, _burning_overlays, _burning_highlight_cells)
+	# 逐格等分时长链式 tween（总时长 = 步长 × 钳制步数——D6 语义不变）
+	var leg_seconds: float = step_seconds * float(total_steps) / float(path_sequence.size())
 	var tween: Tween = create_tween()
-	for cell: Vector2i in waypoints:
+	# 批次 A：每段 tween_property 之前插朝向回调——迈入下一格的瞬间按
+	# 「当前格→下一格」x 相位翻转/回正；prev_cell 段后推进（bind 值捕获同
+	# _ExtinguishPathHighlight.bind 先例）；链首段回调随 tween 启动立即执行
+	#（= 移动开始同时按第一步定初始朝向）；结束后保持最终朝向（无复位回调）
+	var prev_cell: Vector2i = from_pos
+	for cell: Vector2i in path_sequence:
+		tween.tween_callback(_FaceBadgeOnStep.bind(badge, prev_cell.x, cell.x))
 		tween.tween_property(badge, "position",
 				origin + Vector2(cell) * cell_size, leg_seconds)
+		tween.tween_callback(_ExtinguishPathHighlight.bind(cell))
+		prev_cell = cell
 	tween.tween_callback(func() -> void:
 		if is_instance_valid(badge):
 			badge.play_action(UnitAnimState.Action.IDLE))

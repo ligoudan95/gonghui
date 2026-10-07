@@ -1492,35 +1492,35 @@ script = ExtResource("1_xxsy3")
 resource_id = &"bg_dormitory"
 domain = &"assets"
 display_name = "宿舍设施场景·背景"
-rule_note = "bg_<场景名>：场景背景图（M6 批 3.5a 占位——程序色块 1920×1080；正式素材同 id 原位替换）"
+rule_note = "bg_<场景名>：场景背景图（M6 批 3 后半正式入库 2026-10-03；assets 域 AssetRegistry 登记键；1920×1080 不透明）"
 
 [sub_resource type="Resource" id="Resource_0pm5a"]
 script = ExtResource("1_xxsy3")
 resource_id = &"bg_training_ground"
 domain = &"assets"
 display_name = "训练场设施场景·背景"
-rule_note = "bg_<场景名>：场景背景图（M6 批 3.5a 占位——程序色块 1920×1080；正式素材同 id 原位替换）"
+rule_note = "bg_<场景名>：场景背景图（M6 批 3 后半正式入库 2026-10-03；assets 域 AssetRegistry 登记键；1920×1080 不透明）"
 
 [sub_resource type="Resource" id="Resource_pdhvy"]
 script = ExtResource("1_xxsy3")
 resource_id = &"bg_title"
 domain = &"assets"
 display_name = "标题屏背景"
-rule_note = "bg_<场景名>：场景背景图（M6 批 3.5a 占位——程序色块 1920×1080；正式素材同 id 原位替换）"
+rule_note = "bg_<场景名>：场景背景图（M6 批 3 后半正式入库 2026-10-03；assets 域 AssetRegistry 登记键；1920×1080 不透明）"
 
 [sub_resource type="Resource" id="Resource_70q8y"]
 script = ExtResource("1_xxsy3")
 resource_id = &"bg_battle_mine"
 domain = &"assets"
 display_name = "战斗屏矿洞环境·背景"
-rule_note = "bg_<场景名>：场景背景图（M6 批 3.5a 占位——程序色块 1920×1080；正式素材同 id 原位替换）"
+rule_note = "bg_<场景名>：场景背景图（M6 批 3 后半正式入库 2026-10-03；assets 域 AssetRegistry 登记键；1920×1080 不透明）"
 
 [sub_resource type="Resource" id="Resource_glhn4"]
 script = ExtResource("1_xxsy3")
 resource_id = &"bg_explore"
 domain = &"assets"
 display_name = "探索屏环境·背景"
-rule_note = "bg_<场景名>：场景背景图（M6 批 3.5a 占位——程序色块 1920×1080；正式素材同 id 原位替换）"
+rule_note = "bg_<场景名>：场景背景图（M6 批 3 后半正式入库 2026-10-03；assets 域 AssetRegistry 登记键；1920×1080 不透明）"
 
 [sub_resource type="Resource" id="Resource_gipmd"]
 script = ExtResource("1_xxsy3")
@@ -1639,49 +1639,49 @@ script = ExtResource("1_xxsy3")
 resource_id = &"tile_secret_passage"
 domain = &"assets"
 display_name = "暗门开启窄道 tile"
-rule_note = "tile_<语义>：地形/物件 tile（M6 批 3.5a 占位——程序纹样 128×128；正式素材同 id 原位替换）"
+rule_note = "tile_<语义>：地形/物件 tile（M6 批 3 后半正式入库 2026-10-03；assets 域 AssetRegistry 登记键；128×128 圆形徽章规格偏差已用户接受注记）"
 
 [sub_resource type="Resource" id="Resource_shm6k"]
 script = ExtResource("1_xxsy3")
 resource_id = &"icon_explore_party"
 domain = &"assets"
 display_name = "探索小队标记"
-rule_note = "icon_<语义>：图标（M6 批 3.5a 占位——简单形状 64×64 透明底；正式素材同 id 原位替换）"
+rule_note = "icon_<语义>：图标（M6 批 3 后半正式入库 2026-10-03；assets 域 AssetRegistry 登记键；64×64 透明底）"
 
 [sub_resource type="Resource" id="Resource_muqsb"]
 script = ExtResource("1_xxsy3")
 resource_id = &"icon_pt_event"
 domain = &"assets"
 display_name = "事件点图标"
-rule_note = "icon_<语义>：图标（M6 批 3.5a 占位——简单形状 64×64 透明底；正式素材同 id 原位替换）"
+rule_note = "icon_<语义>：图标（M6 批 3 后半正式入库 2026-10-03；assets 域 AssetRegistry 登记键；64×64 透明底）"
 
 [sub_resource type="Resource" id="Resource_s7x4f"]
 script = ExtResource("1_xxsy3")
 resource_id = &"icon_pt_treasure"
 domain = &"assets"
 display_name = "宝箱图标"
-rule_note = "icon_<语义>：图标（M6 批 3.5a 占位——简单形状 64×64 透明底；正式素材同 id 原位替换）"
+rule_note = "icon_<语义>：图标（M6 批 3 后半正式入库 2026-10-03；assets 域 AssetRegistry 登记键；64×64 透明底）"
 
 [sub_resource type="Resource" id="Resource_xbs7p"]
 script = ExtResource("1_xxsy3")
 resource_id = &"icon_pt_target"
 domain = &"assets"
 display_name = "委托目标点图标"
-rule_note = "icon_<语义>：图标（M6 批 3.5a 占位——简单形状 64×64 透明底；正式素材同 id 原位替换）"
+rule_note = "icon_<语义>：图标（M6 批 3 后半正式入库 2026-10-03；assets 域 AssetRegistry 登记键；64×64 透明底）"
 
 [sub_resource type="Resource" id="Resource_01tb8"]
 script = ExtResource("1_xxsy3")
 resource_id = &"icon_pt_exit"
 domain = &"assets"
 display_name = "出口图标"
-rule_note = "icon_<语义>：图标（M6 批 3.5a 占位——简单形状 64×64 透明底；正式素材同 id 原位替换）"
+rule_note = "icon_<语义>：图标（M6 批 3 后半正式入库 2026-10-03；assets 域 AssetRegistry 登记键；64×64 透明底）"
 
 [sub_resource type="Resource" id="Resource_y6c0v"]
 script = ExtResource("1_xxsy3")
 resource_id = &"icon_pt_battle"
 domain = &"assets"
 display_name = "必然遭遇点图标"
-rule_note = "icon_<语义>：图标（M6 批 3.5a 占位——简单形状 64×64 透明底；正式素材同 id 原位替换）"
+rule_note = "icon_<语义>：图标（M6 批 3 后半正式入库 2026-10-03；assets 域 AssetRegistry 登记键；64×64 透明底）"
 
 [sub_resource type="Resource" id="Resource_rt4tc"]
 script = ExtResource("1_xxsy3")

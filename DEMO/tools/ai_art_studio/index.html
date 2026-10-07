@@ -220,6 +220,24 @@ input:disabled, select:disabled { opacity: 0.4; cursor: not-allowed; }
   background: var(--red);
   flex: none;
 }
+/* 入库状态徽章（只读快照，来自 assets_status.js；— = 无快照数据（锚图等不入口径）） */
+.asset-row .lib-badge {
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-strong);
+  color: var(--text-faint);
+  white-space: nowrap;
+  flex: none;
+}
+.asset-row .lib-badge.st-in { color: var(--green); border-color: var(--green); background: rgba(90, 166, 106, 0.10); }
+.asset-row .lib-badge.st-replace { color: var(--accent); border-color: var(--accent-dim); background: var(--accent-bg); }
+.asset-row .lib-badge.st-blocked { color: var(--red); border-color: var(--red); background: var(--red-bg); }
+.asset-row .lib-badge.st-place { color: var(--text-dim); }
+.asset-row .lib-badge.st-off { color: var(--blue); border-color: var(--blue); }
+/* 左栏工具栏下快照时间小字 */
+#list-toolbar .lib-note { font-size: 10px; color: var(--text-faint); line-height: 1.4; }
 #list-empty { padding: 30px 16px; color: var(--text-faint); text-align: center; display: none; }
 
 /* ============ 中栏·提示词与生成 ============ */
@@ -255,6 +273,11 @@ input:disabled, select:disabled { opacity: 0.4; cursor: not-allowed; }
 }
 #item-header .tag.prio { color: var(--accent); border-color: var(--accent-dim); }
 #item-header .tag.anchor-tag { color: var(--blue); border-color: var(--blue); }
+/* 中栏信息头的入库状态 tag（全称展示，配色随状态） */
+#item-header .tag.lib-tag.st-in { color: var(--green); border-color: var(--green); }
+#item-header .tag.lib-tag.st-replace { color: var(--accent); border-color: var(--accent-dim); }
+#item-header .tag.lib-tag.st-blocked { color: var(--red); border-color: var(--red); }
+#item-header .tag.lib-tag.st-off { color: var(--blue); border-color: var(--blue); }
 #item-header .ih-spec { margin-top: 6px; font-size: 11px; color: var(--text-dim); line-height: 1.5; }
 #item-header details { margin-top: 6px; font-size: 11px; color: var(--text-dim); }
 #item-header details summary { cursor: pointer; color: var(--blue); user-select: none; }
@@ -356,6 +379,79 @@ input:disabled, select:disabled { opacity: 0.4; cursor: not-allowed; }
   font-family: Consolas, monospace;
   line-height: 1.5;
 }
+
+/* ============ 中栏·参考图条（手动导入 · 仅 Gemini 通道 · 上限 3 张） ============ */
+#ref-section {
+  flex: none;
+  border-top: 1px dashed var(--border);
+  background: var(--panel);
+  padding: 6px 16px 8px;
+}
+/* 挂了参考图 = 显著指示（accent 左边条 + 浅橙底，切素材保留不闪断） */
+#ref-section.has-refs {
+  background: rgba(232, 163, 61, 0.06);
+  border-left: 3px solid var(--accent);
+  padding-left: 13px;
+}
+#ref-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+#ref-head .ref-label { font-size: 12px; color: var(--text-dim); font-weight: 600; }
+#ref-count-badge {
+  font-size: 10px;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-radius: 9px;
+  padding: 1px 8px;
+  font-family: Consolas, monospace;
+}
+#ref-head .ref-note { font-size: 10px; color: var(--text-faint); }
+#ref-head .spacer { flex: 1; }
+#ref-clear-link { font-size: 10px; padding: 2px 8px; color: var(--text-faint); }
+#ref-clear-link:hover { color: var(--red); border-color: var(--red); }
+#ref-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  overflow-x: auto;
+  padding: 4px;
+  border: 1px dashed transparent;
+  border-radius: 5px;
+  min-height: 42px;
+}
+/* 整条为拖拽投放目标：悬停高亮 */
+#ref-strip.drag-over { border-color: var(--accent); background: var(--accent-bg); }
+#ref-add-btn { flex: none; font-size: 11px; color: var(--text-dim); border-style: dashed; }
+#ref-cards { display: flex; gap: 8px; flex: none; }
+.ref-card {
+  position: relative;
+  width: 56px; height: 56px;
+  flex: none;
+  background: #191c23;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-in;
+  overflow: hidden;
+}
+.ref-card img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.ref-del-btn {
+  position: absolute;
+  top: 2px; right: 2px;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: rgba(15, 17, 22, 0.8);
+  border: 1px solid var(--border-strong);
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ref-del-btn:hover { color: var(--red); border-color: var(--red); }
 
 /* ============ 右栏·生成结果 ============ */
 #right-col { background: var(--panel); }
@@ -603,6 +699,60 @@ input:disabled, select:disabled { opacity: 0.4; cursor: not-allowed; }
   padding: 4px 10px;
   border-radius: 4px;
 }
+/* 左右切换箭头钮（viewport 兄弟节点：点击不触发「点背景关闭」） */
+.modal-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px; height: 76px;
+  font-size: 30px;
+  line-height: 1;
+  padding: 0;
+  background: rgba(15, 17, 22, 0.55);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  color: var(--text-dim);
+  opacity: 0.25;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+.modal-nav-btn:hover { opacity: 1; color: var(--accent); border-color: var(--accent-dim); }
+#modal-nav-prev { left: 14px; }
+#modal-nav-next { right: 14px; }
+#modal-pos { font-size: 11px; color: var(--text-faint); white-space: nowrap; font-family: Consolas, monospace; }
+/* 提示词面板：信息条上方浮层（只读全文 + 复制），max-height 40% 视口滚动 */
+#modal-prompt-panel {
+  position: absolute;
+  left: 0; right: 0; bottom: 41px;
+  max-height: 40vh;
+  overflow-y: auto;
+  background: rgba(15, 17, 22, 0.96);
+  border-top: 1px solid var(--border-strong);
+  padding: 8px 16px 10px;
+  display: none;
+  z-index: 3;
+}
+#modal-prompt-panel.open { display: block; }
+#modal-prompt-panel .mpp-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+#modal-prompt-panel .mpp-title { font-size: 11px; color: var(--text-dim); font-weight: 600; }
+#modal-prompt-panel .mpp-head .spacer { flex: 1; }
+#modal-prompt-panel pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text);
+  font-family: Consolas, monospace;
+  user-select: text;
+}
+/* 参考图预览模式：隐藏网格专属控件（箭头 / 位置指示 / 提示词钮 / 删除钮） */
+#img-modal.mode-ref #modal-nav-prev,
+#img-modal.mode-ref #modal-nav-next,
+#img-modal.mode-ref #modal-pos,
+#img-modal.mode-ref #modal-prompt-btn,
+#img-modal.mode-ref #modal-delete-btn { display: none !important; }
 
 /* ============ 本地存储写失败 toast（K4：一次性非阻塞提示） ============ */
 #ls-warn-toast {
@@ -755,6 +905,7 @@ input:disabled, select:disabled { opacity: 0.4; cursor: not-allowed; }
           <option value="done">已生成</option>
         </select>
       </div>
+      <div class="lib-note" id="lib-note" style="display:none"></div>
     </div>
     <div id="asset-list"></div>
     <div id="list-empty">没有匹配的素材</div>
@@ -797,6 +948,21 @@ input:disabled, select:disabled { opacity: 0.4; cursor: not-allowed; }
           </label>
         </details>
       </div>
+      <!-- 参考图条：与素材无关（切素材保留）；随任务快照冻结；仅 Gemini 通道 -->
+      <div id="ref-section">
+        <div id="ref-head">
+          <span class="ref-label">参考图</span>
+          <span id="ref-count-badge">0/3</span>
+          <span class="ref-note">仅 Gemini 通道 · 最多 3 张 · 长边超 1500px 自动压缩 · 拖拽图片到此条可导入</span>
+          <span class="spacer"></span>
+          <button id="ref-clear-link" title="移除全部参考图" style="display:none">全部清除</button>
+        </div>
+        <div id="ref-strip">
+          <button id="ref-add-btn" title="添加参考图文件">+ 添加图片</button>
+          <div id="ref-cards"></div>
+        </div>
+      </div>
+      <input type="file" id="ref-file-input" multiple accept="image/png,image/jpeg,image/webp,image/gif" style="display:none">
       <div id="generate-bar">
         <div id="generate-row">
           <button id="generate-btn">生 成</button>
@@ -833,26 +999,41 @@ input:disabled, select:disabled { opacity: 0.4; cursor: not-allowed; }
   <div class="ctx-title" id="ctx-title"></div>
   <button data-act="download">下载 PNG（按资源 id 命名）</button>
   <button data-act="open-tab">在新标签页打开图片</button>
+  <button data-act="copy-prompt">复制提示词</button>
   <button data-act="mark">标记 / 取消标记</button>
   <button data-act="delete">删除这张图</button>
 </div>
 
-<!-- 大图模态 -->
+<!-- 大图模态（grid 模式 = 生成图浏览 / mode-ref = 参考图预览） -->
 <div id="img-modal">
   <div id="modal-viewport">
     <img id="modal-img" alt="生成图大图预览">
   </div>
-  <div id="modal-tip">滚轮缩放 · 拖拽平移 · 双击复位 · Esc 关闭</div>
+  <button class="modal-nav-btn" id="modal-nav-prev" title="上一张（←，末张循环回首张）">‹</button>
+  <button class="modal-nav-btn" id="modal-nav-next" title="下一张（→，首张循环到末张）">›</button>
+  <div id="modal-tip">滚轮缩放 · 拖拽平移 · 双击复位 · ← → 切换 · Esc 关闭</div>
+  <div id="modal-prompt-panel">
+    <div class="mpp-head">
+      <span class="mpp-title">提示词（只读 · 随图保存）</span>
+      <span class="spacer"></span>
+      <button id="mpp-copy-btn" title="复制提示词全文">复制</button>
+    </div>
+    <pre id="modal-prompt-text"></pre>
+  </div>
   <button id="modal-close-btn">✕ 关闭</button>
   <div id="modal-info-bar">
     <span class="m-id" id="modal-id"></span>
     <span id="modal-meta"></span>
     <span class="spacer"></span>
+    <span id="modal-pos"></span>
+    <button id="modal-prompt-btn" title="展开 / 收起提示词面板">提示词</button>
+    <button id="modal-delete-btn" title="删除这张图（自动跳到相邻图）">删除</button>
     <button id="modal-download-btn">下载 PNG</button>
   </div>
 </div>
 
 <script src="assets_data.js"></script>
+<script src="assets_status.js"></script>
 <script>
 "use strict";
 /* ============================================================
@@ -907,6 +1088,10 @@ const MIME_WHITELIST = ["image/png", "image/jpeg", "image/webp", "image/gif"];
 const DATA = window.ASSETS_DATA;
 const ITEMS = DATA ? DATA.items : [];          // 116 正式件 + 9 锚图
 const ITEM_MAP = new Map(ITEMS.map(it => [it.id, it]));
+/* 入库状态快照（assets_status.js，由 gen_assets_status.py 生成，只读展示）：
+ * 文件缺失或未生成时 STATUS_MAP 为空——状态列全部显示「—」，其余功能不受影响 */
+const STATUS_DATA = window.ASSETS_STATUS || null;
+const STATUS_MAP = (STATUS_DATA && STATUS_DATA.status) ? STATUS_DATA.status : {};
 let currentId = null;                           // 当前选中素材 id
 let promptLang = "cn";                          // 当前提示词框语言
 let images = [];                                // 会话内时间线（kind="image" 已完成图 / kind="task" 排队·生成·失败的任务卡）
@@ -1010,6 +1195,33 @@ function setMark(uid, mark) {
   lsSetJSON(LS_MARKS, markMap);
 }
 function countGen(itemId) { return images.filter(im => im.kind === "image" && im.item.id === itemId).length; }
+
+/* ---------- 入库状态（游戏工程实况快照 · 只读） ----------
+ * 与「已生成」红标是两套口径：已生成 = 工作台本地标记（你手动双击）；
+ * 入库状态 = 游戏工程 registry/来源留档表的实况（重跑 gen_assets_status.py 刷新，见 README）。
+ * 快照更新出现新状态值时按原文兜底显示（不会因未知值报错） */
+const LIB_STATUS_VIEW = {
+  "已正式入库": { short: "入库", cls: "st-in" },
+  "已正式（待重生成替换）": { short: "待替换", cls: "st-replace" },
+  "占位（待生成）": { short: "占位", cls: "st-place" },
+  "占位（错件拦截·待重导出）": { short: "错件", cls: "st-blocked" },
+  "未入册": { short: "未入册", cls: "st-off" }
+};
+/* 取某素材的入库状态视图（含全称）；无快照数据（锚图等不入口径）→ null */
+function libStatusView(id) {
+  const full = STATUS_MAP[id];
+  if (!full) { return null; }
+  return Object.assign({ full: full }, LIB_STATUS_VIEW[full] || { short: full, cls: "" });
+}
+/* 左栏行内入库状态徽章 HTML（悬浮 title 显示状态全称；缺数据显示「—」） */
+function buildLibBadgeHTML(id) {
+  const st = libStatusView(id);
+  if (!st) {
+    return "<span class='lib-badge' title='入库状态：无快照数据（锚图为生产辅助件，不入库状态口径）'>—</span>";
+  }
+  return "<span class='lib-badge " + st.cls + "' title='入库状态：" + esc(st.full) +
+    "（游戏工程实况快照，重跑 gen_assets_status.py 刷新）'>" + esc(st.short) + "</span>";
+}
 
 /* 从目标规格推导最接近的 aspectRatio 枚举值 */
 function recommendAspect(item) {
@@ -1323,6 +1535,7 @@ function buildRow(item) {
     "</div>" +
     "<div class='row-side'>" +
       (genN ? "<span class='gen-count' title='本次会话已生成张数'>×" + genN + "</span>" : "") +
+      buildLibBadgeHTML(item.id) +
       (isDone(item.id) ? "<span class='done-dot' title='已生成（双击行可取消）'></span>" : "") +
     "</div>";
   row.addEventListener("click", () => loadItem(item.id));
@@ -1365,10 +1578,14 @@ function loadItem(id) {
   // 信息头
   $("#ih-name").textContent = item.name_cn;
   $("#ih-id").textContent = item.id;
+  const libSt = libStatusView(item.id);
   $("#ih-tags").innerHTML =
     "<span class='tag'>" + esc(item.group_id + " " + item.group_name) + "</span>" +
     (item.priority ? "<span class='tag prio'>" + esc(item.priority) + "</span>" : "") +
-    (item.is_anchor ? "<span class='tag anchor-tag'>锚图 · 所属单位 " + esc(item.unit_id) + "</span>" : "");
+    (item.is_anchor ? "<span class='tag anchor-tag'>锚图 · 所属单位 " + esc(item.unit_id) + "</span>" : "") +
+    "<span class='tag lib-tag " + (libSt ? libSt.cls : "") +
+      "' title='游戏工程入库状态快照（assets_status.js，重跑 gen_assets_status.py 刷新）'>入库 · " +
+      (libSt ? esc(libSt.full) : "—") + "</span>";
   $("#ih-spec").textContent = (item.is_anchor ? "设定卡：" : "目标规格：") + (item.spec || "—");
   $("#ih-post-body").textContent = item.post_process || "—";
   // 提示词
@@ -1428,6 +1645,7 @@ function restorePrompt() {
 /* ---------- 本地代理：自动探测与切换 ---------- */
 /* daseinai.xyz 等站点对浏览器 CORS 预检一律 403 无跨域头，页面直连必 Failed to fetch；
  * 探测到本地代理（server.py / 启动工作台.cmd）在线时，生成请求改经其转发（等效 curl 链路） */
+let proxyUpPrev = false;    // 上次探测结果（离线→在线跳变触发运行时缓存恢复）
 async function probeProxy() {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 1500);   // 短超时：代理不在线时快速失败
@@ -1438,8 +1656,14 @@ async function probeProxy() {
     proxyUp = false;
   } finally {
     clearTimeout(timer);
-    updateProxyUI();
   }
+  /* 离线→在线跳变（页面加载首次成功 / 运行中 30s 重探成功 / 手动重探成功）：
+   * 拉一次运行时缓存恢复生成图（uid 去重防重复；fire-and-forget 不阻塞探测） */
+  if (proxyUp && !proxyUpPrev) {
+    restoreRuntimeStore().catch(() => {});
+  }
+  proxyUpPrev = proxyUp;
+  updateProxyUI();
 }
 /* 设置栏状态区：在线→绿色标记；离线→黄色可展开说明（不弹窗打扰） */
 function updateProxyUI() {
@@ -1455,12 +1679,151 @@ function updateProxyUI() {
     badge.style.display = "none";
     help.style.display = "";
   }
+  if (!images.length) { renderThumbs(); }   // 空态文案随在线状态两态（无图时才需重建）
   if (settings.collapsed) { setSettingsCollapsed(true); }   // 折叠摘要里含代理状态，联动刷新
 }
 /* fetch 封装：代理在线走 /proxy?url=<目标>（Authorization 等头照常带，由代理透传）；离线直连 */
 function apiFetch(url, init) {
   if (proxyUp) { return fetch(PROXY_BASE + "/proxy?url=" + encodeURIComponent(url), init); }
   return fetch(url, init);
+}
+
+/* ============================================================
+ * 参考图（手动导入 · 仅 Gemini 通道 · 上限 3 张 · 长边超 1500px 自动压缩）
+ * 与素材无关：切素材不清空；任务发起时随 snapshotRequestConfig 快照冻结
+ *（排队期间清空/替换不影响已入队任务，重试也按原快照重发）
+ * ============================================================ */
+const REF_MAX_COUNT = 3;             // 上限 3 张（C2 拍板）
+const REF_COMPRESS_LONG_EDGE = 1500; // 长边超过此值才 canvas 等比压缩（C3 拍板）
+const REF_COMPRESS_QUALITY = 0.9;    // 重编码质量（仅 jpeg/webp 生效；png/gif 忽略）
+let refs = [];                       // 参考图列表 [{refId,name,mime,width,height,origWidth,origHeight,origBytes,bytes,b64}]
+let refSeed = 1;                     // refId 自增
+
+/* blob → 纯 base64 字符串（readAsDataURL 取逗号后段） */
+function blobToB64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const s = String(reader.result || "");
+      const i = s.indexOf(",");
+      resolve(i >= 0 ? s.slice(i + 1) : "");
+    };
+    reader.onerror = () => reject(new Error("读取文件失败"));
+    reader.readAsDataURL(blob);
+  });
+}
+/* canvas → blob（与现有 toPngBlob 同款 Promise 包装，支持质量参数） */
+function canvasToBlob(canvas, mime, quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((b) => { b ? resolve(b) : reject(new Error("canvas 导出失败")); }, mime, quality);
+  });
+}
+/* 参考图尺寸/体积悬浮说明：压缩过的显示「原始 → 发送」两段，未压缩单段 */
+function refSizeNote(ref) {
+  const mb = (n) => (n / 1048576).toFixed(1) + "MB";
+  if (ref.width !== ref.origWidth || ref.height !== ref.origHeight) {
+    return "原始 " + ref.origWidth + "×" + ref.origHeight + "·" + mb(ref.origBytes) +
+      " → 发送 " + ref.width + "×" + ref.height + "·" + mb(ref.bytes) + "（已压缩）";
+  }
+  return ref.width + "×" + ref.height + "·" + mb(ref.bytes);
+}
+/* 单文件入列候选：长边 ≤1500 原样字节；超限 canvas 等比压缩（round 缩放）。
+ * mime 以实际导出 blob.type 为准过 safeMime——gif 压缩后 canvas 自动导出 png 属正常（D3 裁定） */
+async function compressRefCandidate(file) {
+  const objUrl = URL.createObjectURL(file);
+  try {
+    const img = await loadImageEl(objUrl);   // 解码失败抛错，调用方按拒绝项收集
+    const long = Math.max(img.naturalWidth, img.naturalHeight);
+    if (long <= REF_COMPRESS_LONG_EDGE) {
+      return {
+        mime: safeMime(file.type), b64: await blobToB64(file),
+        width: img.naturalWidth, height: img.naturalHeight,
+        origWidth: img.naturalWidth, origHeight: img.naturalHeight,
+        origBytes: file.size, bytes: file.size
+      };
+    }
+    const scale = REF_COMPRESS_LONG_EDGE / long;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+    canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+    const blob = await canvasToBlob(canvas, safeMime(file.type), REF_COMPRESS_QUALITY);
+    return {
+      mime: safeMime(blob.type),             // 以实际导出为准（gif→png 等格式迁移在此归一）
+      b64: await blobToB64(blob),
+      width: canvas.width, height: canvas.height,
+      origWidth: img.naturalWidth, origHeight: img.naturalHeight,
+      origBytes: file.size, bytes: blob.size
+    };
+  } finally {
+    try { URL.revokeObjectURL(objUrl); } catch (e) { /* 忽略 */ }
+  }
+}
+/* 导入入口（文件选择与拖拽投放共用）：白名单外的逐行列错误区；满 3 张后余量忽略；
+ * 汇总提示非阻塞（错误区展示 + 中栏短提示） */
+async function importRefFiles(fileList) {
+  const files = Array.from(fileList || []);
+  if (!files.length) { return; }
+  const errs = [];
+  let ignored = 0;
+  let added = 0;
+  for (const f of files) {
+    if (refs.length >= REF_MAX_COUNT) { ignored++; continue; }
+    if (!MIME_WHITELIST.includes(String(f.type || "").toLowerCase().trim())) {
+      errs.push(f.name + "：不是支持的图片格式（png / jpeg / webp / gif）");
+      continue;
+    }
+    try {
+      const cand = await compressRefCandidate(f);
+      refs.push(Object.assign({ refId: refSeed++, name: f.name }, cand));
+      added++;
+    } catch (e) {
+      errs.push(f.name + "：" + (e && e.message ? e.message : "导入失败"));
+    }
+  }
+  renderRefStrip();
+  if (ignored) { errs.push("已满 " + REF_MAX_COUNT + " 张，已忽略 " + ignored + " 个文件"); }
+  if (errs.length) { showError("参考图导入：\n" + errs.join("\n")); }
+  if (added) { flashGenNote("已添加 " + added + " 张参考图（当前 " + refs.length + "/" + REF_MAX_COUNT + "）"); }
+}
+/* 渲染参考图条：N>0 显著指示；添加钮满 3 张禁用；小卡单击开大图预览 */
+function renderRefStrip() {
+  $("#ref-section").classList.toggle("has-refs", refs.length > 0);
+  $("#ref-count-badge").textContent = refs.length + "/" + REF_MAX_COUNT;
+  $("#ref-clear-link").style.display = refs.length ? "" : "none";
+  const addBtn = $("#ref-add-btn");
+  addBtn.disabled = refs.length >= REF_MAX_COUNT;
+  addBtn.title = refs.length >= REF_MAX_COUNT ? "已满 " + REF_MAX_COUNT + " 张" : "添加参考图文件";
+  const wrap = $("#ref-cards");
+  wrap.innerHTML = "";
+  refs.forEach(ref => {
+    const card = document.createElement("div");
+    card.className = "ref-card";
+    card.title = ref.name + "\n" + refSizeNote(ref);
+    card.innerHTML = "<img alt='参考图预览'><button class='ref-del-btn' title='移除这张参考图'>×</button>";
+    card.querySelector("img").src = "data:" + ref.mime + ";base64," + ref.b64;
+    card.addEventListener("click", () => openRefPreview(ref));
+    card.querySelector(".ref-del-btn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      const ri = refs.findIndex(r => r.refId === ref.refId);
+      if (ri >= 0) { refs.splice(ri, 1); }
+      renderRefStrip();
+    });
+    wrap.appendChild(card);
+  });
+}
+/* 条目参考图计数：常规条目读 cfg.refs（快照冻结），恢复条目读 refCount（cfg=null 兼容） */
+function refCountOf(im) {
+  return (im.cfg && im.cfg.refs) ? im.cfg.refs.length : (im.refCount || 0);
+}
+/* 参考图大图预览：复用模态（mode-ref 模式，隐藏网格专属控件） */
+function openRefPreview(ref) {
+  modalKind = "ref";
+  modalUid = null;
+  modalCollection = [];
+  modalIndex = -1;
+  setModalImageRef(ref);
+  updateModalChrome();
 }
 
 function buildFinalPrompt(item) {
@@ -1502,8 +1865,14 @@ async function generateViaGemini(prompt, cfg, signal) {
   const useBearer = cfg.auth === "bearer";
   const imageConfig = { aspectRatio: cfg.aspect || "1:1" };
   if (cfg.size) { imageConfig.imageSize = cfg.size; }
+  /* 参考图 → inlineData parts（排在 text 前，提示词永远最后一段） */
+  const parts = [];
+  (cfg.refs || []).forEach(r => {
+    parts.push({ inlineData: { mimeType: r.mime, data: r.b64 } });
+  });
+  parts.push({ text: prompt });
   const body = {
-    contents: [{ parts: [{ text: prompt }] }],
+    contents: [{ parts: parts }],
     generationConfig: { responseModalities: ["IMAGE"], imageConfig: imageConfig }
   };
   const path = baseUrl + "/v1beta/models/" + encodeURIComponent(model) + ":generateContent";
@@ -1602,7 +1971,8 @@ function formatGenError(err) {
     "\n3. API Key 无效或无该模型权限（看上方 HTTP 错误的响应体）。";
 }
 
-/* 任务发起时的请求配置快照：排队期间切提供商/端点/比例不影响已入队任务（重试也用原快照） */
+/* 任务发起时的请求配置快照：排队期间切提供商/端点/比例不影响已入队任务（重试也用原快照）。
+ * 参考图随快照冻结：逐字段浅拷贝（b64 为不可变字符串，拷贝后与 refs 列表后续变动隔离） */
 function snapshotRequestConfig() {
   return {
     provider: settings.provider,
@@ -1611,7 +1981,13 @@ function snapshotRequestConfig() {
     apiKey: getApiKey(),
     aspect: settings.aspect || "1:1",
     size: settings.gemini.size || "",
-    auth: settings.gemini.auth === "bearer" ? "bearer" : "query"
+    auth: settings.gemini.auth === "bearer" ? "bearer" : "query",
+    refs: refs.map(r => ({
+      refId: r.refId, name: r.name, mime: r.mime,
+      width: r.width, height: r.height,
+      origWidth: r.origWidth, origHeight: r.origHeight,
+      origBytes: r.origBytes, bytes: r.bytes, b64: r.b64
+    }))
   };
 }
 
@@ -1626,6 +2002,11 @@ function generate() {
     return;
   }
   if (!(prov().model || "").trim()) { showError("未填写模型版本。"); return; }
+  /* C1 拍板：OpenAI 通道不支持参考图——挂了参考图直接阻止（零请求发出），提示切换提供商 */
+  if (refs.length > 0 && settings.provider === "openai") {
+    showError("参考图仅 Gemini 通道支持，请到设置栏把提供商切换为 Gemini（或清空参考图）后再生成。");
+    return;
+  }
 
   const prompt = buildFinalPrompt(item);
   if (!prompt) { showError("提示词为空。"); return; }
@@ -1731,6 +2112,7 @@ function settleTask(entry, result) {
   replaceTaskCardWithThumb(entry);
   updateTaskStats();
   scheduleTasks();                       // 腾出的并发位立即补位
+  saveToRuntimeStore(entry).catch(() => {});   // 运行时配对保存（C12：排队/生成中/失败均不入库，成功才存；fire-and-forget）
 }
 function failTask(entry, err) {
   cleanupTaskRefs(entry);
@@ -1820,9 +2202,12 @@ function renderThumbs() {
   if (!list.length) {
     const empty = document.createElement("div");
     empty.id = "thumb-empty";
+    /* 空态两态：在线 = 运行时缓存口径（刷新自动恢复）；离线 = 会话内存口径（刷新即失） */
     empty.innerHTML = images.length
       ? "没有已标记的图片<br>（点击图片右上角 ☆ 循环标记）"
-      : "尚未生成图片<br>选中素材 → 点击「生 成」<br><br>· 双击缩略图看大图<br>· 右键缩略图下载 PNG<br>· 生成图仅存本次会话，刷新即失";
+      : (proxyUp
+        ? "尚未生成图片<br>选中素材 → 点击「生 成」<br><br>· 双击缩略图看大图<br>· 右键缩略图下载 PNG<br>· 生成图与提示词将存入本地服务运行时缓存（刷新本页自动恢复，关闭 server.py 即清空）"
+        : "尚未生成图片<br>选中素材 → 点击「生 成」<br><br>· 双击缩略图看大图<br>· 右键缩略图下载 PNG<br>· 生成图仅存本次会话，刷新即失");
     grid.appendChild(empty);
     return;
   }
@@ -1863,7 +2248,9 @@ function buildThumb(im) {
     "<div class='thumb-meta'>" +
       "<span class='thumb-id' title='" + esc(im.item.id) + ".png'>" + esc(im.item.id) + "</span>" +
       "<span class='thumb-time'>" + fmtTime(im.time) + " · " + (im.provider === "openai" ? "GPT" : "Gemini") +
-        " · " + esc(im.sizeLabel || "—") + (im.url ? " · URL 源" : "") + "</span>" +
+        " · " + esc(im.sizeLabel || "—") + (im.url ? " · URL 源" : "") +
+        (refCountOf(im) ? " · 参考图×" + refCountOf(im) : "") +
+        (im.restored ? " · 恢复" : "") + "</span>" +
     "</div>";
   // 双击大图
   card.querySelector(".thumb-img-wrap").addEventListener("dblclick", () => openModal(im.uid));
@@ -1892,7 +2279,8 @@ function buildTaskCard(entry) {
       "<div class='task-err-wrap' title='点击展开完整错误'>" +
         "<div class='task-err-head'>生成失败</div>" +
         "<div class='task-err-sum'>" + esc(summary) + "</div>" +
-        "<div class='task-err-meta'>" + esc(entry.item.name_cn) + "<br>" + esc(entry.item.id) + "</div>" +
+        "<div class='task-err-meta'>" + esc(entry.item.name_cn) + "<br>" + esc(entry.item.id) +
+          (refCountOf(entry) ? "<br>含 " + refCountOf(entry) + " 张参考图" : "") + "</div>" +
       "</div>" +
       "<button class='task-retry-btn' title='用原参数（发起时快照）重新排队'>重试</button>" +
       "<button class='task-del-btn' title='删除这张错误卡'>×</button>";
@@ -1908,7 +2296,8 @@ function buildTaskCard(entry) {
       "<div class='task-info'>" +
         "<div class='task-name' title='" + esc(entry.item.name_cn) + "'>" + esc(entry.item.name_cn) + "</div>" +
         "<div class='task-id'>" + esc(entry.item.id) + "</div>" +
-        "<div class='task-state'>" + (entry.status === "running" ? "生成中…" : "排队中") + "</div>" +
+        "<div class='task-state'>" + (entry.status === "running" ? "生成中…" : "排队中") +
+          (refCountOf(entry) ? " · 参考图×" + refCountOf(entry) : "") + "</div>" +
       "</div>" +
     "</div>" +
     "<button class='task-cancel-btn' title='取消该任务'>×</button>";
@@ -1998,6 +2387,7 @@ $("#ctx-menu").addEventListener("click", (e) => {
   closeCtxMenu();
   if (act === "download") { downloadImage(uid); }
   else if (act === "open-tab") { openImageInTab(uid); }
+  else if (act === "copy-prompt") { copyPrompt(uid); }
   else if (act === "mark") { cycleMark(uid); }
   else if (act === "delete") { deleteImage(uid); }
 });
@@ -2010,7 +2400,22 @@ function deleteImage(uid) {
     setMark(uid, "");
     renderList();
     renderThumbs();
-    if (modalUid === String(uid)) { closeModal(); }
+    /* 模态联动（D1 裁定）：删的是当前大图 → 从集合剔除；集合空关模态，否则跳相邻（原位置的后一张，末张回退前一张） */
+    if ($("#img-modal").classList.contains("visible") && modalKind === "grid" && modalUid === String(uid)) {
+      const ci = modalCollection.indexOf(String(uid));
+      if (ci >= 0) { modalCollection.splice(ci, 1); }
+      if (!modalCollection.length) {
+        closeModal();
+      } else {
+        modalIndex = Math.min(ci >= 0 ? ci : 0, modalCollection.length - 1);
+        const next = images.find(i => String(i.uid) === modalCollection[modalIndex]);
+        if (next) { setModalImageGrid(next); updateModalChrome(); refreshModalPrompt(); }
+        else { closeModal(); }   // 防御：集合内 uid 均已失效
+      }
+    } else if (modalUid === String(uid)) {
+      closeModal();
+    }
+    if (proxyUp) { rtDeleteRemote(uid); }   // 运行时缓存远端同步删除（fire-and-forget，失败静默）
   }
 }
 
@@ -2140,12 +2545,174 @@ async function downloadUrlImage(im) {
 }
 
 /* ============================================================
- * 大图模态（缩放 / 平移 / 双击复位 / Esc 关闭）
+ * 运行时配对保存（需求 3 · server.py /rt-* 端点 · 纯内存会话级）
+ * 在线（proxyUp）时：生成成功 → 图+提示词 POST 进 server 进程内存，刷新本页
+ * 自动恢复；关闭 server.py 即全清；总量软上限 512MiB（满后仅提示，不影响生成/下载）。
+ * 安全红线：record 逐字段显式构造，绝不序列化 entry.cfg——apiKey/baseUrl/auth
+ * 天然不进存储（server 侧另有字段白名单第二道防线）。
+ * ============================================================ */
+/* 任务条目 → 运行时存储 record（白名单字段）；URL 源顺带拉取字节转 b64，
+ * 拉取失败则保留 url（恢复后按 URL 源直显 + 下载三级降级） */
+async function buildRtRecord(entry) {
+  const record = {
+    uid: entry.uid,
+    item_id: entry.item.id,
+    item_name: entry.item.name_cn,
+    prompt: entry.prompt,
+    provider: entry.provider,
+    model: entry.model,
+    size_label: entry.sizeLabel,
+    time: entry.time,
+    duration_ms: entry.durationMs,
+    ref_count: refCountOf(entry),
+    url_source: !!entry.url,
+    url: entry.url || null,
+    mime: entry.mime,
+    img_b64: null
+  };
+  if (entry.url) {
+    try {
+      const blob = await fetchUrlBlob(entry.url);
+      record.img_b64 = await blobToB64(blob);
+      record.mime = safeMime(blob.type);
+    } catch (e) {
+      record.img_b64 = null;   // 保留 url：恢复时无字节但可直显远程直链
+    }
+  } else {
+    record.img_b64 = entry.b64;
+  }
+  return record;
+}
+/* 保存单条（settleTask 末尾 fire-and-forget 调用；离线直接跳过）。
+ * 注意：缓存满时 server 返回 HTTP 200 + {ok:false, reason:"full"}，须解析响应体判定 */
+async function saveToRuntimeStore(entry) {
+  if (!proxyUp) { return; }
+  const payload = await buildRtRecord(entry);
+  let resp = null;
+  try {
+    resp = await fetch(PROXY_BASE + "/rt-store", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+  } catch (e) {
+    flashGenNote("运行时保存未成功（不影响生成与下载）");
+    return;
+  }
+  let data = null;
+  try { data = await resp.json(); } catch (e) { data = null; }
+  if (resp.ok && (!data || data.ok !== false)) { return; }   // 成功（200 + ok:true）
+  if (data && data.reason === "full") {
+    showError("运行时缓存已满（软上限约 512MB），请先下载 / 清空后继续——本张已生成成功，仅未纳入运行时保存。");
+    return;
+  }
+  flashGenNote("运行时保存未成功（不影响生成与下载）");
+}
+/* 拉取全部记录并恢复进本会话（probeProxy 离线→在线跳变时调用一次；uid 去重防重复恢复）。
+ * items 为 dict 插入序 = 完成顺序（恢复排列为完成顺序的近似，D2 注记） */
+async function restoreRuntimeStore() {
+  let resp = null;
+  try {
+    resp = await fetch(PROXY_BASE + "/rt-store", { method: "GET", cache: "no-store" });
+  } catch (e) { return; }
+  if (!resp.ok) { return; }
+  let data = null;
+  try { data = await resp.json(); } catch (e) { return; }
+  const items = (data && Array.isArray(data.items)) ? data.items : [];
+  if (!items.length) { return; }
+  const corrupt = [];
+  const restored = [];
+  items.forEach(rec => {
+    if (!rec || typeof rec !== "object") { corrupt.push("未知条目"); return; }
+    const item = ITEM_MAP.get(rec.item_id);
+    const time = Number(rec.time);
+    const duration = Number(rec.duration_ms);
+    /* 逐条校验：uid/item_id/prompt 类型、素材在册、图数据可解码（b64）或 url 可用、数值合法 */
+    if (typeof rec.uid !== "string" || !rec.uid ||
+        typeof rec.item_id !== "string" || !item ||
+        typeof rec.prompt !== "string" ||
+        !isFinite(time) || time <= 0) {
+      corrupt.push(rec.uid || rec.item_id || "未知条目");
+      return;
+    }
+    let b64 = null;
+    if (rec.img_b64) {
+      try { b64ToUint8(String(rec.img_b64).replace(/\s+/g, "")); b64 = String(rec.img_b64).replace(/\s+/g, ""); }
+      catch (e) { b64 = null; }
+    }
+    if (!b64 && !(typeof rec.url === "string" && rec.url)) { corrupt.push(rec.uid); return; }
+    /* uid 去重：本会话已有同 uid（此前恢复过 / 本会话生成已入库）不重复恢复 */
+    if (images.some(im => String(im.uid) === rec.uid)) { return; }
+    restored.push({
+      kind: "image", status: "done",
+      uid: rec.uid, item: item, prompt: rec.prompt,
+      cfg: null,                                     // 快照不可还原（含 Key，不入存储）——仅保留参考图计数
+      refCount: Math.max(0, Number(rec.ref_count) || 0),
+      url: (!b64 && rec.url_source) ? rec.url : null,
+      urlSource: !!rec.url_source,
+      b64: b64,
+      mime: safeMime(rec.mime),
+      time: time,
+      provider: rec.provider === "openai" ? "openai" : "gemini",
+      model: String(rec.model || ""),
+      sizeLabel: String(rec.size_label || "—"),
+      durationMs: isFinite(duration) && duration > 0 ? duration : 0,
+      restored: true
+    });
+  });
+  if (restored.length) {
+    images = restored.reverse().concat(images);   // items 完成序（旧→新）→ 头插还原时间线（最新在顶）
+    renderList();
+    renderThumbs();
+    flashGenNote("已从运行时缓存恢复 " + restored.length + " 张图片（关闭 server.py 即清空）");
+  }
+  if (corrupt.length) {
+    showError("运行时恢复：" + corrupt.length + " 张数据损坏已跳过（" + corrupt.slice(0, 3).join("、") +
+      (corrupt.length > 3 ? " 等" : "") + "），其余 " + restored.length + " 张已恢复。");
+  }
+}
+/* 远端删单条（deleteImage 联动；失败静默——远端缓存只是恢复用途，不反向影响本地） */
+async function rtDeleteRemote(uid) {
+  if (!proxyUp) { return; }
+  try {
+    await fetch(PROXY_BASE + "/rt-store-delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uid: String(uid) })
+    });
+  } catch (e) { /* 静默 */ }
+}
+/* 远端清空（「清空」按钮联动；失败静默） */
+async function rtClearRemote() {
+  if (!proxyUp) { return; }
+  try {
+    await fetch(PROXY_BASE + "/rt-store-clear", { method: "POST" });
+  } catch (e) { /* 静默 */ }
+}
+/* 右键菜单「复制提示词」：写剪贴板，失败给手动复制指引 */
+async function copyPrompt(uid) {
+  const im = images.find(i => String(i.uid) === String(uid));
+  if (!im) { return; }
+  try {
+    await navigator.clipboard.writeText(im.prompt || "");
+    flashGenNote("提示词已复制到剪贴板");
+  } catch (e) {
+    showError("复制提示词失败（剪贴板权限被拒或页面未聚焦）——可双击缩略图打开大图，点「提示词」后在面板中手动选中复制。");
+  }
+}
+
+/* ============================================================
+ * 大图模态（缩放 / 平移 / 双击复位 / Esc 关闭 / ←→ 集合内切换）
  * 打开与复位基准 = contain 全屏适配缩放（上限 1，低分辨率图不放大）
+ * 两种模式：grid = 生成图浏览（集合快照内导航）；ref = 参考图预览（隐藏网格专属控件）
  * ============================================================ */
 let modalUid = null;
 let modalView = { scale: 1, tx: 0, ty: 0 };
 let modalFitScale = 1;   // 当前图的 contain 适配缩放（打开态/双击复位基准；滚轮下限随其放宽）
+let modalCollection = [];  // grid 模式集合快照（String(uid)[]，images 序 = 网格 DOM 序；打开时定格，筛选变化/新图完成不动）
+let modalIndex = -1;       // 当前图在集合中的索引
+let modalKind = "grid";    // "grid" | "ref"
+let modalRef = null;       // ref 模式当前参考图
 /* 视口可用区留白：左右各 32px；顶部 48px 清开提示条与关闭钮；底部 16px + 信息条实测高度 */
 const MODAL_FIT_PAD_X = 32;
 const MODAL_FIT_TOP = 48;
@@ -2171,21 +2738,25 @@ function fitModalToImage() {
   modalView = { scale: modalFitScale, tx: 0, ty: 0 };
   applyModalTransform();
 }
-/* 双击复位：回到打开时的全屏适配态（适配缩放 + 居中） */
+/* 双击复位：回到打开时的全屏适配态（适配缩放 + 居中）；ref 预览同样适用 */
 function resetModalView() {
-  if (!modalUid) { return; }   // 双击背景在 click 阶段已关模态，此处不再复位
+  if (!modalUid && modalKind !== "ref") { return; }   // 双击背景在 click 阶段已关模态，此处不再复位
   modalView = { scale: modalFitScale, tx: 0, ty: 0 };
   applyModalTransform();
 }
-function openModal(uid) {
-  const im = images.find(i => String(i.uid) === String(uid));
-  if (!im) { return; }
-  modalUid = String(uid);
-  $("#modal-id").textContent = im.item.id + ".png";
-  $("#modal-meta").textContent =
-    im.item.name_cn + " · " + fmtTime(im.time) + " · " + (im.provider === "openai" ? "GPT·OpenAI 兼容" : "Gemini") +
-    " · " + im.model + " · " + (im.sizeLabel || "—") + (im.url ? " · URL 源" : "") +
-    " · 耗时 " + (im.durationMs / 1000).toFixed(1) + "s";
+/* 集合快照：与 renderThumbs 同一判定式（含任务卡不影响——集合只收已完成图）；
+ * images 数组序 = 网格 DOM 序（时间线新→旧） */
+function buildModalCollection() {
+  const onlyMarked = $("#thumb-filter").value === "marked";
+  return images
+    .filter(im => im.kind === "image" && (!onlyMarked || getMark(im.uid)))
+    .map(im => String(im.uid));
+}
+/* 设源并适配（打开与切换共用同一份代码——contain 复位语义一致）：
+ * 设 id/meta → 显示模态 → 兜底 transform → 绑 onload/onerror → 赋 src → 已缓存同步适配 */
+function setModalSrcAndFit(src, idText, metaText) {
+  $("#modal-id").textContent = idText;
+  $("#modal-meta").textContent = metaText;
   $("#img-modal").classList.add("visible");   // 先显示再测视口：display:none 下 clientWidth/offsetHeight 均为 0
   modalView = { scale: 1, tx: 0, ty: 0 };     // 兜底初值：图未就绪/加载失败时按 1:1 居中
   modalFitScale = 1;
@@ -2197,12 +2768,89 @@ function openModal(uid) {
     modalView = { scale: 1, tx: 0, ty: 0 };
     applyModalTransform();
   };
-  img.src = im.url ? im.url : "data:" + im.mime + ";base64," + im.b64;   // URL 源直接显示远程直链
+  img.src = src;
   if (img.complete && img.naturalWidth > 0) { fitModalToImage(); }   // 已缓存：同步先算一次（onload 再触发亦幂等）
+}
+/* grid 模式显示某张生成图（打开 / 切换 / 删除后跳相邻共用） */
+function setModalImageGrid(im) {
+  modalUid = String(im.uid);
+  const metaText = im.item.name_cn + " · " + fmtTime(im.time) + " · " + (im.provider === "openai" ? "GPT·OpenAI 兼容" : "Gemini") +
+    " · " + im.model + " · " + (im.sizeLabel || "—") + (im.url ? " · URL 源" : "") +
+    (im.restored ? " · 运行时恢复" : "") +
+    " · 耗时 " + (im.durationMs / 1000).toFixed(1) + "s";
+  setModalSrcAndFit(im.url ? im.url : "data:" + im.mime + ";base64," + im.b64, im.item.id + ".png", metaText);
+}
+/* ref 模式显示某张参考图（压缩后字节直显；下载文件名 = 原文件名） */
+function setModalImageRef(ref) {
+  modalRef = ref;
+  setModalSrcAndFit("data:" + ref.mime + ";base64," + ref.b64, ref.name, refSizeNote(ref));
+}
+/* 打开生成图：建集合快照（含「只看已标记」口径）→ 定位 → 设图 → 刷新外壳（箭头/位置指示） */
+function openModal(uid) {
+  const im = images.find(i => String(i.uid) === String(uid));
+  if (!im) { return; }
+  modalKind = "grid";
+  modalRef = null;
+  modalCollection = buildModalCollection();
+  if (!modalCollection.includes(String(uid))) { modalCollection = [String(uid)]; }   // 兜底单张（防御筛选态错位）
+  modalIndex = modalCollection.indexOf(String(uid));
+  setModalImageGrid(im);
+  updateModalChrome();
+  refreshModalPrompt();
 }
 function closeModal() {
   $("#img-modal").classList.remove("visible");
+  $("#img-modal").classList.remove("mode-ref");
+  $("#modal-prompt-panel").classList.remove("open");   // 提示词面板随模态一并收起
   modalUid = null;
+  modalRef = null;
+  modalKind = "grid";
+  modalCollection = [];
+  modalIndex = -1;
+}
+/* 集合内切换：dir ∈ {-1, +1, "home", "end"}；守卫 grid 模式且集合 >1（单张全部无动作）；
+ * 目标索引循环取模（末→首 / 首←到末）；按 uid 回查 images，查无从集合剔除后取相邻 */
+function switchModal(dir) {
+  if (modalKind !== "grid" || modalCollection.length <= 1) { return; }
+  const n = modalCollection.length;
+  let target = modalIndex;
+  if (dir === "home") { target = 0; }
+  else if (dir === "end") { target = n - 1; }
+  else { target = ((modalIndex + (dir >= 0 ? 1 : -1)) % n + n) % n; }
+  let im = images.find(i => String(i.uid) === modalCollection[target]);
+  while (!im && modalCollection.length) {
+    modalCollection.splice(target, 1);
+    if (!modalCollection.length) { closeModal(); return; }
+    target = Math.min(target, modalCollection.length - 1);
+    im = images.find(i => String(i.uid) === modalCollection[target]);
+  }
+  if (!im) { closeModal(); return; }
+  modalIndex = target;
+  setModalImageGrid(im);
+  updateModalChrome();
+  refreshModalPrompt();
+}
+/* 模态外壳刷新：箭头显隐（非 grid 或集合 ≤1 隐藏）、位置指示「第 x / N 张」、.mode-ref 同步 */
+function updateModalChrome() {
+  const isGrid = modalKind === "grid";
+  $("#img-modal").classList.toggle("mode-ref", !isGrid);
+  const showNav = isGrid && modalCollection.length > 1;
+  $("#modal-nav-prev").style.display = showNav ? "flex" : "none";
+  $("#modal-nav-next").style.display = showNav ? "flex" : "none";
+  const pos = $("#modal-pos");
+  if (isGrid && modalCollection.length > 1) {
+    pos.style.display = "";
+    pos.textContent = "第 " + (modalIndex + 1) + " / " + modalCollection.length + " 张";
+  } else {
+    pos.style.display = "none";
+  }
+}
+/* 提示词面板联动：开着才刷新内容（切换 / 删除跳相邻后调用；关闭态不动） */
+function refreshModalPrompt() {
+  const panel = $("#modal-prompt-panel");
+  if (!panel.classList.contains("open")) { return; }
+  const im = modalUid ? images.find(i => String(i.uid) === modalUid) : null;
+  $("#modal-prompt-text").textContent = im ? (im.prompt || "（无提示词）") : "（无提示词）";
 }
 $("#modal-viewport").addEventListener("wheel", (e) => {
   e.preventDefault();
@@ -2247,7 +2895,41 @@ $("#modal-viewport").addEventListener("wheel", (e) => {
   });
 })();
 $("#modal-close-btn").addEventListener("click", closeModal);
-$("#modal-download-btn").addEventListener("click", () => { if (modalUid) { downloadImage(modalUid); } });
+$("#modal-nav-prev").addEventListener("click", () => switchModal(-1));
+$("#modal-nav-next").addEventListener("click", () => switchModal(1));
+/* 提示词钮：toggle 面板（打开时立即填充当前图提示词；切换图由 refreshModalPrompt 联动） */
+$("#modal-prompt-btn").addEventListener("click", () => {
+  $("#modal-prompt-panel").classList.toggle("open");
+  refreshModalPrompt();
+});
+$("#mpp-copy-btn").addEventListener("click", async () => {
+  const im = modalUid ? images.find(i => String(i.uid) === modalUid) : null;
+  try {
+    await navigator.clipboard.writeText(im ? (im.prompt || "") : "");
+    flashGenNote("提示词已复制到剪贴板");
+  } catch (e) {
+    showError("复制失败（剪贴板权限被拒）——可在面板中手动选中复制。");
+  }
+});
+/* 删除钮：删当前图（deleteImage 内做集合剔除 + 跳相邻 / 集合空关模态） */
+$("#modal-delete-btn").addEventListener("click", () => { if (modalUid) { deleteImage(modalUid); } });
+/* 下载钮：ref 模式下载参考图压缩后字节（文件名 = 原文件名）；grid 模式按 modalUid 现查现下载 */
+$("#modal-download-btn").addEventListener("click", () => {
+  if (modalKind === "ref" && modalRef) {
+    try {
+      const bytes = b64ToUint8(modalRef.b64);
+      let name = modalRef.name || ("ref_" + modalRef.refId);
+      if (!/\.[a-z0-9]+$/i.test(name)) {   // 原名无扩展名时按 mime 补全
+        name += "." + (modalRef.mime === "image/jpeg" ? "jpg" : (modalRef.mime.split("/")[1] || "png"));
+      }
+      saveBlobAs(new Blob([bytes], { type: modalRef.mime }), name);
+    } catch (e) {
+      showError("下载参考图失败：" + (e && e.message ? e.message : e));
+    }
+    return;
+  }
+  if (modalUid) { downloadImage(modalUid); }
+});
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     closeModal();
@@ -2256,6 +2938,21 @@ document.addEventListener("keydown", (e) => {
   if (e.ctrlKey && e.key === "Enter") {
     e.preventDefault();
     generate();
+  }
+  /* 大图模态内 ←/→/Home/End 切换：输入控件聚焦时不抢按键；带 Alt/Ctrl/Meta 修饰不拦截 */
+  if ($("#img-modal").classList.contains("visible") && !e.altKey && !e.ctrlKey && !e.metaKey) {
+    const el = document.activeElement;
+    const tag = el ? el.tagName : "";
+    const editable = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || !!(el && el.isContentEditable);
+    if (!editable) {
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        e.preventDefault();
+        switchModal(e.key === "ArrowLeft" ? -1 : 1);
+      } else if (e.key === "Home" || e.key === "End") {
+        e.preventDefault();
+        switchModal(e.key === "Home" ? "home" : "end");
+      }
+    }
   }
 });
 
@@ -2369,12 +3066,40 @@ function init() {
   $("#group-filter").addEventListener("change", renderList);
   $("#status-filter").addEventListener("change", renderList);
   renderList();
+  // 入库状态快照时间（assets_status.js 缺失时不显示，状态列全为「—」）
+  if (STATUS_DATA && STATUS_DATA.generated_at) {
+    $("#lib-note").textContent = "入库快照 " + STATUS_DATA.generated_at + " · 重跑 gen_assets_status.py 刷新";
+    $("#lib-note").style.display = "";
+  }
 
   // 中栏
   $("#lang-toggle-btn").addEventListener("click", togglePromptLang);
   $("#prompt-restore-btn").addEventListener("click", restorePrompt);
   $("#prompt-textarea").addEventListener("input", updatePromptLangState);
   $("#generate-btn").addEventListener("click", generate);
+  // 参考图条：按钮选文件 / 拖拽投放（整条为目标）/ 全部清除（切素材不清空，见 refs 声明处注释）
+  $("#ref-add-btn").addEventListener("click", () => $("#ref-file-input").click());
+  $("#ref-file-input").addEventListener("change", (e) => {
+    importRefFiles(e.target.files);
+    e.target.value = "";   // 清空选择，同批文件可再次选择
+  });
+  $("#ref-clear-link").addEventListener("click", () => { refs = []; renderRefStrip(); });
+  (() => {
+    const strip = $("#ref-strip");
+    strip.addEventListener("dragover", (e) => {
+      e.preventDefault();   // drop 生效前提
+      strip.classList.add("drag-over");
+    });
+    strip.addEventListener("dragleave", () => strip.classList.remove("drag-over"));
+    strip.addEventListener("drop", (e) => {
+      e.preventDefault();
+      strip.classList.remove("drag-over");
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+        importRefFiles(e.dataTransfer.files);
+      }
+    });
+  })();
+  renderRefStrip();
 
   // 右栏
   $("#thumb-filter").addEventListener("change", renderThumbs);
@@ -2383,14 +3108,19 @@ function init() {
     if (!images.length) { return; }   // B9：无图但有进行中任务时也允许清空（走取消）
     const pending = pendingTaskCount();
     const imgCount = images.filter(im => im.kind === "image").length;
+    /* confirm 文案两态：在线 = 运行时缓存同步清空口径；离线 = 会话内存口径 */
+    const storeNote = proxyUp
+      ? "\n本地服务的运行时缓存将同步清空，刷新后不再恢复。"
+      : "\n本地服务未连接：仅清空当前页面（会话内存本就刷新即失）。";
     if (window.confirm("清空本次会话的全部 " + imgCount + " 张生成图？（标记记录一并清除；已下载文件不受影响）" +
-        (pending ? "\n注意：排队 / 生成中的 " + pending + " 个任务将同时被取消。" : ""))) {
+        (pending ? "\n注意：排队 / 生成中的 " + pending + " 个任务将同时被取消。" : "") + storeNote)) {
       cancelAllTasks(true);           // B9：先取消全部进行中任务（排队出队 + 生成中 abort）
       images.forEach(revokeBlobUrl);  // K3：释放全部 blob URL
       images = [];
       markMap = {};
       lsSetJSON(LS_MARKS, markMap);
       closeModal();
+      if (proxyUp) { rtClearRemote(); }   // 运行时缓存同步清空（fire-and-forget，失败静默）
       renderList();
       renderThumbs();
       updateTaskStats();
