@@ -5,7 +5,8 @@
 ## tween 生命周期（中5：池登记/杀旧起新/回落 IDLE）/ trap_triggered 存活
 ## HIT / unit_downed 尸态锁定+条隐藏（D5）/ 三致倒路径统一 DOWNED（中3：
 ## 攻击致死链真实 _execute_skill 实测 3/3）/ battle_ended 尸体常驻 /
-## 序条头像首帧 atlas 契约。
+## 序条头像首帧 atlas 契约 / 批次 A 移动朝向随步更新（链首即刻/竖直回正/
+## 瞬移一次判定/无位移不触发/移动与攻击朝向互相覆盖）。
 ## 驱动口径：真实装配进战斗屏后 controller 信号直发（连接链 = 生产接线），
 ## 演出参数经共享 cfg 注入并即恢复。
 extends GdUnitTestSuite
@@ -230,7 +231,9 @@ func test_hit_damage_plays_hit_and_flash() -> void:
 func test_unit_moved_teleport_falls_back_idle() -> void:
 	## D6=A 移动演出（cfg 步长注 0 瞬移）：位置直落新格 + **立即回落 IDLE**
 	##（低6 盲审修复：瞬移分支与 tween 分支 tween_callback 回落对称——
-	## cfg 置 0 后不再走步动画常驻到下次行动）
+	## cfg 置 0 后不再走步动画常驻到下次行动）；试玩反馈批：瞬移分支无演出
+	## 过程不建**移动燃线**（燃线池/映射双空——漏洞1 修复：燃线入独立池
+	## _burning_overlays，断言目标随之锚定燃线池而非预览池）
 	var battle: Control = await _EnterRandomBattle()
 	assert_object(battle).is_not_null()
 	battle.controller.delay_seconds = 0.0
@@ -248,6 +251,9 @@ func test_unit_moved_teleport_falls_back_idle() -> void:
 	assert_int(badge.current_action()).is_equal(UnitAnimState.Action.IDLE)
 	var board: BattleBoard = battle.get_node("%BoardLayer") as BattleBoard
 	assert_vector(badge.position).is_equal(board.origin + Vector2(to_pos) * board.cell_size)
+	assert_int(board._burning_overlays.size()) \
+			.override_failure_message("瞬移分支不应建移动燃线").is_equal(0)
+	assert_int(board._burning_highlight_cells.size()).is_equal(0)
 
 func test_unit_moved_tween_lifecycle_and_idle_fallback() -> void:
 	## 中5（盲审）：非 0 步长移动演出主路径——tween 池登记/finished 出池/
@@ -296,6 +302,122 @@ func test_unit_moved_tween_lifecycle_and_idle_fallback() -> void:
 	assert_int(badge.current_action()).is_equal(UnitAnimState.Action.IDLE)
 	assert_vector(badge.position).is_equal(
 			board.origin + Vector2(to_b) * board.cell_size)
+
+func test_unit_moved_path_highlights_extinguish_on_arrival() -> void:
+	## 试玩反馈批（D4 契约修订）：移动过程路径闪烁高光——真实路径建**燃线**
+	##（含终点不含起点）→ 逐格链每段到达即熄灭（走过的格消失、前方格仍在）
+	## → 全程完成燃线清空；步长注 0.3s/段拉长时序窗供分段断言；漏洞1 修复
+	## 断言目标锚定：燃线入独立池 _burning_overlays（不随 clear_overlays/
+	## _ClearSelection 清理——由熄灭回调与 tween finished 自然烧完自清）
+	var battle: Control = await _EnterRandomBattle()
+	assert_object(battle).is_not_null()
+	battle.controller.delay_seconds = 0.0
+	battle.controller.abort_battle()
+	var cfg: CoreConfig = battle.context.cfg
+	var original_step: float = cfg.ui_battle_move_step_seconds
+	cfg.ui_battle_move_step_seconds = 0.3
+	var board: BattleBoard = battle.get_node("%BoardLayer") as BattleBoard
+	var unit: BattleUnit = _AliveUnitOf(battle.context.allies)
+	var from_pos: Vector2i = unit.grid_pos
+	var mid: Vector2i = from_pos + Vector2i(1, 0)
+	var to_pos: Vector2i = from_pos + Vector2i(2, 0)
+	unit.grid_pos = to_pos
+	battle.controller.unit_moved.emit(unit, from_pos, to_pos, [mid, to_pos])
+	# 移动开始：真实路径 2 格全亮（unit_moved 处理器前置 clear 已清旧层——
+	# 此处池内容全部来自 move_badge 重建入燃线池）
+	assert_int(board._burning_overlays.size()).is_equal(2)
+	assert_bool(board._burning_highlight_cells.has(mid)).is_true()
+	assert_bool(board._burning_highlight_cells.has(to_pos)).is_true()
+	# 第一段（0.3s）完成后：走过格熄灭、终点仍在闪
+	await get_tree().create_timer(0.55).timeout
+	assert_bool(board._burning_highlight_cells.has(mid)).is_false() \
+			.override_failure_message("走过的格燃线未熄灭")
+	assert_bool(board._burning_highlight_cells.has(to_pos)).is_true() \
+			.override_failure_message("前方格燃线不应提前熄灭")
+	# 全程完成（两段 0.6s + 余量）：燃线全清 + 回落 IDLE
+	var waited: int = 0
+	while board._move_tweens.has(unit.unit_id) and waited < 300:
+		await get_tree().process_frame
+		waited += 1
+	cfg.ui_battle_move_step_seconds = original_step
+	assert_bool(waited < 300).is_true().override_failure_message("移动 tween 未在帧限内完成")
+	assert_int(board._burning_overlays.size()).is_equal(0)
+	assert_int(board._burning_highlight_cells.size()).is_equal(0)
+	assert_int(_BadgeOf(battle, unit).current_action()).is_equal(UnitAnimState.Action.IDLE)
+
+func test_move_tap_production_chain_burning_highlights_lifecycle() -> void:
+	## 漏洞1 测试缺口补位（生产链版——区别于上方直发 unit_moved 信号版）：
+	## 两次 _HandleMoveTap 同格（首点预览 + 二连点确认）走真实交互链——
+	## request_move → unit_moved → 处理器前置 clear_overlays（清预览层）+
+	## move_badge 重建燃线（独立池）；断言确认后燃线高光节点在移动 tween
+	## 完成前仍存在（演出窗口内采样——确认分支随后的 _ClearSelection 与
+	## turn_started 均不清在途燃线）、tween finished 后逐格熄灭自清
+	var battle: Control = await _EnterRandomBattle()
+	assert_object(battle).is_not_null()
+	var controller: BattleController = battle.controller
+	controller.delay_seconds = 0.0
+	# 等首个我方指令窗（开战自动流——首动单位 controllable 才开指令窗）
+	var waited: int = 0
+	while (controller.current_unit == null or not controller.awaiting_command) \
+			and waited < 900:
+		await get_tree().process_frame
+		waited += 1
+	assert_bool(controller.awaiting_command) \
+			.override_failure_message("未等到我方指令窗").is_true()
+	var unit: BattleUnit = controller.current_unit
+	var board: BattleBoard = battle.get_node("%BoardLayer") as BattleBoard
+	var cfg: CoreConfig = battle.context.cfg
+	var original_step: float = cfg.ui_battle_move_step_seconds
+	cfg.ui_battle_move_step_seconds = 0.3
+	# 挑真实寻路最长路径的可达目标（≥2 格拉长演出窗供中途采样；可达集内
+	# 恒有非起点格——find_reachable 至少含邻接格）
+	var dest: Vector2i = Vector2i(-1, -1)
+	var path_len: int = 0
+	for cell: Vector2i in battle.context.grid.find_reachable(unit, unit.move_final()):
+		if cell == unit.grid_pos:
+			continue
+		var probe_len: int = battle.context.grid.find_path(unit, unit.grid_pos,
+				cell, unit.move_final()).size()
+		if probe_len > path_len:
+			path_len = probe_len
+			dest = cell
+	assert_int(path_len).is_greater(0)
+	var real_path: Array[Vector2i] = battle.context.grid.find_path(unit,
+			unit.grid_pos, dest, unit.move_final())
+	# 首点同格预览：高光入预览池（选择态），燃线池未动
+	battle._HandleMoveTap(dest)
+	assert_vector(battle._pending_cell).is_equal(dest)
+	assert_int(board._path_highlight_cells.size()).is_equal(path_len)
+	assert_int(board._burning_overlays.size()).is_equal(0)
+	# 二连点确认：request_move 受理 → unit_moved → 前置 clear 清预览 +
+	# move_badge 按同一路径重建燃线（演出窗口内存在）
+	battle._HandleMoveTap(dest)
+	assert_bool(unit.has_moved).is_true()
+	assert_bool(board._move_tweens.has(unit.unit_id)).is_true() \
+			.override_failure_message("确认移动后应有在途移动 tween")
+	assert_int(board._path_highlight_cells.size()).is_equal(0) \
+			.override_failure_message("确认后预览高光应被前置 clear 清空")
+	assert_int(board._burning_overlays.size()).is_equal(path_len) \
+			.override_failure_message("确认后燃线应在演出窗口内存在（独立池）")
+	# 中途采样（路径 ≥2 格时）：首格已熄、终点仍在烧
+	if path_len >= 2:
+		await get_tree().create_timer(0.55).timeout
+		assert_bool(board._burning_highlight_cells.has(real_path[0])).is_false() \
+				.override_failure_message("走过的格燃线未熄灭（生产链）")
+		assert_bool(board._burning_highlight_cells.has(dest)).is_true() \
+				.override_failure_message("前方格燃线不应提前熄灭（生产链）")
+	# tween finished 后：燃线逐格熄尽自清（无任何 clear_overlays 介入）
+	var settle: int = 0
+	while board._move_tweens.has(unit.unit_id) and settle < 300:
+		await get_tree().process_frame
+		settle += 1
+	cfg.ui_battle_move_step_seconds = original_step
+	assert_bool(settle < 300).is_true() \
+			.override_failure_message("移动 tween 未在帧限内完成（生产链）")
+	assert_int(board._burning_overlays.size()).is_equal(0) \
+			.override_failure_message("tween 完成后燃线未自清（生产链）")
+	assert_int(board._burning_highlight_cells.size()).is_equal(0)
+	controller.abort_battle()
 
 func test_trap_triggered_alive_plays_hit() -> void:
 	## 陷阱触发：存活承伤 → HIT + 受击白闪（低7 盲审修复：与技能命中路径
@@ -467,6 +589,139 @@ func test_round_settled_dot_hit_skips_dead() -> void:
 	])
 	assert_int(_BadgeOf(battle, alive_one).current_action()).is_equal(UnitAnimState.Action.HIT)
 	assert_int(_BadgeOf(battle, dead_one).current_action()).is_equal(UnitAnimState.Action.DOWNED)
+
+func test_move_facing_updates_per_step() -> void:
+	## 批次 A 用例①：逐格随步更新朝向——emit 后链首回调即刻按第一步定
+	## 初始朝向（左行 → 面左），第二段竖直步迈入瞬间回正（x 相等 → 默认）；
+	## 移动结束后保持最终朝向；直发口径摆安全起点（纯视觉层不校验格占用）
+	var battle: Control = await _EnterRandomBattle()
+	assert_object(battle).is_not_null()
+	battle.controller.delay_seconds = 0.0
+	battle.controller.abort_battle()
+	var cfg: CoreConfig = battle.context.cfg
+	var original_step: float = cfg.ui_battle_move_step_seconds
+	cfg.ui_battle_move_step_seconds = 0.3
+	var board: BattleBoard = battle.get_node("%BoardLayer") as BattleBoard
+	var unit: BattleUnit = _AliveUnitOf(battle.context.enemies)
+	# L 形路径：左行一步 + 竖直一步（两段相位不同——面左/回正各锚定一段）
+	var from_pos: Vector2i = Vector2i(5, 5)
+	var mid: Vector2i = from_pos + Vector2i(-1, 0)
+	var to_pos: Vector2i = Vector2i(mid.x, mid.y - 1)
+	unit.grid_pos = to_pos
+	var badge: UnitBadge = _BadgeOf(battle, unit)
+	# 预置残留默认态：确证链首回调真实改写（而非默认值巧合）
+	board.set_badge_flip(unit, false)
+	battle.controller.unit_moved.emit(unit, from_pos, to_pos, [mid, to_pos])
+	await get_tree().process_frame
+	assert_bool(_FlipHOf(badge)).is_true() \
+			.override_failure_message("链首未按第一步（左行）即刻面左翻转")
+	# 第一段（0.3s）完成、第二段竖直步已迈入（0.45s 采样点）：回正默认朝向
+	await get_tree().create_timer(0.45).timeout
+	assert_bool(_FlipHOf(badge)).is_false() \
+			.override_failure_message("第二段竖直步迈入后未回正默认朝向")
+	var waited: int = 0
+	while board._move_tweens.has(unit.unit_id) and waited < 300:
+		await get_tree().process_frame
+		waited += 1
+	cfg.ui_battle_move_step_seconds = original_step
+	assert_bool(waited < 300).is_true().override_failure_message("移动 tween 未在帧限内完成")
+	assert_bool(_FlipHOf(badge)).is_false() \
+			.override_failure_message("移动结束后未保持最终朝向（竖直回正态）")
+
+func test_move_facing_teleport_single_judgment() -> void:
+	## 批次 A 用例②：瞬移（步长注 0）退化起终点一次判定——左移 → 面左；
+	## 同列竖直移 → 回正默认（与攻击同列回正同口径）
+	var battle: Control = await _EnterRandomBattle()
+	assert_object(battle).is_not_null()
+	battle.controller.delay_seconds = 0.0
+	battle.controller.abort_battle()
+	var cfg: CoreConfig = battle.context.cfg
+	var original_step: float = cfg.ui_battle_move_step_seconds
+	cfg.ui_battle_move_step_seconds = 0.0
+	var board: BattleBoard = battle.get_node("%BoardLayer") as BattleBoard
+	var unit: BattleUnit = _AliveUnitOf(battle.context.enemies)
+	# 左移两格：起终点一次判定 → 面左
+	var from_a: Vector2i = Vector2i(5, 5)
+	var to_a: Vector2i = from_a + Vector2i(-2, 0)
+	unit.grid_pos = to_a
+	board.set_badge_flip(unit, false)
+	battle.controller.unit_moved.emit(unit, from_a, to_a, [to_a])
+	assert_bool(_FlipHOf(_BadgeOf(battle, unit))).is_true() \
+			.override_failure_message("瞬移左移未按起终点判定面左")
+	# 同列竖直移：x 相等 → 回正默认
+	var from_b: Vector2i = to_a
+	var to_b: Vector2i = Vector2i(from_b.x, from_b.y - 2)
+	unit.grid_pos = to_b
+	battle.controller.unit_moved.emit(unit, from_b, to_b, [to_b])
+	assert_bool(_FlipHOf(_BadgeOf(battle, unit))).is_false() \
+			.override_failure_message("瞬移同列移未回正默认朝向")
+	cfg.ui_battle_move_step_seconds = original_step
+
+func test_move_facing_no_displacement_keeps_flip() -> void:
+	## 批次 A 用例③：无位移（起点==终点）不触发朝向判定——预置翻转维持原样
+	var battle: Control = await _EnterRandomBattle()
+	assert_object(battle).is_not_null()
+	battle.controller.delay_seconds = 0.0
+	battle.controller.abort_battle()
+	var board: BattleBoard = battle.get_node("%BoardLayer") as BattleBoard
+	var unit: BattleUnit = _AliveUnitOf(battle.context.enemies)
+	var stay: Vector2i = Vector2i(5, 5)
+	unit.grid_pos = stay
+	board.set_badge_flip(unit, true)
+	battle.controller.unit_moved.emit(unit, stay, stay, [])
+	assert_bool(_FlipHOf(_BadgeOf(battle, unit))).is_true() \
+			.override_failure_message("无位移分支不应触碰朝向（预置翻转被改写）")
+
+func test_move_facing_and_attack_facing_bidirectional() -> void:
+	## 批次 A 用例④：移动与攻击朝向时序互相覆盖——移动→攻击（右移回正后
+	## 攻击左侧目标再翻面）；攻击→移动（攻击翻面态下右移链首回调回正）
+	var battle: Control = await _EnterRandomBattle()
+	assert_object(battle).is_not_null()
+	battle.controller.delay_seconds = 0.0
+	battle.controller.abort_battle()
+	var cfg: CoreConfig = battle.context.cfg
+	var original_step: float = cfg.ui_battle_move_step_seconds
+	cfg.ui_battle_move_step_seconds = 0.02
+	var board: BattleBoard = battle.get_node("%BoardLayer") as BattleBoard
+	var caster: BattleUnit = _AliveUnitOf(battle.context.allies)
+	var target: BattleUnit = _AliveUnitOf(battle.context.enemies)
+	caster.grid_pos = Vector2i(2, 4)
+	var badge: UnitBadge = _BadgeOf(battle, caster)
+	# —— 移动→攻击：预置翻面，右移链首回调回正；移动完成后攻击左侧目标再翻面
+	board.set_badge_flip(caster, true)
+	var from_a: Vector2i = caster.grid_pos
+	var to_a: Vector2i = from_a + Vector2i(2, 0)
+	caster.grid_pos = to_a
+	battle.controller.unit_moved.emit(caster, from_a, to_a,
+			[from_a + Vector2i(1, 0), to_a])
+	await get_tree().process_frame
+	assert_bool(_FlipHOf(badge)).is_false() \
+			.override_failure_message("右移链首未回正（残留攻击翻面未覆盖）")
+	var waited: int = 0
+	while board._move_tweens.has(caster.unit_id) and waited < 300:
+		await get_tree().process_frame
+		waited += 1
+	assert_bool(waited < 300).is_true().override_failure_message("移动 tween 未在帧限内完成")
+	target.grid_pos = Vector2i(to_a.x - 2, to_a.y)
+	battle._OnSkillExecuted(caster, _MakeResult(&"skl_atk_warrior",
+			target.unit_id, true, 5))
+	assert_bool(_FlipHOf(badge)).is_true() \
+			.override_failure_message("攻击未覆盖移动朝向（左侧目标未翻面）")
+	# —— 攻击→移动：翻面态下右移，链首回调回正
+	var from_b: Vector2i = caster.grid_pos
+	var to_b: Vector2i = from_b + Vector2i(2, 0)
+	caster.grid_pos = to_b
+	battle.controller.unit_moved.emit(caster, from_b, to_b,
+			[from_b + Vector2i(1, 0), to_b])
+	await get_tree().process_frame
+	assert_bool(_FlipHOf(badge)).is_false() \
+			.override_failure_message("移动未覆盖攻击朝向（右侧移动未回正）")
+	var settle: int = 0
+	while board._move_tweens.has(caster.unit_id) and settle < 300:
+		await get_tree().process_frame
+		settle += 1
+	cfg.ui_battle_move_step_seconds = original_step
+	assert_bool(settle < 300).is_true().override_failure_message("移动 tween 未在帧限内完成（攻击→移动）")
 
 func test_turn_order_bar_uses_idle_first_frame_atlas() -> void:
 	## 序条头像契约（×2 断言组）：重建后每条目 icon = AtlasTexture（idle 竖条

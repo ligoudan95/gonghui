@@ -4,7 +4,8 @@
 ## 两段式确认交互（选中→高亮→点目标预览→再点确认；取消=点其他区域/再点钮；
 ## 技能确认带血条伤害预览——2026-09-24 二轮反馈）、技能按钮态（资源不足灰显、
 ## hover 描述与预计伤害——二轮反馈）、蛊惑紫边提示、敌方延时点按跳过、
-## 敌方行动提示行（拍板 C 2026-10-01：敌方轮日志栏顶部一行，我方轮/终局清除）、
+## 敌方行动提示行（拍板 C 2026-10-01：敌方轮右栏提示行——批次 B 布局重构后
+## 居 RightLayout 首位，我方轮/终局清除）、
 ## 撤退确认弹窗、结算面板路由回公会壳。
 ## 移动范围回显口径（2026-09-26 试玩反馈②③）：指令窗内全部取消路径
 ## （出格点按/不可达空格/执行被拒/技能取消）统一 R3-05「取消后回显」——
@@ -63,9 +64,9 @@ const RETREAT_CONFIRM_STATIC_TEXT: String = "确认撤退？撤退将按委托�
 var controller: BattleController = null
 ## GameData 单例引用
 var _game_data: Node = null
-## 右栏内容 min 宽基准（中4：_ready 自 tscn 值捕获——补偿后还原的零硬编码锚点）
+## 右栏内容 min 宽基准（中4：_ready 自 tscn 值捕获——补偿后还原的零硬编码锚点；
+## 批次 B 布局重构：UnitInfoCard 迁左带，右栏仅 BattleLog 一项需补偿）
 var _right_log_min_base: Vector2 = Vector2.ZERO
-var _right_card_min_base: Vector2 = Vector2.ZERO
 ## 当前技能选择（&"" = 移动模式）
 var _selected_skill_id: StringName = &""
 ## 技能选择模式下的范围格集
@@ -139,16 +140,15 @@ func _ApplyBackgroundTexture() -> void:
 			get_node_or_null("/root/GameData"))
 
 func _ApplyFontTiers() -> void:
-	## tscn 内嵌字号档位覆写（B-7）：RoundLabel（26→large）/ OrderTitle（16→
-	## normal）/ IdleLabel（18→normal）——tscn 值留占位，运行时以 cfg 档位为准；
-	## W3-08：底部指令钮四枚 + 撤退补齐（按钮统一 normal 档——三屏收口）
+	## tscn 内嵌字号档位覆写（B-7）：RoundLabel（26→large）/ IdleLabel（18→
+	## normal）——tscn 值留占位，运行时以 cfg 档位为准；W3-08：底部指令钮
+	## 四枚 + 撤退补齐（按钮统一 normal 档——三屏收口）；批次 B 布局重构：
+	## OrderTitle 节点已删（行动序竖列归左带，标题行退役）
 	## 参数：无
 	## 返回：无
 	var cfg: CoreConfig = context.cfg if context != null else null
 	%RoundLabel.add_theme_font_size_override("font_size",
 			UiTheme.font_of(cfg, &"ui_font_size_large", UiTheme.FONT_LARGE))
-	%OrderTitle.add_theme_font_size_override(
-			"font_size", UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 	%IdleLabel.add_theme_font_size_override("font_size",
 			UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 	# 拍板 C：敌方行动提示行与日志条目同档（minor——tscn 值留占位）
@@ -163,22 +163,21 @@ func _ApplyFontTiers() -> void:
 
 func _SetupRightPanelScrollCompensation() -> void:
 	## 右栏矮窗滚动条补偿挂接（中4 盲审修复：Godot 4 滚动条非 overlay——
-	## 竖滚动条出现占内容区宽，内容 min 宽 284 恒超剩余宽而 BattleLog/
-	## UnitInfoCard 右缘（含面板边框）被恒裁不可达且 horizontal_scroll_mode
-	## 禁横滚无法到达）：捕获 tscn min 宽基准 + 监听竖滚动条显隐动态补偿
-	##（可见 → 内容 min 宽让出条宽恰满可视宽；隐藏 → 还原基准。宽度增减
-	## 不影响内容高——滚动条显隐无振荡回路）
+	## 竖滚动条出现占内容区宽，内容 min 宽 308 恒超剩余宽而 BattleLog 右缘
+	##（含面板边框）被恒裁不可达且 horizontal_scroll_mode 禁横滚无法到达）：
+	## 捕获 tscn min 宽基准 + 监听竖滚动条显隐动态补偿（可见 → 内容 min 宽
+	## 让出条宽恰满可视宽；隐藏 → 还原基准。宽度增减不影响内容高——滚动条
+	## 显隐无振荡回路）；批次 B：右栏仅 BattleLog（UnitInfoCard 迁左带）
 	## 参数：无
 	## 返回：无
 	_right_log_min_base = %BattleLog.custom_minimum_size
-	_right_card_min_base = %UnitInfoCard.custom_minimum_size
 	var right_panel: ScrollContainer = %RightPanel as ScrollContainer
 	right_panel.get_v_scroll_bar().visibility_changed.connect(
 			_ApplyRightPanelScrollCompensation)
 
 func _ApplyRightPanelScrollCompensation() -> void:
-	## 右栏内容 min 宽补偿应用（中4）：竖滚动条可见 → BattleLog/UnitInfoCard
-	## min 宽 = 基准 − 条宽；隐藏 → 还原基准（常态窗口不损失宽度）
+	## 右栏内容 min 宽补偿应用（中4）：竖滚动条可见 → BattleLog min 宽 =
+	## 基准 − 条宽；隐藏 → 还原基准（常态窗口不损失宽度）
 	## 参数：无
 	## 返回：无
 	var right_panel: ScrollContainer = %RightPanel as ScrollContainer
@@ -188,8 +187,6 @@ func _ApplyRightPanelScrollCompensation() -> void:
 		compensate = bar.size.x if bar.size.x > 0.0 else bar.get_minimum_size().x
 	%BattleLog.custom_minimum_size = Vector2(
 			maxf(0.0, _right_log_min_base.x - compensate), _right_log_min_base.y)
-	%UnitInfoCard.custom_minimum_size = Vector2(
-			maxf(0.0, _right_card_min_base.x - compensate), _right_card_min_base.y)
 
 func _StatusLookupOf() -> Callable:
 	## 状态解析闭包（信息卡消费；上下文未建时返回空解析）
@@ -243,9 +240,16 @@ func _ConnectController() -> void:
 	controller.turn_started.connect(_OnTurnStarted)
 	controller.unit_moved.connect(func(unit: BattleUnit, from_pos: Vector2i,
 			_to_pos: Vector2i, move_path: Array) -> void:
+		# 试玩反馈批：clear_overlays 前置——先清选择态旧层（含预览阶段路径
+		# 预览高光），move_badge 随后按真实路径重建**移动燃线**（独立演出
+		# 生命周期——漏洞1 修复：燃线池不随 clear_overlays/_ClearSelection
+		# 清理，由逐格熄灭回调与移动 tween finished 自然烧完自清——确认分支
+		# 随后的 _ClearSelection 与下一行动轮 turn_started 均不再截断在途
+		# 燃线，敌方长距移动同权（漏洞2 统一解决）；敌方 AI 移动不走
+		# _ClearSelection，选择态旧层清理仅靠此处——前置不改变清理覆盖面
+		%BoardLayer.clear_overlays()
 		%BoardLayer.move_badge(unit, from_pos, move_path)
 		%BoardLayer.refresh_badge(unit)
-		%BoardLayer.clear_overlays()
 		%BoardLayer.RefreshDynamicMarks()
 	)
 	controller.skill_executed.connect(_OnSkillExecuted)
@@ -346,8 +350,11 @@ func _DispatchSkillPose(caster: BattleUnit, result: SkillExecutor.ExecutionResul
 	var target: BattleUnit = context.find_unit(result.target_id)
 	if skill != null and target != null:
 		# 攻击时朝目标翻面（低8 契约显式化：目标在左 → 翻转；目标在右/同列
-		#（x 相等——朝向无相位依据）→ 重置默认朝向 false，不保持上次攻击残留翻转）
-		%BoardLayer.set_badge_flip(caster, target.grid_pos.x < caster.grid_pos.x)
+		#（x 相等——朝向无相位依据）→ 重置默认朝向 false，不保持上次攻击残留
+		# 翻转；批次 A：判定改引 BattleBoard.facing_flip_of 单源——与移动随步
+		# 朝向同口径）
+		%BoardLayer.set_badge_flip(caster, BattleBoard.facing_flip_of(
+				caster.grid_pos.x, target.grid_pos.x))
 	var pose: int = skill.attack_pose if skill != null else SkillDef.AttackPose.NONE
 	match pose:
 		SkillDef.AttackPose.MELEE:
@@ -485,7 +492,12 @@ func _HandleMoveTap(cell: Vector2i) -> void:
 	var reachable: Array[Vector2i] = context.grid.find_reachable(unit, unit.move_final())
 	if reachable.has(cell):
 		_pending_cell = cell
-		%BoardLayer.show_path_preview(unit.grid_pos, cell)
+		# 试玩反馈批修复：预览高光与移动裁决同源——find_path 为 controller.
+		# _move_unit 移动同款寻路函数（同一算法单源），预览即真实将走的路径，
+		# 杜绝旧直线近似（lerp 插值穿障碍）与寻路结果的偏差
+		var preview_path: Array[Vector2i] = context.grid.find_path(unit,
+				unit.grid_pos, cell, unit.move_final())
+		%BoardLayer.show_path_preview(preview_path)
 		return
 	if occupant == null:
 		# 不可达空格点按 = 取消路径预览（反馈②③：回显移动范围——跳过连点/
@@ -583,7 +595,7 @@ func _ClearSelection() -> void:
 	%BoardLayer.clear_overlays()
 
 # --------------------------------------------------------------------------
-# 按钮组（BottomBar）
+# 按钮组（ButtonRow——批次 B 布局重构：左下角单行贴底）
 # --------------------------------------------------------------------------
 
 func _RefreshActionBarForCurrentTurn() -> void:

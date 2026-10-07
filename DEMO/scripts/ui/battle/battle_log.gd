@@ -1,4 +1,5 @@
-## 战斗日志栏（BattleLog，PanelContainer——右侧栏 UnitInfoCard 正下方）
+## 战斗日志栏（BattleLog，PanelContainer——右栏 RightLayout 主体：敌方提示行
+## 正下方；批次 B 布局重构前位于 UnitInfoCard 正下方）
 ## 职责：实时滚动展示战斗全过程——回合/行动轮/移动/技能执行明细（消费
 ## ExecutionResult.trace 结构化键值，中文模板在 UI 层——逻辑层零文案）、
 ## 状态变化/倒地/终局。数值链路可视化 = 17 案验算带的玩家侧呈现

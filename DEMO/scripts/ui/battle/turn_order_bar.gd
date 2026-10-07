@@ -1,10 +1,11 @@
-## 回合序条（TurnOrderBar，HBoxContainer——TopBar 内）
+## 回合序条（TurnOrderBar，VBoxContainer——左带 LeftPanel/LeftScroll 内竖排）
 ## 职责：展示本回合行动序列——各单位小头像（M6：idle 竖条首帧 AtlasTexture
-## 36×36 Nearest）+ 速度值，当前行动位金色高亮、倒地灰显；每回合初
+## 36×36 Nearest）+ 速度值（批次 B 布局重构：条目改横排小卡 icon 左/速度右，
+## 序条整体竖列化贴左带），当前行动位金色高亮、倒地灰显；每回合初
 ## （round_started）重建。
-## 数据来源：M1 批 3 方案 §7.1（TopBar.TurnOrderBar：头像+速度值当前高亮）。
+## 数据来源：M1 批 3 方案 §7.1（头像+速度值当前高亮——批次 B 改竖列布局）。
 class_name TurnOrderBar
-extends HBoxContainer
+extends VBoxContainer
 
 ## 序条头像显示尺寸
 const ICON_SIZE: float = 36.0
@@ -57,9 +58,10 @@ func rebuild(units: Array) -> void:
 	_units.clear()
 	for unit: BattleUnit in units:
 		var entry := PanelContainer.new()
-		entry.custom_minimum_size = Vector2(ICON_SIZE + 16, ICON_SIZE + 28)
+		# 批次 B：条目改横排小卡（icon 左/速度右）——序条竖列化的条目形态
+		entry.custom_minimum_size = Vector2(92, 44)
 		entry.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var box := VBoxContainer.new()
+		var box := HBoxContainer.new()
 		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		box.add_theme_constant_override("separation", 0)
 		var icon := TextureRect.new()
@@ -77,7 +79,7 @@ func rebuild(units: Array) -> void:
 		var speed_label := Label.new()
 		speed_label.text = str(unit.speed_for_order())
 		speed_label.add_theme_font_size_override("font_size", _UiFont(&"ui_font_size_minor", UiTheme.FONT_MINOR))
-		speed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		speed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		speed_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		box.add_child(speed_label)
 		entry.add_child(box)

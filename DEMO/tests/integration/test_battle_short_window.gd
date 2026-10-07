@@ -1,10 +1,13 @@
-## 极矮窗口契约测试（M6 批 2 挂账 4.3：720px 最小窗口下战斗屏右栏完整可操作）
-## 覆盖：project 最小窗口 1280×720 设置且不与双档视口冲突；右侧栏容器化结构
-##（UnitInfoCard+BattleLog 收进 RightPanel ScrollContainer）；内容 min 高恒超
-## 720 视口可用高（矮窗必然可滚——#24 同款先例）；模拟 1280×720 根尺寸后
-## 右栏滚动可达 + 日志正尺寸 + 底栏不遮右栏；棋盘正尺寸；中4（盲审）：
-## 竖滚动条占宽补偿契约（内容 min 宽让出条宽、右缘不裁）；低16（盲审）：
-## 1280×600 嵌入视口监测档（编辑器嵌入不守最小窗——回归红灯）。
+## 极矮窗口契约测试（M6 批 2 挂账 4.3；批次 B 布局重构改版 2026-10-07：
+## 左带（回合大字+竖排序条+信息卡）与右栏（提示行+日志）新结构下 720px
+## 最小窗口完整可操作）
+## 覆盖：project 最小窗口 1280×720 设置且不与双档视口冲突；新树结构契约
+##（UnitInfoCard 归 LeftPanel 末子、BattleLog 归 RightLayout、EnemyTurnHint
+## 首位、TurnOrderBar 在 LeftScroll 内）；720 档左栏 7 条目不溢出（LeftScroll
+## 在位且无需滚动）；600 嵌入视口档 LeftScroll 纵向可滚 + 棋盘正尺寸 + 日志
+## 右缘不越；ButtonRow 右缘不越 RightPanel 左缘；中4（盲审）竖滚动条占宽
+## 补偿契约（强制法：临时放大 BattleLog min.y 制造右栏溢出断言补偿，用后
+## 还原——右栏常态 min 428 恒低于可用高，自然溢出不再可复现）。
 extends GdUnitTestSuite
 
 ## 战斗场景路径
@@ -28,101 +31,140 @@ func test_project_minimum_window_settings() -> void:
 	assert_bool(min_width <= vp_width and min_height <= vp_height).is_true() \
 			.override_failure_message("最小窗口超双档视口——设置冲突")
 
-func test_right_panel_container_structure() -> void:
-	## 容器化结构契约：UnitInfoCard/BattleLog 均为 RightPanel/RightLayout 子节点
-	##（极矮窗口改造收口——两栏不再各自锚定漂浮）；树序信息卡在日志上
+func _MakeUnits(count: int) -> Array:
+	## 手造测试单位（rebuild 消费面：unit_id/attrs/alive——speed_for_order
+	## 未 bind 走兜底 0，条目尺寸契约与速度值无关）
+	## 参数 count：单位数
+	## 返回：BattleUnit 数组
+	var units: Array = []
+	for i: int in range(count):
+		var unit := BattleUnit.new()
+		unit.unit_id = StringName("probe_unit_%d" % i)
+		unit.display_name = "探针%d" % i
+		unit.alive = true
+		units.append(unit)
+	return units
+
+func test_layout_structure_new_tree() -> void:
+	## 新树结构契约（批次 B 布局重构）：RoundLabel=LeftPanel 首子、
+	## TurnOrderBar=LeftScroll 内、UnitInfoCard=LeftPanel 末子；
+	## EnemyTurnHint=RightLayout 首子、BattleLog=RightLayout 内
 	var runner: GdUnitSceneRunner = scene_runner(BATTLE_SCENE)
 	var battle: Control = runner.scene() as Control
 	assert_object(battle).is_not_null()
+	var left_panel: Control = battle.get_node("%LeftPanel")
+	var round_label: Control = battle.get_node("%RoundLabel")
+	assert_str(round_label.get_parent().name).is_equal("LeftPanel")
+	assert_int(round_label.get_index()).is_equal(0)
+	var order_bar: Control = battle.get_node("%TurnOrderBar")
+	assert_str(order_bar.get_parent().name).is_equal("LeftScroll")
+	assert_str(order_bar.get_parent().get_parent().name).is_equal("LeftPanel")
 	var info_card: Control = battle.get_node("%UnitInfoCard")
+	assert_str(info_card.get_parent().name).is_equal("LeftPanel")
+	assert_int(info_card.get_index()).is_equal(left_panel.get_child_count() - 1)
 	var log_panel: Control = battle.get_node("%BattleLog")
-	assert_str(info_card.get_parent().name).is_equal("RightLayout")
 	assert_str(log_panel.get_parent().name).is_equal("RightLayout")
-	assert_str(log_panel.get_parent().get_parent().name).is_equal("RightPanel")
-	assert_bool(info_card.get_index() < log_panel.get_index()).is_true()
+	var hint: Control = battle.get_node("%EnemyTurnHint")
+	assert_str(hint.get_parent().name).is_equal("RightLayout")
+	assert_int(hint.get_index()).is_equal(0)
 
-func test_right_panel_content_min_exceeds_720_viewport() -> void:
-	## 滚动必然性契约：信息卡点亮态下右栏内容 min 总高（180 + 间距 + 420 =
-	## 608）恒大于 720 视口下右栏可用高（720 − 84 顶 − 108 底 = 528）——数值
-	## 锚定，不依赖运行时视口（信息卡默认隐藏、show_unit 才点亮——隐藏子
-	## 节点不进容器 min，测试显式点亮后量取）
+func test_short_window_left_panel_no_overflow() -> void:
+	## 720 档左栏不溢出契约（批次 B 改版）：模拟 1280×720 根尺寸 + 信息卡
+	## 点亮 + 序条 7 条目 rebuild（满员口径）——左栏内容 min 总高（31+8+356+
+	## 8+180 = 583）低于左栏可用高（720 − 12 顶 − 92 底 = 616），LeftScroll
+	## 无需纵向滚动（v_bar max == 0）；LeftScroll 在位（结构不塌）
 	var runner: GdUnitSceneRunner = scene_runner(BATTLE_SCENE)
 	var battle: Control = runner.scene() as Control
-	var info_card: Control = battle.get_node("%UnitInfoCard")
-	info_card.visible = true
-	await get_tree().process_frame
-	var layout: VBoxContainer = battle.get_node("%RightPanel/RightLayout") as VBoxContainer
-	var combined_min: Vector2 = layout.get_combined_minimum_size()
-	assert_float(combined_min.y).is_greater_equal(608.0) \
-			.override_failure_message("右栏内容 min 高 %s 塌缩（预期 ≥608）" % combined_min)
-	assert_bool(combined_min.y > 720.0 - 84.0 - 108.0).is_true() \
-			.override_failure_message("720 视口下右栏内容不超高——滚动契约失效")
-
-func test_short_window_right_panel_scrollable() -> void:
-	## 模拟 1280×720 根尺寸 + 信息卡点亮态：右栏纵向滚动可达（v scroll bar
-	## max > 0）——矮窗下右栏完整可操作的机制锚点
-	var runner: GdUnitSceneRunner = scene_runner(BATTLE_SCENE)
-	var battle: Control = runner.scene() as Control
-	assert_object(battle).is_not_null()
 	battle.get_node("%UnitInfoCard").visible = true
+	var order_bar: TurnOrderBar = battle.get_node("%TurnOrderBar") as TurnOrderBar
+	order_bar.rebuild(_MakeUnits(7))
 	battle.size = Vector2(1280.0, 720.0)
 	await get_tree().process_frame
 	await get_tree().process_frame
-	var right_panel: ScrollContainer = battle.get_node("%RightPanel") as ScrollContainer
-	assert_object(right_panel).is_not_null()
-	assert_float(right_panel.size.y).is_greater(500.0) \
-			.override_failure_message("720 根尺寸下右栏高度异常（%s）" % right_panel.size)
-	assert_float(right_panel.get_v_scroll_bar().max_value).is_greater(0.0) \
-			.override_failure_message("矮窗下右栏不可滚动——内容被裁不可达")
+	var left_scroll: ScrollContainer = battle.get_node("%LeftScroll") as ScrollContainer
+	assert_object(left_scroll).is_not_null() \
+			.override_failure_message("LeftScroll 结构塌失")
+	assert_float(left_scroll.size.y).is_greater(200.0) \
+			.override_failure_message("720 档 LeftScroll 高度塌缩（%s）" % left_scroll.size)
+	# 溢出判据：v_bar max_value 语义 = 内容总高（Range.max）——无溢出 = 内容高
+	# 不超视口高（max ≤ size.y；条目总高 332-356 < 720 档视口 ~384 恰好收纳）
+	assert_float(left_scroll.get_v_scroll_bar().max_value) \
+			.is_less_equal(left_scroll.size.y + 0.5) \
+			.override_failure_message("720 档左栏溢出（内容高 %s > 视口高 %s）——满员序条+信息卡应恰好收纳" % [
+					left_scroll.get_v_scroll_bar().max_value, left_scroll.size.y])
 
-func test_short_window_log_and_board_positive_size() -> void:
-	## 模拟 1280×720 根尺寸：日志正尺寸（>200×200——六轮塌缩 BUG 防回归）
-	## + 棋盘正尺寸（矮窗不挤塌左侧战场）
+func test_600_height_left_scroll_and_log_and_board() -> void:
+	## 600 嵌入视口监测档（低16 同款：编辑器嵌入不守最小窗——回归红灯）：
+	## 1280×600 下左栏必然超高（LeftScroll 可滚 = 7 条目竖列完整可达）+
+	## 棋盘正尺寸（满高布局不塌）+ 日志右缘不越面板可视右缘（补偿覆盖矮档）
 	var runner: GdUnitSceneRunner = scene_runner(BATTLE_SCENE)
 	var battle: Control = runner.scene() as Control
-	battle.size = Vector2(1280.0, 720.0)
+	battle.get_node("%UnitInfoCard").visible = true
+	var order_bar: TurnOrderBar = battle.get_node("%TurnOrderBar") as TurnOrderBar
+	order_bar.rebuild(_MakeUnits(7))
+	battle.size = Vector2(1280.0, 600.0)
 	await get_tree().process_frame
 	await get_tree().process_frame
-	var log_panel: Control = battle.get_node("%BattleLog")
-	assert_float(log_panel.size.y).is_greater(200.0) \
-			.override_failure_message("矮窗日志高度塌缩（%s）" % log_panel.size)
-	assert_float(log_panel.size.x).is_greater(200.0)
+	await get_tree().process_frame
+	var left_scroll: ScrollContainer = battle.get_node("%LeftScroll") as ScrollContainer
+	var left_bar: VScrollBar = left_scroll.get_v_scroll_bar()
+	assert_bool(left_bar.is_visible_in_tree()).is_true() \
+			.override_failure_message("600 档左栏滚动条未出现——竖列序条不可达")
+	# 溢出判据（v_bar max = 内容总高）：内容高超视口高 = 纵向可滚（序条可达）
+	assert_float(left_bar.max_value).is_greater(left_scroll.size.y) \
+			.override_failure_message("600 档左栏不可滚动（内容高 %s ≤ 视口高 %s）" % [
+					left_bar.max_value, left_scroll.size.y])
 	var board: Control = battle.get_node("%BoardLayer")
 	assert_float(board.size.x).is_greater(200.0)
-	assert_float(board.size.y).is_greater(200.0) \
-			.override_failure_message("矮窗棋盘高度塌缩（%s）" % board.size)
+	assert_float(board.size.y).is_greater(150.0) \
+			.override_failure_message("600 档棋盘高度塌缩（%s）" % board.size)
+	var right_panel: ScrollContainer = battle.get_node("%RightPanel") as ScrollContainer
+	var right_bar: VScrollBar = right_panel.get_v_scroll_bar()
+	var bar_width: float = right_bar.size.x if right_bar.is_visible_in_tree() else 0.0
+	var log_panel: PanelContainer = battle.get_node("%BattleLog") as PanelContainer
+	assert_float(log_panel.get_global_rect().end.x) \
+			.is_less_equal(right_panel.get_global_rect().end.x - bar_width + 0.5) \
+			.override_failure_message("600 档日志右缘被裁（%s 越可视右缘 %s）" % [
+					log_panel.get_global_rect().end.x,
+					right_panel.get_global_rect().end.x - bar_width])
 
-func test_short_window_bottom_bar_not_overlapping_right_panel() -> void:
-	## 模拟 1280×720 根尺寸：右栏底边不与底栏顶边重叠（右栏 offset_bottom=-108
-	## vs 底栏高 100——8px 呼吸带数值契约）
+func test_short_window_button_row_not_overlapping_right_panel() -> void:
+	## 模拟 1280×720 根尺寸：ButtonRow 右缘不越 RightPanel 左缘（五钮左下单行
+	## 与右栏无水平重叠——批次 B 新版遮蔽契约，替代原「底栏不遮右栏」）
 	var runner: GdUnitSceneRunner = scene_runner(BATTLE_SCENE)
 	var battle: Control = runner.scene() as Control
 	battle.size = Vector2(1280.0, 720.0)
 	await get_tree().process_frame
 	await get_tree().process_frame
+	var button_row: Control = battle.get_node("%ButtonRow")
 	var right_panel: Control = battle.get_node("%RightPanel")
-	var bottom_bar: Control = battle.get_node("BottomBar")
-	assert_float(right_panel.get_end().y).is_less_equal(bottom_bar.position.y) \
-			.override_failure_message("右栏底边 %s 越过底栏顶 %s——重叠遮挡" % [
-					right_panel.get_end().y, bottom_bar.position.y])
+	assert_float(button_row.get_global_rect().end.x) \
+			.is_less_equal(right_panel.get_global_rect().position.x + 0.5) \
+			.override_failure_message("ButtonRow 右缘 %s 越过 RightPanel 左缘 %s——水平重叠" % [
+					button_row.get_global_rect().end.x,
+					right_panel.get_global_rect().position.x])
 
-func test_short_window_scrollbar_compensation_no_clip() -> void:
-	## 中4（盲审）契约：720 矮窗竖滚动条出现时——①内容 min 宽 + 滚动条宽 ≤
-	## 面板宽（补偿生效）；②日志右缘不越面板可视右缘（横滚禁用下越界即恒
-	## 裁不可达——含面板右边框完整可见）。修法 = battle_screen 竖滚动条显隐
-	## 动态补偿内容 min 宽（条宽让出，非 overlay 滚动条不再挤裁内容）
+func test_short_window_scrollbar_compensation_forced() -> void:
+	## 中4（盲审）契约（批次 B 强制法版）：右栏常态内容 min（提示行隐藏 +
+	## 日志 420 + 间距）恒低于可用高——竖滚动条自然溢出不再可复现，改为
+	## 临时放大 BattleLog min.y（base 同步改——防补偿回调按旧 base 回写引发
+	## 显隐振荡）强制溢出：①补偿生效（min 宽 + 条宽 ≤ 面板宽）；②日志右缘
+	## 不越面板可视右缘（横滚禁用下越界即恒裁不可达）；用后双还原
 	var runner: GdUnitSceneRunner = scene_runner(BATTLE_SCENE)
 	var battle: Control = runner.scene() as Control
-	battle.get_node("%UnitInfoCard").visible = true
 	battle.size = Vector2(1280.0, 720.0)
+	var log_panel: PanelContainer = battle.get_node("%BattleLog") as PanelContainer
+	var base: Vector2 = battle._right_log_min_base
+	# 强制溢出：min.y 放大至超右栏可用高（720 − 12 顶 − 12 底 = 696），base 同步
+	battle._right_log_min_base = Vector2(base.x, 900.0)
+	log_panel.custom_minimum_size = Vector2(base.x, 900.0)
 	await get_tree().process_frame
 	await get_tree().process_frame
 	await get_tree().process_frame
 	var right_panel: ScrollContainer = battle.get_node("%RightPanel") as ScrollContainer
 	var bar: VScrollBar = right_panel.get_v_scroll_bar()
 	assert_bool(bar.is_visible_in_tree()).is_true() \
-			.override_failure_message("720 矮窗右栏竖滚动条未出现——契约前置失效")
-	var log_panel: PanelContainer = battle.get_node("%BattleLog") as PanelContainer
+			.override_failure_message("强制溢出下右栏竖滚动条未出现——契约前置失效")
 	# ① 补偿数值契约：内容 min 宽已让出滚动条宽
 	assert_float(log_panel.custom_minimum_size.x + bar.size.x) \
 			.is_less_equal(right_panel.size.x + 0.5) \
@@ -134,29 +176,7 @@ func test_short_window_scrollbar_compensation_no_clip() -> void:
 			.override_failure_message("BattleLog 右缘 %s 越可视右缘 %s——矮窗右缘恒裁不可达" % [
 					log_panel.get_global_rect().end.x,
 					right_panel.get_global_rect().end.x - bar.size.x])
-
-func test_short_window_600_height_layout_monitor() -> void:
-	## 低16（盲审）：<720 嵌入视口监测档（project 最小窗只约束独立运行窗——
-	## 编辑器嵌入视口不守 1280×720，无兜底只能监测）：1280×600 下右栏仍可
-	## 滚 + 日志右缘不裁 + 棋盘不塌（回归红灯；窗口管理属编辑器行为工程上
-	## 不可控，见 battle_screen/project.godot 注）
-	var runner: GdUnitSceneRunner = scene_runner(BATTLE_SCENE)
-	var battle: Control = runner.scene() as Control
-	battle.get_node("%UnitInfoCard").visible = true
-	battle.size = Vector2(1280.0, 600.0)
+	# 双还原（min + base——防污染后续用例）
+	battle._right_log_min_base = base
+	log_panel.custom_minimum_size = base
 	await get_tree().process_frame
-	await get_tree().process_frame
-	await get_tree().process_frame
-	var right_panel: ScrollContainer = battle.get_node("%RightPanel") as ScrollContainer
-	var bar: VScrollBar = right_panel.get_v_scroll_bar()
-	assert_bool(bar.is_visible_in_tree()).is_true()
-	assert_float(bar.max_value).is_greater(0.0) \
-			.override_failure_message("600 嵌入视口右栏不可滚动")
-	var log_panel: PanelContainer = battle.get_node("%BattleLog") as PanelContainer
-	assert_float(log_panel.get_global_rect().end.x) \
-			.is_less_equal(right_panel.get_global_rect().end.x - bar.size.x + 0.5) \
-			.override_failure_message("600 嵌入视口日志右缘被裁（补偿未覆盖矮档）")
-	var board: Control = battle.get_node("%BoardLayer")
-	assert_float(board.size.x).is_greater(200.0)
-	assert_float(board.size.y).is_greater(150.0) \
-			.override_failure_message("600 嵌入视口棋盘高度塌缩（%s）" % board.size)
