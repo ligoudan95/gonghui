@@ -202,7 +202,7 @@ func _GenerateSkills() -> bool:
 		{ATTR_STRENGTH: 1.0}, SkillDef.DamageType.PHYSICAL), "res://data/class/skills/skl_atk_warrior.tres") and ok
 	ok = _SaveResource(_MakeAttackSkill(&"skl_atk_rogue", "突刺", &"cls_rogue",
 		{ATTR_AGILITY: 1.0}, SkillDef.DamageType.PHYSICAL), "res://data/class/skills/skl_atk_rogue.tres") and ok
-	ok = _SaveResource(_MakeAttackSkill(&"skl_atk_mage", "魔弹", &"cls_mage",
+	ok = _SaveResource(_MakeAttackSkill(&"skl_atk_mage", "杖击", &"cls_mage",
 		{ATTR_INTELLIGENCE: 1.0}, SkillDef.DamageType.MAGICAL), "res://data/class/skills/skl_atk_mage.tres") and ok
 	ok = _SaveResource(_MakeAttackSkill(&"skl_atk_priest", "圣击", &"cls_priest",
 		{ATTR_PERCEPTION: 1.0}, SkillDef.DamageType.MAGICAL), "res://data/class/skills/skl_atk_priest.tres") and ok
@@ -647,7 +647,7 @@ func _GenerateNamingRegistry() -> bool:
 	var skill_rules: Dictionary = {
 		&"skl_atk_warrior": ["挥击（战士普攻）", "skl_atk_<职业>：职业内置普攻（tier=0 出生自带，D3 定细 2026-09-23）"],
 		&"skl_atk_rogue": ["突刺（盗贼普攻）", "skl_atk_<职业>：职业内置普攻"],
-		&"skl_atk_mage": ["魔弹（法师普攻）", "skl_atk_<职业>：职业内置普攻"],
+		&"skl_atk_mage": ["杖击（法师普攻）", "skl_atk_<职业>：职业内置普攻"],
 		&"skl_atk_priest": ["圣击（牧师普攻）", "skl_atk_<职业>：职业内置普攻"],
 		&"skl_atk_ranger": ["射击（游侠普攻）", "skl_atk_<职业>：职业内置普攻"],
 		&"skl_atk_arcanist": ["咒击（奇术师普攻）", "skl_atk_<职业>：职业内置普攻"],

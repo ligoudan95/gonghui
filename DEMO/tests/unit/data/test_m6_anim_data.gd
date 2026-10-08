@@ -27,13 +27,15 @@ func _PoseOf(skill_id: StringName) -> int:
 
 func test_attack_pose_distribution_matches_plan() -> void:
 	## D4=A 拍板回填分布：MELEE 8 / CAST 13 / NONE 2——逐 id 断言
+	## 【2026-10-08 用户拍板】法师普攻 skl_atk_mage 改近战姿态（挥杖）：
+	## MELEE 8→9 / CAST 13→12（火球术/寒冰锁链仍 CAST）
 	for skill_id: StringName in [&"skl_atk_warrior", &"skl_atk_rogue",
-			&"skl_atk_enemy_common", &"skl_warrior_power_strike",
+			&"skl_atk_mage", &"skl_atk_enemy_common", &"skl_warrior_power_strike",
 			&"skl_rogue_backstab", &"skl_enemy_plague_bite",
 			&"skl_enemy_dirty_trick", &"skl_enemy_relentless"]:
 		assert_int(_PoseOf(skill_id)).is_equal(SkillDef.AttackPose.MELEE) \
 				.override_failure_message("%s 应为 MELEE" % skill_id)
-	for skill_id: StringName in [&"skl_atk_mage", &"skl_atk_priest",
+	for skill_id: StringName in [&"skl_atk_priest",
 			&"skl_atk_arcanist", &"skl_atk_ranger", &"skl_mage_fireball",
 			&"skl_mage_frost_chain", &"skl_priest_heal", &"skl_priest_smite",
 			&"skl_ranger_piercing_arrow", &"skl_ranger_set_trap",

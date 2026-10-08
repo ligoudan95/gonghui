@@ -681,11 +681,11 @@ func test_rogue_sprint_effect_and_lifecycle() -> void:
 	assert_str(String(short.error)).is_equal("no_resource")
 
 # ====================================================================
-# D. 法师（魔弹 / 火球术 / 寒冰锁链）
+# D. 法师（杖击 / 火球术 / 寒冰锁链）
 # ====================================================================
 
 func test_mage_bolt_damage_value() -> void:
-	## ②魔弹（普攻）：毛 =(智16×1.0+武器2)×1.0 = 18.0 → 法术轨
+	## ②杖击（普攻）：毛 =(智16×1.0+武器2)×1.0 = 18.0 → 法术轨
 	## round(18)−max(0, 甲2−法穿3) = 18；命中率 = 0.85−0.04 = 0.81
 	var mage := _MakeMage(Vector2i(3, 6))
 	var rat := _MakeTrash(Vector2i(3, 5))
@@ -698,7 +698,7 @@ func test_mage_bolt_damage_value() -> void:
 
 func test_damage_track_routing_physical_vs_magical() -> void:
 	## ②减免轨选对（伤害类型路由）：同一目标（物甲 6/法甲 1/法抗 30%）——
-	## 挥击走物理轨 round(20×1)−max(0, 6−物穿3) = 17；魔弹走法术轨
+	## 挥击走物理轨 round(20×1)−max(0, 6−物穿3) = 17；杖击走法术轨
 	## round(18×0.7)−max(0, 1−法穿3) = 13；trace 的 resist/armor/pierce 按轨取值
 	var target := _MakeTrash(Vector2i(3, 5))
 	target.phys_armor = 6

@@ -28,11 +28,11 @@ func test_push_line_appends_entries() -> void:
 	var log_panel: BattleLog = _MakeLog()
 	log_panel.push_line("—— 回合 1 ——", BattleLog.LineKind.SYSTEM)
 	log_panel.push_line("法师 移动 (2,3)→(4,3)", BattleLog.LineKind.MOVE)
-	log_panel.push_line("法师 · 魔弹 → 鼠人", BattleLog.LineKind.DAMAGE)
+	log_panel.push_line("法师 · 杖击 → 鼠人", BattleLog.LineKind.DAMAGE)
 	var lines: Array[String] = _LinesOf(log_panel)
 	assert_int(lines.size()).is_equal(3)
 	assert_str(lines[0]).is_equal("—— 回合 1 ——")
-	assert_str(lines[2]).is_equal("法师 · 魔弹 → 鼠人")
+	assert_str(lines[2]).is_equal("法师 · 杖击 → 鼠人")
 
 func test_skill_trace_damage_template() -> void:
 	## 伤害链模板：喂结构化 trace（真实键契约）→ 主行 + 命中行 + 伤害行，

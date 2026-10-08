@@ -70,7 +70,7 @@ rule_note = "skl_atk_<职业>：职业内置普攻"
 script = ExtResource("1_xxsy3")
 resource_id = &"skl_atk_mage"
 domain = &"class/skills"
-display_name = "魔弹（法师普攻）"
+display_name = "杖击（法师普攻）"
 rule_note = "skl_atk_<职业>：职业内置普攻"
 
 [sub_resource type="Resource" id="Resource_6s0uu"]
