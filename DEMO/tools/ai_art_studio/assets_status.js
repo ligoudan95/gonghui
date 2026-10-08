@@ -2,17 +2,17 @@
 // 数据源: DEMO/data/assets/registry.tres（键清单=在册）+ DEMO/art_spec/风格指导/art_source_log.md（AI 分区已登记行=正式件单源）+ 脚本内特殊注记
 // 状态值: 已正式入库 / 已正式（待重生成替换） / 占位（错件拦截·待重导出） / 占位（待生成） / 未入册
 // 口径: 119 件 = 规格书 00-10 组总量（registry 118 − ui_main_theme + 字体 2 件）；四套口径说明见 README
-// 生成时间: 2026-10-07 22:48:00
+// 生成时间: 2026-10-08 23:56:27
 window.ASSETS_STATUS = {
-  "generated_at": "2026-10-07 22:48:00",
+  "generated_at": "2026-10-08 23:56:27",
   "source_registry": "F:/game project/gonghui/DEMO/data/assets/registry.tres",
   "source_log": "F:/game project/gonghui/DEMO/art_spec/风格指导/art_source_log.md",
   "expected_total": 119,
   "counts": {
-    "已正式入库": 16,
+    "已正式入库": 18,
     "已正式（待重生成替换）": 0,
     "占位（错件拦截·待重导出）": 0,
-    "占位（待生成）": 101,
+    "占位（待生成）": 99,
     "未入册": 2
   },
   "status": {
@@ -66,7 +66,7 @@ window.ASSETS_STATUS = {
     "spr_cls_mage_downed": "占位（待生成）",
     "spr_cls_mage_hit": "占位（待生成）",
     "spr_cls_mage_idle": "占位（待生成）",
-    "spr_cls_mage_melee_attack": "占位（待生成）",
+    "spr_cls_mage_melee_attack": "已正式入库",
     "spr_cls_mage_move": "占位（待生成）",
     "spr_cls_priest_cast_ranged": "占位（待生成）",
     "spr_cls_priest_downed": "占位（待生成）",
@@ -84,7 +84,7 @@ window.ASSETS_STATUS = {
     "spr_cls_rogue_downed": "占位（待生成）",
     "spr_cls_rogue_hit": "占位（待生成）",
     "spr_cls_rogue_idle": "占位（待生成）",
-    "spr_cls_rogue_melee_attack": "占位（待生成）",
+    "spr_cls_rogue_melee_attack": "已正式入库",
     "spr_cls_rogue_move": "占位（待生成）",
     "spr_cls_warrior_cast_ranged": "占位（待生成）",
     "spr_cls_warrior_downed": "占位（待生成）",
