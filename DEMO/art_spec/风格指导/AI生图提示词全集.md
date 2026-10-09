@@ -6,6 +6,7 @@
 > 覆盖范围：119 件中生图待产 **116 件** = 01 背景 6 + 02 矿洞 tile 9 + 03 村子 tile 7 + 04 单位动作集 54 + 05 小队与交互图标 7 + 06 迷雾 2 + 07 系统图标 19 + 08 UI 基础件 8 + 09 战棋叠加与 D20 4；`bg_guild_hall` 已正式入库不重出；字体 2 件（font_cn_body/font_cn_title）非 AI 生图通道，文末单列说明
 > 口径勘注：派工口径「62 件」= registry 批 3.5a 新增占位键数（不含批 1 已入册的 54 个 `spr_*` 单位件键）；按规格书 v1.3 逐组核对后的生图覆盖范围实为 **116 件**（含 04 组 54 件，与派工分组清单一致），本文档按 116 件全量交付
 > 快照注记 2026-10-03：本全集为 2026-10-02 时点快照（116 件生图口径）；批 3 后半 5 件背景+bg_association_hall 重导出（2026-10-03 入库、错件拦截闭环）6 件+小队交互图标 7 件（2026-10-03 图标批入库、**05 组收官**——《小队交互七个图标合集》一次出图后拆分，两处图与规格偏差注记见 05 组 v1.5（2026-10-03 勘误：原三处中「深蓝叹号」系拆分脚本通道对调 bug 误报、当日修复重入库销项））合计 13 件已正式入库、实际待产 103 件；bg_dormitory 书名瑕疵经用户 2026-10-03 审核接受现状（维持已入库件、原「待重生成」拍板撤销）；bg_title/bg_explore 条目内旧「待拍板」注已由实际出件落地。状态以规格书+art_source_log 状态总表为准。
+> 快照注记 2026-10-09：**战棋等距改造 E1 批**——战棋消费键破裂为菱形另制：①5 件同 id 重制 **256×128 菱形**（`tile_battle_bush`/`tile_battle_highground`/`tile_battle_trap`+`fx_battle_select`/`fx_battle_range`——条目规格与提示词已就地修订 top-down→isometric）；②**12 件 `_iso` 新键条目并入**（02 矿洞组 5+03 村子组 7〔**战棋菱形·完整版预备**——无战斗消费点，村子图战斗化时启用〕）；③覆盖范围 116→**128 件**（总盘 119→131，registry 118→130 键）；④`tile_mine_rock`/`tile_mine_cart`（方形）与 `tile_battle_poison_swamp`（方形）条目保留——E1 起无战棋消费（rock/cart 无现行消费点备用、poison_swamp 转探索专用），提示词维持方形口径不删。菱形件通用规格与几何约束见 `00_全局风格约束.md` §六-8；⑤tile 层正式件产出归 **M6 后专项批 E2 素材波**（M6 批 4 收窄为动作件/图标验收——见 M6 方案），各组「生产顺序建议 P1-P6」维持相对次序参考。
 
 ---
 
@@ -21,7 +22,7 @@
 
 ---
 
-## 全量总表（116 件）
+## 全量总表（128 件 = 116＋E1 批 `_iso` 新键 12·2026-10-09）
 
 | 资源 id | 中文名 | 组 | 尺寸·帧带 | 优先级 |
 |---|---|---|---|---|
@@ -36,10 +37,15 @@
 | tile_mine_wall | 矿洞岩壁 | 02 矿洞tile | 128×128 | P2 tile |
 | tile_mine_rock | 障碍·塌方碎石堆 | 02 矿洞tile | 128×128 | P2 tile |
 | tile_mine_cart | 障碍·废弃矿车 | 02 矿洞tile | 128×128 | P2 tile |
-| tile_battle_bush | 战棋草丛 | 02 矿洞tile | 128×128 | P2 tile |
-| tile_battle_highground | 战棋高地 | 02 矿洞tile | 128×128 | P2 tile |
-| tile_battle_poison_swamp | 战棋毒沼 | 02 矿洞tile | 128×128 | P2 tile |
-| tile_battle_trap | 战棋陷阱（v1.1 扩件） | 02 矿洞tile | 128×128 | P2 tile |
+| tile_battle_bush | 战棋草丛 | 02 矿洞tile | **256×128·菱形** | P2 tile |
+| tile_battle_highground | 战棋高地 | 02 矿洞tile | **256×128·菱形** | P2 tile |
+| tile_battle_poison_swamp | 战棋毒沼 | 02 矿洞tile | 128×128（探索专用） | P2 tile |
+| tile_battle_trap | 战棋陷阱（v1.1 扩件） | 02 矿洞tile | **256×128·菱形** | P2 tile |
+| tile_mine_floor_01_iso | 矿洞地面·基岩（战棋菱形） | 02 矿洞tile | 256×128 | P2 tile |
+| tile_mine_floor_02_iso | 矿洞地面·碎石变体（战棋菱形） | 02 矿洞tile | 256×128 | P2 tile |
+| tile_mine_rock_iso | 障碍·塌方碎石堆（战棋菱形） | 02 矿洞tile | 256×128 | P2 tile |
+| tile_mine_cart_iso | 障碍·废弃矿车（战棋菱形） | 02 矿洞tile | 256×128 | P2 tile |
+| tile_battle_poison_swamp_iso | 战棋毒沼（菱形） | 02 矿洞tile | 256×128 | P2 tile |
 | tile_village_grass_01 | 草地·基色 | 03 村子tile | 128×128 | P2 tile |
 | tile_village_grass_02 | 草地·野花变体 | 03 村子tile | 128×128 | P2 tile |
 | tile_village_path | 土路 | 03 村子tile | 128×128 | P2 tile |
@@ -47,6 +53,13 @@
 | tile_village_house | 农舍 | 03 村子tile | 128×128 | P2 tile |
 | tile_village_tree_01 | 树木·阔叶单株 | 03 村子tile | 128×128 | P2 tile |
 | tile_village_tree_02 | 树木·双株变体 | 03 村子tile | 128×128 | P2 tile |
+| tile_village_grass_01_iso | 草地·基色（战棋菱形·完整版预备） | 03 村子tile | 256×128 | P2 tile |
+| tile_village_grass_02_iso | 草地·野花变体（战棋菱形·完整版预备） | 03 村子tile | 256×128 | P2 tile |
+| tile_village_path_iso | 土路（战棋菱形·完整版预备） | 03 村子tile | 256×128 | P2 tile |
+| tile_village_well_iso | 水井（战棋菱形·完整版预备） | 03 村子tile | 256×128 | P2 tile |
+| tile_village_house_iso | 农舍（战棋菱形·完整版预备） | 03 村子tile | 256×128 | P2 tile |
+| tile_village_tree_01_iso | 树木·阔叶单株（战棋菱形·完整版预备） | 03 村子tile | 256×128 | P2 tile |
+| tile_village_tree_02_iso | 树木·双株变体（战棋菱形·完整版预备） | 03 村子tile | 256×128 | P2 tile |
 | spr_cls_warrior_idle | 战士·待机 | 04 单位动作 | 128×256·2 帧 | P1 单位动作 |
 | spr_cls_warrior_move | 战士·移动 | 04 单位动作 | 128×512·4 帧 | P1 单位动作 |
 | spr_cls_warrior_melee_attack | 战士·近战攻击 | 04 单位动作 | 128×384·3 帧 | P1 单位动作 |
@@ -137,8 +150,8 @@
 | ui_label_result_success | 成功标签底 | 08 UI基础 | 96×48 | P5 UI 件 |
 | ui_label_result_failure | 失败标签底 | 08 UI基础 | 96×48 | P5 UI 件 |
 | ui_label_result_crit_failure | 大失败标签底 | 08 UI基础 | 96×48 | P5 UI 件 |
-| fx_battle_select | 选中框 | 09 叠加·D20 | 128×128 | P6 迷雾·叠加 |
-| fx_battle_range | 范围指示格面 | 09 叠加·D20 | 128×128 | P6 迷雾·叠加 |
+| fx_battle_select | 选中框 | 09 叠加·D20 | **256×128·菱形** | P6 迷雾·叠加 |
+| fx_battle_range | 范围指示格面 | 09 叠加·D20 | **256×128·菱形** | P6 迷雾·叠加 |
 | fx_battle_path_arrow | 路径箭头 | 09 叠加·D20 | 128×128 | P6 迷雾·叠加 |
 | fx_d20 | D20 骰面 | 09 叠加·D20 | 256×256 | P6 迷雾·叠加 |
 
@@ -273,10 +286,10 @@
 
 ---
 
-## 02 矿洞 tile 组（9 件）
+## 02 矿洞 tile 组（14 件 = 方形 9 + 战棋菱形 5·E1 增补）
 
-- 生产顺序建议：**P2**（批 4 替换次序第 2 位·tile 层）；建议先出 `tile_mine_floor_01` 定组内风格样张（回填 00 §四）再铺全组
-- 组级公共说明：源 128×128（AI 工具按 512/1024 正方形出图后缩放，向下缩放无损）；可平铺件四边无缝；物件件轮廓不越画布、底缘对齐格界；状态地格四件（bush/highground/poison_swamp/trap）颜色+形状双编码（形状单独剪影即可区分）；调性=蓝灰冷色+火把橙点光（#5A6472/#3E4550/#E07B39）；验收细则见 `02_矿洞tile组.md`
+- 生产顺序建议：**P2**（tile 层·正式件产出归 E2 素材波）；建议先出 `tile_mine_floor_01`（方形）与 `tile_mine_floor_01_iso`（菱形）定组内两种几何的风格样张（回填 00 §四）再铺全组
+- 组级公共说明：方形 9 件源 128×128（AI 工具按 512/1024 正方形出图后缩放，向下缩放无损）、**探索层专用**（rock/cart 两键 E1 起无现行消费点在册备用）；**战棋菱形 5 件源 256×128（2:1 等距·00 §六-8）**：菱形四顶点=画布四边中点、菱形满幅、四角透明（AI 工具按 2:1 比例出图〔如 1024×512〕后缩放，必要时人工修整顶点对位）；物件件轮廓不越菱形、底缘对齐菱形下缘；状态地格（bush/highground/poison_swamp 两版/trap）颜色+形状双编码；调性=蓝灰冷色+火把橙点光（#5A6472/#3E4550/#E07B39）；验收细则见 `02_矿洞tile组.md`（v2.0）
 
 ### tile_mine_floor_01（矿洞地面·基岩）
 
@@ -378,17 +391,17 @@
 
   中文参考：像素画、像素化、3D 渲染、照片级写实、写实照片、模糊、JPEG 压缩伪影、水印、签名、用户名、文字、字母、数字、徽标、多余肢体、多余手指、躯体变形、变异解剖、低分辨率、草稿、未完成线稿、杂乱线条、生硬渐变、渐变条带、噪点纹理、彩色背景、投影、边框、网格线、tile 边缘交叠
 
-### tile_battle_bush（战棋草丛）
+### tile_battle_bush（战棋草丛·v2.0 同 id 重制菱形）
 
-- 目标规格：128×128（源）·覆盖件（地面底+手绘草丛覆盖）
-- 出图后处理：正方形出图（512 或 1024）→ 缩放至 128×128；草丛图案完整落于画布内、不遮底格四角定位；绿系 #7CA85A、颜色+形状双编码
+- 目标规格：**256×128（源）·菱形覆盖件**（菱形地面底+手绘草丛覆盖——E1 等距批重制，00 §六-8）
+- 出图后处理：2:1 比例出图（如 1024×512）→ 缩放至 256×128；菱形四顶点对位画布四边中点、四角透明（必要时人工修整对位）；草丛图案完整落于菱形内；绿系 #7CA85A、颜色+形状双编码
 - 正向提示词（完整版，直接复制）：
 
   ```text
-  anime style, cel shading, clean bold lineart, flat color blocks with soft highlights, japanese fantasy, high saturation with balanced brightness, grass bush cluster overlay on dungeon floor tile, lush green tufts, top-down game tile, shape and color clearly distinct
+  anime style, cel shading, clean bold lineart, flat color blocks with soft highlights, japanese fantasy, high saturation with balanced brightness, grass bush cluster on isometric diamond tile, rhombus cave floor base, lush green tufts, motif fully inside the diamond, shape and color clearly distinct
   ```
 
-  中文参考：动画风格、赛璐璐上色、干净粗犷线稿、带柔和高光的平涂色块、日式奇幻、高饱和度且明度均衡、地牢地面格上的草丛簇覆盖层、茂盛的绿色草簇、顶视游戏地格、形状与颜色清晰可辨
+  中文参考：动画风格、赛璐璐上色、干净粗犷线稿、带柔和高光的平涂色块、日式奇幻、高饱和度且明度均衡、等距菱形地格上的草丛簇、菱形地牢地面底、茂盛的绿色草簇、母题完整落于菱形内、形状与颜色清晰可辨
 
 - 负面提示词（完整版，直接复制）：
 
@@ -398,17 +411,17 @@
 
   中文参考：像素画、像素化、3D 渲染、照片级写实、写实照片、模糊、JPEG 压缩伪影、水印、签名、用户名、文字、字母、数字、徽标、多余肢体、多余手指、躯体变形、变异解剖、低分辨率、草稿、未完成线稿、杂乱线条、生硬渐变、渐变条带、噪点纹理、彩色背景、投影、边框、网格线
 
-### tile_battle_highground（战棋高地）
+### tile_battle_highground（战棋高地·v2.0 同 id 重制菱形）
 
-- 目标规格：128×128（源）·物件件（抬升台面+侧壁明暗差）
-- 出图后处理：正方形出图（512 或 1024）→ 缩放至 128×128；高度差顶视可读（台面+侧壁阴影）；颜色+形状双编码
+- 目标规格：**256×128（源）·菱形物件件**（等距抬升台面+侧壁明暗差——E1 等距批重制，00 §六-8）
+- 出图后处理：2:1 比例出图（如 1024×512）→ 缩放至 256×128；菱形四顶点对位画布四边中点、四角透明；高度差可读（等距台面+侧壁阴影）；颜色+形状双编码
 - 正向提示词（完整版，直接复制）：
 
   ```text
-  anime style, cel shading, clean bold lineart, flat color blocks with soft highlights, japanese fantasy, high saturation with balanced brightness, raised stone platform tile, elevated terrace with visible side wall shading, top-down game tile, height difference readable
+  anime style, cel shading, clean bold lineart, flat color blocks with soft highlights, japanese fantasy, high saturation with balanced brightness, raised stone platform on isometric diamond tile, rhombus base, elevated terrace with visible side wall shading, height difference readable
   ```
 
-  中文参考：动画风格、赛璐璐上色、干净粗犷线稿、带柔和高光的平涂色块、日式奇幻、高饱和度且明度均衡、抬升的石质平台格、带可见侧壁明暗的高台面、顶视游戏地格、高度差可读
+  中文参考：动画风格、赛璐璐上色、干净粗犷线稿、带柔和高光的平涂色块、日式奇幻、高饱和度且明度均衡、等距菱形地格上的抬升石质平台、菱形底座、带可见侧壁明暗的高台面、高度差可读
 
 - 负面提示词（完整版，直接复制）：
 
@@ -418,9 +431,9 @@
 
   中文参考：像素画、像素化、3D 渲染、照片级写实、写实照片、模糊、JPEG 压缩伪影、水印、签名、用户名、文字、字母、数字、徽标、多余肢体、多余手指、躯体变形、变异解剖、低分辨率、草稿、未完成线稿、杂乱线条、生硬渐变、渐变条带、噪点纹理、彩色背景、投影、边框、网格线
 
-### tile_battle_poison_swamp（战棋毒沼）
+### tile_battle_poison_swamp（战棋毒沼·方形——E1 起探索专用）
 
-- 目标规格：128×128（源）·可平铺（四边无缝）
+- 目标规格：128×128（源）·可平铺（四边无缝）——E1 等距批起**探索层毒瘴格专用**（战棋消费改指菱形新键 `tile_battle_poison_swamp_iso`）
 - 出图后处理：正方形出图（512 或 1024）→ 缩放至 128×128；2×2 平铺目检接缝、必要时人工修整四边无缝（D2=B 全 AI 生成+人工修整单轨）；静态纹理（动效占位为静态）；紫 #7A2E35 系+绿 #4C9A5F 泡点
 - 正向提示词（完整版，直接复制）：
 
@@ -438,17 +451,17 @@
 
   中文参考：像素画、像素化、3D 渲染、照片级写实、写实照片、模糊、JPEG 压缩伪影、水印、签名、用户名、文字、字母、数字、徽标、多余肢体、多余手指、躯体变形、变异解剖、低分辨率、草稿、未完成线稿、杂乱线条、生硬渐变、渐变条带、噪点纹理、彩色背景、投影、边框、网格线
 
-### tile_battle_trap（战棋陷阱（v1.1 扩件））
+### tile_battle_trap（战棋陷阱（v1.1 扩件）·v2.0 同 id 重制菱形）
 
-- 目标规格：128×128（源）·覆盖件（运行时叠加于底格之上的陷阱格面）
-- 出图后处理：正方形出图（512 或 1024）→ 缩放至 128×128；警示剪影独立可辨（金属包边 #A8843C 机械件+警示橙点 #E07B39 系、底为矿洞地面同系）；颜色+形状双编码；正式件到位后程序角标退役
+- 目标规格：**256×128（源）·菱形覆盖件**（运行时叠加于底格之上的菱形陷阱盒面——E1 等距批重制，00 §六-8）
+- 出图后处理：2:1 比例出图（如 1024×512）→ 缩放至 256×128；菱形四顶点对位画布四边中点、四角透明；警示剪影独立可辨（金属包边 #A8843C 机械件+警示橙点 #E07B39 系、底为矿洞地面同系）；颜色+形状双编码；正式件到位后程序角标退役
 - 正向提示词（完整版，直接复制）：
 
   ```text
-  anime style, cel shading, clean bold lineart, flat color blocks with soft highlights, japanese fantasy, high saturation with balanced brightness, bear trap with metal spikes hazard on dungeon floor, mechanical trap face with warning orange accent, top-down game tile, danger clearly readable
+  anime style, cel shading, clean bold lineart, flat color blocks with soft highlights, japanese fantasy, high saturation with balanced brightness, bear trap with metal spikes on isometric diamond tile, rhombus cave floor base, mechanical trap face with warning orange accent, motif fully inside the diamond, danger clearly readable
   ```
 
-  中文参考：动画风格、赛璐璐上色、干净粗犷线稿、带柔和高光的平涂色块、日式奇幻、高饱和度且明度均衡、地牢地面上带金属尖刺的熊夹陷阱、带警示橙色点缀的机械陷阱格面、顶视游戏地格、危险清晰可读
+  中文参考：动画风格、赛璐璐上色、干净粗犷线稿、带柔和高光的平涂色块、日式奇幻、高饱和度且明度均衡、等距菱形地格上带金属尖刺的熊夹陷阱、菱形地牢地面底、带警示橙色点缀的机械陷阱格面、母题完整落于菱形内、危险清晰可读
 
 - 负面提示词（完整版，直接复制）：
 
@@ -458,12 +471,112 @@
 
   中文参考：像素画、像素化、3D 渲染、照片级写实、写实照片、模糊、JPEG 压缩伪影、水印、签名、用户名、文字、字母、数字、徽标、多余肢体、多余手指、躯体变形、变异解剖、低分辨率、草稿、未完成线稿、杂乱线条、生硬渐变、渐变条带、噪点纹理、彩色背景、投影、边框、网格线、tile 边缘交叠
 
+### tile_mine_floor_01_iso（矿洞地面·基岩（战棋菱形）·E1 新键）
+
+- 目标规格：256×128（源）·菱形满幅（菱形四顶点=画布四边中点、四角透明——00 §六-8；战棋 `tile_normal` 底图）
+- 出图后处理：2:1 比例出图（如 1024×512）→ 缩放至 256×128；菱形四顶点对位画布四边中点（必要时人工修整对位）
+- 正向提示词（完整版，直接复制）：
+
+  ```text
+  anime style, cel shading, clean bold lineart, flat color blocks with soft highlights, japanese fantasy, high saturation with balanced brightness, isometric 2:1 diamond floor tile, rhombus-shaped cave stone texture, blue-gray rock with dark cracks, diamond filling the full frame, corners transparent, dungeon mine theme
+  ```
+
+  中文参考：动画风格、赛璐璐上色、干净粗犷线稿、带柔和高光的平涂色块、日式奇幻、高饱和度且明度均衡、2:1 等距菱形地面格、菱形的洞穴岩石纹理、带深色裂缝的蓝灰岩石、菱形铺满全画幅、四角透明、地牢矿洞主题
+
+- 负面提示词（完整版，直接复制）：
+
+  ```text
+  pixel art, pixelated, 3d render, photorealistic, realistic photo, blurry, jpeg artifacts, watermark, signature, username, text, letters, numbers, logo, extra limbs, extra fingers, deformed body, mutated anatomy, lowres, sketch, unfinished lineart, messy lines, harsh gradients, gradient banding, noisy texture, colored background, drop shadow, frame borders, grid lines
+  ```
+
+  中文参考：像素画、像素化、3D 渲染、照片级写实、写实照片、模糊、JPEG 压缩伪影、水印、签名、用户名、文字、字母、数字、徽标、多余肢体、多余手指、躯体变形、变异解剖、低分辨率、草稿、未完成线稿、杂乱线条、生硬渐变、渐变条带、噪点纹理、彩色背景、投影、边框、网格线
+
+### tile_mine_floor_02_iso（矿洞地面·碎石变体（战棋菱形）·E1 新键）
+
+- 目标规格：256×128（源）·菱形满幅（同上；战棋 `tile_normal` 变体混铺）
+- 出图后处理：2:1 比例出图（如 1024×512）→ 缩放至 256×128；菱形四顶点对位；与 floor_01_iso 同色系（变体混铺打破重复感）
+- 正向提示词（完整版，直接复制）：
+
+  ```text
+  anime style, cel shading, clean bold lineart, flat color blocks with soft highlights, japanese fantasy, high saturation with balanced brightness, isometric 2:1 diamond floor tile, rhombus-shaped cave stone with scattered rubble and ore debris, blue-gray rock, diamond filling the full frame, corners transparent
+  ```
+
+  中文参考：动画风格、赛璐璐上色、干净粗犷线稿、带柔和高光的平涂色块、日式奇幻、高饱和度且明度均衡、2:1 等距菱形地面格、菱形的散落着碎石与矿渣的洞穴石地、蓝灰岩石、菱形铺满全画幅、四角透明
+
+- 负面提示词（完整版，直接复制）：
+
+  ```text
+  pixel art, pixelated, 3d render, photorealistic, realistic photo, blurry, jpeg artifacts, watermark, signature, username, text, letters, numbers, logo, extra limbs, extra fingers, deformed body, mutated anatomy, lowres, sketch, unfinished lineart, messy lines, harsh gradients, gradient banding, noisy texture, colored background, drop shadow, frame borders, grid lines
+  ```
+
+  中文参考：像素画、像素化、3D 渲染、照片级写实、写实照片、模糊、JPEG 压缩伪影、水印、签名、用户名、文字、字母、数字、徽标、多余肢体、多余手指、躯体变形、变异解剖、低分辨率、草稿、未完成线稿、杂乱线条、生硬渐变、渐变条带、噪点纹理、彩色背景、投影、边框、网格线
+
+### tile_mine_rock_iso（障碍·塌方碎石堆（战棋菱形）·E1 新键）
+
+- 目标规格：256×128（源）·菱形物件件（母题完整落于菱形内、底缘对齐菱形下缘；战棋 `tile_obstacle` 表现 1）
+- 出图后处理：2:1 比例出图（如 1024×512）→ 缩放至 256×128；菱形四顶点对位、母题不越菱形、不可通行剪影清晰
+- 正向提示词（完整版，直接复制）：
+
+  ```text
+  anime style, cel shading, clean bold lineart, flat color blocks with soft highlights, japanese fantasy, high saturation with balanced brightness, rockslide rubble pile on isometric diamond tile, rhombus cave floor base, clear impassable silhouette, motif fully inside the diamond, bottom edge aligned to diamond lower edge
+  ```
+
+  中文参考：动画风格、赛璐璐上色、干净粗犷线稿、带柔和高光的平涂色块、日式奇幻、高饱和度且明度均衡、等距菱形地格上的塌方碎石堆、菱形洞穴地面底、清晰的不可通行剪影、母题完整落于菱形内、底缘对齐菱形下缘
+
+- 负面提示词（完整版，直接复制）：
+
+  ```text
+  pixel art, pixelated, 3d render, photorealistic, realistic photo, blurry, jpeg artifacts, watermark, signature, username, text, letters, numbers, logo, extra limbs, extra fingers, deformed body, mutated anatomy, lowres, sketch, unfinished lineart, messy lines, harsh gradients, gradient banding, noisy texture, colored background, drop shadow, frame borders, grid lines, overlapping tile edges
+  ```
+
+  中文参考：像素画、像素化、3D 渲染、照片级写实、写实照片、模糊、JPEG 压缩伪影、水印、签名、用户名、文字、字母、数字、徽标、多余肢体、多余手指、躯体变形、变异解剖、低分辨率、草稿、未完成线稿、杂乱线条、生硬渐变、渐变条带、噪点纹理、彩色背景、投影、边框、网格线、tile 边缘交叠
+
+### tile_mine_cart_iso（障碍·废弃矿车（战棋菱形）·E1 新键）
+
+- 目标规格：256×128（源）·菱形物件件（母题完整落于菱形内；战棋 `tile_obstacle` 表现 2）
+- 出图后处理：2:1 比例出图（如 1024×512）→ 缩放至 256×128；菱形四顶点对位、母题不越菱形
+- 正向提示词（完整版，直接复制）：
+
+  ```text
+  anime style, cel shading, clean bold lineart, flat color blocks with soft highlights, japanese fantasy, high saturation with balanced brightness, overturned broken mine cart with rail fragment on isometric diamond tile, rhombus cave floor base, wooden cart with metal parts, motif fully inside the diamond
+  ```
+
+  中文参考：动画风格、赛璐璐上色、干净粗犷线稿、带柔和高光的平涂色块、日式奇幻、高饱和度且明度均衡、等距菱形地格上连着铁轨残段的翻倒破损矿车、菱形洞穴地面底、带金属部件的木质矿车、母题完整落于菱形内
+
+- 负面提示词（完整版，直接复制）：
+
+  ```text
+  pixel art, pixelated, 3d render, photorealistic, realistic photo, blurry, jpeg artifacts, watermark, signature, username, text, letters, numbers, logo, extra limbs, extra fingers, deformed body, mutated anatomy, lowres, sketch, unfinished lineart, messy lines, harsh gradients, gradient banding, noisy texture, colored background, drop shadow, frame borders, grid lines, overlapping tile edges
+  ```
+
+  中文参考：像素画、像素化、3D 渲染、照片级写实、写实照片、模糊、JPEG 压缩伪影、水印、签名、用户名、文字、字母、数字、徽标、多余肢体、多余手指、躯体变形、变异解剖、低分辨率、草稿、未完成线稿、杂乱线条、生硬渐变、渐变条带、噪点纹理、彩色背景、投影、边框、网格线、tile 边缘交叠
+
+### tile_battle_poison_swamp_iso（战棋毒沼（菱形）·E1 新键）
+
+- 目标规格：256×128（源）·菱形满幅（战棋 `tile_poison_swamp` E1 改指本键；色板同方形版）
+- 出图后处理：2:1 比例出图（如 1024×512）→ 缩放至 256×128；菱形四顶点对位；静态纹理（动效占位为静态）；紫 #7A2E35 系+绿 #4C9A5F 泡点
+- 正向提示词（完整版，直接复制）：
+
+  ```text
+  anime style, cel shading, clean bold lineart, flat color blocks with soft highlights, japanese fantasy, high saturation with balanced brightness, isometric 2:1 diamond tile, rhombus-shaped poisonous swamp pool, purple-green bubbling toxic slime texture filling the full diamond, corners transparent
+  ```
+
+  中文参考：动画风格、赛璐璐上色、干净粗犷线稿、带柔和高光的平涂色块、日式奇幻、高饱和度且明度均衡、2:1 等距菱形地格、菱形的毒沼洼池、紫绿相间冒泡的毒液纹理铺满菱形、四角透明
+
+- 负面提示词（完整版，直接复制）：
+
+  ```text
+  pixel art, pixelated, 3d render, photorealistic, realistic photo, blurry, jpeg artifacts, watermark, signature, username, text, letters, numbers, logo, extra limbs, extra fingers, deformed body, mutated anatomy, lowres, sketch, unfinished lineart, messy lines, harsh gradients, gradient banding, noisy texture, colored background, drop shadow, frame borders, grid lines
+  ```
+
+  中文参考：像素画、像素化、3D 渲染、照片级写实、写实照片、模糊、JPEG 压缩伪影、水印、签名、用户名、文字、字母、数字、徽标、多余肢体、多余手指、躯体变形、变异解剖、低分辨率、草稿、未完成线稿、杂乱线条、生硬渐变、渐变条带、噪点纹理、彩色背景、投影、边框、网格线
+
 ---
 
-## 03 村子 tile 组（7 件）
+## 03 村子 tile 组（14 件 = 方形 7 + 战棋菱形 7〔完整版预备〕·E1 增补）
 
-- 生产顺序建议：**P2**（批 4 替换次序第 2 位·tile 层）；建议先出 `tile_village_grass_01` 定组内风格样张再铺全组
-- 组级公共说明：源 128×128（512/1024 出图后缩放）；调性=田园明亮少阴影（草绿 #7CA85A+土黄 #C9A66B，明亮少阴影=安全区视觉信号）——与 02 矿洞组并排「村子明亮田园 vs 矿洞冷暗岩穴」反差成立；可平铺三件四边无缝；物件四件轮廓不越画布、底缘对齐格界；验收细则见 `03_村子tile组.md`
+- 生产顺序建议：**P2**（tile 层·正式件产出归 E2 素材波）；建议先出 `tile_village_grass_01`（方形）定组内风格样张再铺全组；菱形 7 件为完整版预备、无战斗消费点（随 E2/完整版节奏产出）
+- 组级公共说明：方形 7 件源 128×128（512/1024 出图后缩放）；**菱形 7 件源 256×128（2:1 等距·00 §六-8）**：菱形四顶点=画布四边中点、菱形满幅、四角透明、物件母题不越菱形；调性=田园明亮少阴影（草绿 #7CA85A+土黄 #C9A66B，明亮少阴影=安全区视觉信号）——与 02 矿洞组并排「村子明亮田园 vs 矿洞冷暗岩穴」反差成立；菱形版与方形版同件同色系（同套题材两视角）；验收细则见 `03_村子tile组.md`（v2.0）
 
 ### tile_village_grass_01（草地·基色）
 
@@ -596,6 +709,146 @@
   ```
 
   中文参考：动画风格、赛璐璐上色、干净粗犷线稿、带柔和高光的平涂色块、日式奇幻、高饱和度且明度均衡、草地上簇生的两棵小阔叶树、略有高差变化、单格游戏地格、顶视角
+
+- 负面提示词（完整版，直接复制）：
+
+  ```text
+  pixel art, pixelated, 3d render, photorealistic, realistic photo, blurry, jpeg artifacts, watermark, signature, username, text, letters, numbers, logo, extra limbs, extra fingers, deformed body, mutated anatomy, lowres, sketch, unfinished lineart, messy lines, harsh gradients, gradient banding, noisy texture, colored background, drop shadow, frame borders, grid lines, overlapping tile edges
+  ```
+
+  中文参考：像素画、像素化、3D 渲染、照片级写实、写实照片、模糊、JPEG 压缩伪影、水印、签名、用户名、文字、字母、数字、徽标、多余肢体、多余手指、躯体变形、变异解剖、低分辨率、草稿、未完成线稿、杂乱线条、生硬渐变、渐变条带、噪点纹理、彩色背景、投影、边框、网格线、tile 边缘交叠
+
+### tile_village_grass_01_iso（草地·基色（战棋菱形·完整版预备）·E1 新键）
+
+- 目标规格：256×128（源）·菱形满幅（00 §六-8；**无现行战斗消费点**——村子图战斗化时启用）
+- 出图后处理：2:1 比例出图（如 1024×512）→ 缩放至 256×128；菱形四顶点对位画布四边中点（必要时人工修整对位）；色系同方形版 grass_01
+- 正向提示词（完整版，直接复制）：
+
+  ```text
+  anime style, cel shading, clean bold lineart, flat color blocks with soft highlights, japanese fantasy, high saturation with balanced brightness, isometric 2:1 diamond floor tile, rhombus-shaped bright meadow grass texture, soft green with small tufts, diamond filling the full frame, corners transparent
+  ```
+
+  中文参考：动画风格、赛璐璐上色、干净粗犷线稿、带柔和高光的平涂色块、日式奇幻、高饱和度且明度均衡、2:1 等距菱形地面格、菱形的明亮草甸草地纹理、缀着小草簇的柔和绿色、菱形铺满全画幅、四角透明
+
+- 负面提示词（完整版，直接复制）：
+
+  ```text
+  pixel art, pixelated, 3d render, photorealistic, realistic photo, blurry, jpeg artifacts, watermark, signature, username, text, letters, numbers, logo, extra limbs, extra fingers, deformed body, mutated anatomy, lowres, sketch, unfinished lineart, messy lines, harsh gradients, gradient banding, noisy texture, colored background, drop shadow, frame borders, grid lines
+  ```
+
+  中文参考：像素画、像素化、3D 渲染、照片级写实、写实照片、模糊、JPEG 压缩伪影、水印、签名、用户名、文字、字母、数字、徽标、多余肢体、多余手指、躯体变形、变异解剖、低分辨率、草稿、未完成线稿、杂乱线条、生硬渐变、渐变条带、噪点纹理、彩色背景、投影、边框、网格线
+
+### tile_village_grass_02_iso（草地·野花变体（战棋菱形·完整版预备）·E1 新键）
+
+- 目标规格：256×128（源）·菱形满幅（完整版预备，同上）
+- 出图后处理：2:1 比例出图（如 1024×512）→ 缩放至 256×128；菱形四顶点对位；与 grass_01_iso 同色系（变体混铺预备）
+- 正向提示词（完整版，直接复制）：
+
+  ```text
+  anime style, cel shading, clean bold lineart, flat color blocks with soft highlights, japanese fantasy, high saturation with balanced brightness, isometric 2:1 diamond floor tile, rhombus-shaped meadow grass with tiny wildflowers, diamond filling the full frame, corners transparent
+  ```
+
+  中文参考：动画风格、赛璐璐上色、干净粗犷线稿、带柔和高光的平涂色块、日式奇幻、高饱和度且明度均衡、2:1 等距菱形地面格、菱形的缀着细小野花的草甸草地、菱形铺满全画幅、四角透明
+
+- 负面提示词（完整版，直接复制）：
+
+  ```text
+  pixel art, pixelated, 3d render, photorealistic, realistic photo, blurry, jpeg artifacts, watermark, signature, username, text, letters, numbers, logo, extra limbs, extra fingers, deformed body, mutated anatomy, lowres, sketch, unfinished lineart, messy lines, harsh gradients, gradient banding, noisy texture, colored background, drop shadow, frame borders, grid lines
+  ```
+
+  中文参考：像素画、像素化、3D 渲染、照片级写实、写实照片、模糊、JPEG 压缩伪影、水印、签名、用户名、文字、字母、数字、徽标、多余肢体、多余手指、躯体变形、变异解剖、低分辨率、草稿、未完成线稿、杂乱线条、生硬渐变、渐变条带、噪点纹理、彩色背景、投影、边框、网格线
+
+### tile_village_path_iso（土路（战棋菱形·完整版预备）·E1 新键）
+
+- 目标规格：256×128（源）·菱形满幅（完整版预备）
+- 出图后处理：2:1 比例出图（如 1024×512）→ 缩放至 256×128；菱形四顶点对位
+- 正向提示词（完整版，直接复制）：
+
+  ```text
+  anime style, cel shading, clean bold lineart, flat color blocks with soft highlights, japanese fantasy, high saturation with balanced brightness, isometric 2:1 diamond floor tile, rhombus-shaped packed dirt path texture with grass edges, diamond filling the full frame, corners transparent
+  ```
+
+  中文参考：动画风格、赛璐璐上色、干净粗犷线稿、带柔和高光的平涂色块、日式奇幻、高饱和度且明度均衡、2:1 等距菱形地面格、菱形的压实土路纹理带草缘、菱形铺满全画幅、四角透明
+
+- 负面提示词（完整版，直接复制）：
+
+  ```text
+  pixel art, pixelated, 3d render, photorealistic, realistic photo, blurry, jpeg artifacts, watermark, signature, username, text, letters, numbers, logo, extra limbs, extra fingers, deformed body, mutated anatomy, lowres, sketch, unfinished lineart, messy lines, harsh gradients, gradient banding, noisy texture, colored background, drop shadow, frame borders, grid lines
+  ```
+
+  中文参考：像素画、像素化、3D 渲染、照片级写实、写实照片、模糊、JPEG 压缩伪影、水印、签名、用户名、文字、字母、数字、徽标、多余肢体、多余手指、躯体变形、变异解剖、低分辨率、草稿、未完成线稿、杂乱线条、生硬渐变、渐变条带、噪点纹理、彩色背景、投影、边框、网格线
+
+### tile_village_well_iso（水井（战棋菱形·完整版预备）·E1 新键）
+
+- 目标规格：256×128（源）·菱形物件件（母题完整落于菱形内、底缘对齐菱形下缘）
+- 出图后处理：2:1 比例出图（如 1024×512）→ 缩放至 256×128；菱形四顶点对位、母题不越菱形
+- 正向提示词（完整版，直接复制）：
+
+  ```text
+  anime style, cel shading, clean bold lineart, flat color blocks with soft highlights, japanese fantasy, high saturation with balanced brightness, stone water well with wooden frame on isometric diamond tile, rhombus grass floor base, motif fully inside the diamond, bottom edge aligned to diamond lower edge
+  ```
+
+  中文参考：动画风格、赛璐璐上色、干净粗犷线稿、带柔和高光的平涂色块、日式奇幻、高饱和度且明度均衡、等距菱形地格上的石砌木架水井、菱形草地底、母题完整落于菱形内、底缘对齐菱形下缘
+
+- 负面提示词（完整版，直接复制）：
+
+  ```text
+  pixel art, pixelated, 3d render, photorealistic, realistic photo, blurry, jpeg artifacts, watermark, signature, username, text, letters, numbers, logo, extra limbs, extra fingers, deformed body, mutated anatomy, lowres, sketch, unfinished lineart, messy lines, harsh gradients, gradient banding, noisy texture, colored background, drop shadow, frame borders, grid lines, overlapping tile edges
+  ```
+
+  中文参考：像素画、像素化、3D 渲染、照片级写实、写实照片、模糊、JPEG 压缩伪影、水印、签名、用户名、文字、字母、数字、徽标、多余肢体、多余手指、躯体变形、变异解剖、低分辨率、草稿、未完成线稿、杂乱线条、生硬渐变、渐变条带、噪点纹理、彩色背景、投影、边框、网格线、tile 边缘交叠
+
+### tile_village_house_iso（农舍（战棋菱形·完整版预备）·E1 新键）
+
+- 目标规格：256×128（源）·菱形物件件（母题完整落于菱形内）
+- 出图后处理：2:1 比例出图（如 1024×512）→ 缩放至 256×128；菱形四顶点对位、母题不越菱形
+- 正向提示词（完整版，直接复制）：
+
+  ```text
+  anime style, cel shading, clean bold lineart, flat color blocks with soft highlights, japanese fantasy, high saturation with balanced brightness, small countryside farm house on isometric diamond tile, yellow-brown wall with wooden beams, motif fully inside the diamond
+  ```
+
+  中文参考：动画风格、赛璐璐上色、干净粗犷线稿、带柔和高光的平涂色块、日式奇幻、高饱和度且明度均衡、等距菱形地格上的乡间小农舍、黄褐墙面配木梁、母题完整落于菱形内
+
+- 负面提示词（完整版，直接复制）：
+
+  ```text
+  pixel art, pixelated, 3d render, photorealistic, realistic photo, blurry, jpeg artifacts, watermark, signature, username, text, letters, numbers, logo, extra limbs, extra fingers, deformed body, mutated anatomy, lowres, sketch, unfinished lineart, messy lines, harsh gradients, gradient banding, noisy texture, colored background, drop shadow, frame borders, grid lines, overlapping tile edges
+  ```
+
+  中文参考：像素画、像素化、3D 渲染、照片级写实、写实照片、模糊、JPEG 压缩伪影、水印、签名、用户名、文字、字母、数字、徽标、多余肢体、多余手指、躯体变形、变异解剖、低分辨率、草稿、未完成线稿、杂乱线条、生硬渐变、渐变条带、噪点纹理、彩色背景、投影、边框、网格线、tile 边缘交叠
+
+### tile_village_tree_01_iso（树木·阔叶单株（战棋菱形·完整版预备）·E1 新键）
+
+- 目标规格：256×128（源）·菱形物件件（母题完整落于菱形内）
+- 出图后处理：2:1 比例出图（如 1024×512）→ 缩放至 256×128；菱形四顶点对位、母题不越菱形
+- 正向提示词（完整版，直接复制）：
+
+  ```text
+  anime style, cel shading, clean bold lineart, flat color blocks with soft highlights, japanese fantasy, high saturation with balanced brightness, round-canopy broadleaf tree on isometric diamond tile, rhombus grass floor base, motif fully inside the diamond
+  ```
+
+  中文参考：动画风格、赛璐璐上色、干净粗犷线稿、带柔和高光的平涂色块、日式奇幻、高饱和度且明度均衡、等距菱形地格上的圆润树冠阔叶树、菱形草地底、母题完整落于菱形内
+
+- 负面提示词（完整版，直接复制）：
+
+  ```text
+  pixel art, pixelated, 3d render, photorealistic, realistic photo, blurry, jpeg artifacts, watermark, signature, username, text, letters, numbers, logo, extra limbs, extra fingers, deformed body, mutated anatomy, lowres, sketch, unfinished lineart, messy lines, harsh gradients, gradient banding, noisy texture, colored background, drop shadow, frame borders, grid lines, overlapping tile edges
+  ```
+
+  中文参考：像素画、像素化、3D 渲染、照片级写实、写实照片、模糊、JPEG 压缩伪影、水印、签名、用户名、文字、字母、数字、徽标、多余肢体、多余手指、躯体变形、变异解剖、低分辨率、草稿、未完成线稿、杂乱线条、生硬渐变、渐变条带、噪点纹理、彩色背景、投影、边框、网格线、tile 边缘交叠
+
+### tile_village_tree_02_iso（树木·双株变体（战棋菱形·完整版预备）·E1 新键）
+
+- 目标规格：256×128（源）·菱形物件件（母题完整落于菱形内）
+- 出图后处理：2:1 比例出图（如 1024×512）→ 缩放至 256×128；菱形四顶点对位、母题不越菱形
+- 正向提示词（完整版，直接复制）：
+
+  ```text
+  anime style, cel shading, clean bold lineart, flat color blocks with soft highlights, japanese fantasy, high saturation with balanced brightness, two small broadleaf trees clustered on isometric diamond tile, rhombus grass floor base, motif fully inside the diamond
+  ```
+
+  中文参考：动画风格、赛璐璐上色、干净粗犷线稿、带柔和高光的平涂色块、日式奇幻、高饱和度且明度均衡、等距菱形地格上簇生的两棵小阔叶树、菱形草地底、母题完整落于菱形内
 
 - 负面提示词（完整版，直接复制）：
 
@@ -2575,20 +2828,20 @@
 
 ## 09 战棋叠加件与 D20 组（4 件）
 
-- 生产顺序建议：**P6**（批 4 替换次序末位）
-- 组级公共说明：叠加件叠于战棋格面之上、不得遮挡单位/地形辨识（半透明/角框化设计）；色觉无障碍沿用「颜色+形状」双编码；`fx_battle_range` 全不透明基准（禁自带 α、染蓝=移动/染红=攻击由运行时 modulate 承载、语义禁换）；验收细则见 `09_战棋叠加件与D20组.md`
+- 生产顺序建议：**P6**（替换次序末位·正式件产出归 E2 素材波）
+- 组级公共说明：叠加件叠于战棋格面之上、不得遮挡单位/地形辨识（半透明/角框化设计）；色觉无障碍沿用「颜色+形状」双编码；**`fx_battle_select`/`fx_battle_range` 为 256×128 菱形（E1 同 id 重制·00 §六-8）**；`fx_battle_range` 全不透明基准（禁自带 α、染蓝=移动/染红=攻击由运行时 modulate 承载、语义禁换）；验收细则见 `09_战棋叠加件与D20组.md`（v2.0）
 
-### fx_battle_select（选中框）
+### fx_battle_select（选中框·v2.0 同 id 重制菱形）
 
-- 目标规格：128×128·透明底（中央镂空）·半透明角框
-- 出图后处理：扣图（角括外与中央均清透明，中央镂空≥60%、单位完整可见）→ 128×128；四角括号在矿洞冷底上可辨（灯火黄 #F5C869 角括+细边线）
+- 目标规格：**256×128·菱形透明底（中央镂空）·半透明角框**（菱形四顶点=画布四边中点、四角透明——E1 等距批重制）
+- 出图后处理：2:1 比例出图（如 1024×512）→ 扣图（菱形角括外与中央均清透明，中央镂空≥60%、单位完整可见）→ 256×128；菱形四角括号在矿洞冷底上可辨（灯火黄 #F5C869 角括+细边线）
 - 正向提示词（完整版，直接复制）：
 
   ```text
-  anime style, cel shading, clean bold lineart, flat color blocks with soft highlights, japanese fantasy, high saturation with balanced brightness, game tile selection frame, four corner brackets glowing warm yellow, hollow center, semi-transparent, no fill, transparent background
+  anime style, cel shading, clean bold lineart, flat color blocks with soft highlights, japanese fantasy, high saturation with balanced brightness, isometric 2:1 diamond selection frame, rhombus corner brackets glowing warm yellow, hollow center, semi-transparent, no fill, diamond corners at frame edge midpoints, canvas corners transparent
   ```
 
-  中文参考：动画风格、赛璐璐上色、干净粗犷线稿、带柔和高光的平涂色块、日式奇幻、高饱和度且明度均衡、游戏地格选中框、四处泛着暖黄光的角括、中央镂空、半透明、无填充、透明背景
+  中文参考：动画风格、赛璐璐上色、干净粗犷线稿、带柔和高光的平涂色块、日式奇幻、高饱和度且明度均衡、2:1 等距菱形选中框、泛着暖黄光的菱形角括、中央镂空、半透明、无填充、菱形顶点位于画布四边中点、画布四角透明
 
 - 负面提示词（完整版，直接复制）：
 
@@ -2598,17 +2851,17 @@
 
   中文参考：像素画、像素化、3D 渲染、照片级写实、写实照片、模糊、JPEG 压缩伪影、水印、签名、用户名、文字、字母、数字、徽标、多余肢体、多余手指、躯体变形、变异解剖、低分辨率、草稿、未完成线稿、杂乱线条、生硬渐变、渐变条带、噪点纹理、彩色背景、投影、边框、网格线、实心填充、遮挡角色
 
-### fx_battle_range（范围指示格面）
+### fx_battle_range（范围指示格面·v2.0 同 id 重制菱形）
 
-- 目标规格：128×128·全不透明基准（净 α 由运行时 modulate 承载）
-- 出图后处理：缩放至 128×128；**整图压全不透明中性格面（禁自带 α**——与运行时染色 modulate 会 α 双乘失控）；染蓝=移动/染红=攻击技能由 cfg 承载；叠加后底面 tile 纹理仍隐约可辨
+- 目标规格：**256×128·菱形全不透明基准**（净 α 由运行时 modulate 承载；菱形内像素全不透明、菱形外透明属正常裁剪——E1 等距批重制）
+- 出图后处理：2:1 比例出图（如 1024×512）→ 缩放至 256×128；**菱形内压全不透明中性格面（禁自带 α**——与运行时染色 modulate 会 α 双乘失控）；菱形四顶点=画布四边中点；染蓝=移动/染红=攻击技能由 cfg 承载；叠加后底面 tile 纹理仍隐约可辨
 - 正向提示词（完整版，直接复制）：
 
   ```text
-  anime style, cel shading, clean bold lineart, flat color blocks with soft highlights, japanese fantasy, high saturation with balanced brightness, game tile range overlay, plain neutral translucent cell fill with thin border, uniform, no symbols
+  anime style, cel shading, clean bold lineart, flat color blocks with soft highlights, japanese fantasy, high saturation with balanced brightness, isometric 2:1 diamond game tile range overlay, rhombus plain neutral cell fill with thin diamond border, uniform, no symbols, diamond corners at frame edge midpoints, canvas corners transparent
   ```
 
-  中文参考：动画风格、赛璐璐上色、干净粗犷线稿、带柔和高光的平涂色块、日式奇幻、高饱和度且明度均衡、游戏地格范围叠加件、带细边的素净中性半透明格面填充、均匀一致、无符号
+  中文参考：动画风格、赛璐璐上色、干净粗犷线稿、带柔和高光的平涂色块、日式奇幻、高饱和度且明度均衡、2:1 等距菱形地格范围叠加件、带细菱形边的素净中性格面填充、均匀一致、无符号、菱形顶点位于画布四边中点、画布四角透明
 
 - 负面提示词（完整版，直接复制）：
 
@@ -2618,9 +2871,9 @@
 
   中文参考：像素画、像素化、3D 渲染、照片级写实、写实照片、模糊、JPEG 压缩伪影、水印、签名、用户名、文字、字母、数字、徽标、多余肢体、多余手指、躯体变形、变异解剖、低分辨率、草稿、未完成线稿、杂乱线条、生硬渐变、渐变条带、噪点纹理、彩色背景、投影、边框、网格线、箭头、图标、浓烈色彩
 
-### fx_battle_path_arrow（路径箭头）
+### fx_battle_path_arrow（路径箭头·**备用**——消费点已拆除、维持 128×128 方形口径）
 
-- 目标规格：128×128·透明底·半透明
+- 目标规格：128×128·透明底·半透明（**v2.0 等距备用注记 2026-10-09**：E1 后棋盘为菱形网格，如恢复箭头表现需按当时几何重订规格，本方形条目仅历史备用参考）
 - 出图后处理：扣图 → 128×128；箭身左右对称设计（上/下/左朝向由运行时旋转 ±90°/180° 复用、不出多朝向素材）；渲染尺寸=格内适配不溢出（灯火黄箭身+描边）
 - 正向提示词（完整版，直接复制）：
 
@@ -2675,14 +2928,14 @@ ttf/otf 字体文件无法用 AI 生图获得，`font_cn_body` / `font_cn_title`
 | 组 | 件数 | 说明 |
 |---|---|---|
 | 01 背景 | 6 | bg_guild_hall 已正式入库不重出 |
-| 02 矿洞 tile | 9 | 含 tile_battle_trap（v1.1 扩件） |
-| 03 村子 tile | 7 | |
+| 02 矿洞 tile | 14 | 方形 9（探索专用；rock/cart 备用）+ 战棋菱形 `_iso` 5（E1 增补）；含 tile_battle_trap（v1.1 扩件·v2.0 菱形重制） |
+| 03 村子 tile | 14 | 方形 7 + 战棋菱形 `_iso` 7（完整版预备·E1 增补） |
 | 04 单位动作集 | 54 | 9 单位×6 动作 |
 | 05 小队与交互图标 | 7 | 图标 6 + 暗门 tile 1 |
 | 06 迷雾 | 2 | |
 | 07 系统图标 | 19 | 资源 3 + 属性 7 + 资源条 3 + 职业 6 |
 | 08 UI 基础件 | 8 | 面板 1 + 按钮三态 3 + 四档标签 4 |
-| 09 战棋叠加与 D20 | 4 | 叠加 3 + D20 面 1 |
-| **合计** | **116** | = 119 − bg_guild_hall（已正式）− 字体 2（非生图通道） |
+| 09 战棋叠加与 D20 | 4 | 叠加 3（select/range·v2.0 菱形重制 + path_arrow 备用）+ D20 面 1 |
+| **合计** | **128** | = 131 − bg_guild_hall（已正式）− 字体 2（非生图通道）；116＋E1 批 `_iso` 新键 12（2026-10-09） |
 
 （全文完）
