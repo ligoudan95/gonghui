@@ -31,7 +31,9 @@
 ## fac-bg 设施背景（非空即查，空 = 占位合法不收紧））。
 ## + E1 战棋等距投影批新增（V-M6-iso-cfg 投影参数值域 / V-M6-iso-asset-
 ## geometry 菱形键 17 键源图几何+naming 反查；V-M0-cfg-domain 扩 iso 六数值
-## 正值域、V-B2-cfg-fallback 扩 8 键锚定）。
+## 正值域、V-B2-cfg-fallback 扩 8 键锚定）
+## + 布局三改批新增（V-M6-log-cfg 战斗日志卷轴 ui_battle_log_* 十键值域；
+## V-M0-cfg-domain 扩日志卷参数基本值域、V-B2-cfg-fallback 扩 10 键锚定）。
 ## 用法：DataValidator.run_all(game_data)——game_data 为 GameData 自动加载单例或其实例。
 class_name DataValidator
 extends RefCounted
@@ -255,6 +257,8 @@ static func run_all(game_data: Node) -> ValidationReport:
 	## V-M6-iso-asset-geometry 菱形键源图几何——错误级）----
 	_CheckIsoCfg(report, game_data)
 	_CheckIsoAssetGeometry(report, game_data)
+	# ---- 布局三改批新增（V-M6-log-cfg 战斗日志卷轴参数值域——错误级）----
+	_CheckLogCfg(report, game_data)
 	return report
 
 # --------------------------------------------------------------------------
@@ -1251,6 +1255,21 @@ static func _CheckCfgDomains(report: ValidationReport, game_data: Node) -> void:
 		if float(cfg.get(iso_positive)) <= 0.0:
 			report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
 					"%s ≤ 0（E1 投影参数未回填/非法）" % iso_positive)
+	# 布局三改批扩展：战斗日志卷轴参数基本值域（精确范围在 V-M6-log-cfg；
+	# 锚点/展开两 margin 与动画时长合法域含 0（贴边/即时口径）——非负检查，
+	# 其余六键正值）
+	for log_positive: String in ["ui_battle_log_anchor_width",
+			"ui_battle_log_anchor_height", "ui_battle_log_hit_min_size",
+			"ui_battle_log_expand_width", "ui_battle_log_expand_height_ratio",
+			"ui_battle_log_expand_min_height"]:
+		if float(cfg.get(log_positive)) <= 0.0:
+			report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
+					"%s ≤ 0（日志卷轴参数未回填/非法）" % log_positive)
+	for log_nonneg: String in ["ui_battle_log_anchor_margin",
+			"ui_battle_log_expand_margin", "ui_battle_log_toggle_seconds"]:
+		if float(cfg.get(log_nonneg)) < 0.0:
+			report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
+					"%s < 0（日志卷轴参数非法）" % log_nonneg)
 	# 试玩反馈批：路径闪烁高光呼吸渐变形态——Tween.TransitionType 合法值集
 	#（0 = 未回填哨兵与 LINEAR 同值故一并禁用；运行时回退兜底 SINE，表侧
 	# 拦非法定值——合法集单源 UiTheme.BATTLE_PATH_HIGHLIGHT_TRANS_VALID）
@@ -1404,6 +1423,16 @@ static func _CheckCfgFallbacks(report: ValidationReport, game_data: Node) -> voi
 		["ui_battle_iso_sprite_width_ratio", UiTheme.ISO_SPRITE_WIDTH_RATIO],
 		["ui_battle_iso_feet_y_ratio", UiTheme.ISO_FEET_Y_RATIO],
 		["ui_battle_iso_ring_ratio", UiTheme.ISO_RING_RATIO],
+		# 布局三改批：战斗日志卷轴九数值参数锚定（调表须同步 UiTheme 兜底）
+		["ui_battle_log_anchor_width", UiTheme.BATTLE_LOG_ANCHOR_WIDTH],
+		["ui_battle_log_anchor_height", UiTheme.BATTLE_LOG_ANCHOR_HEIGHT],
+		["ui_battle_log_anchor_margin", UiTheme.BATTLE_LOG_ANCHOR_MARGIN],
+		["ui_battle_log_hit_min_size", UiTheme.BATTLE_LOG_HIT_MIN],
+		["ui_battle_log_expand_width", UiTheme.BATTLE_LOG_EXPAND_WIDTH],
+		["ui_battle_log_expand_height_ratio", UiTheme.BATTLE_LOG_EXPAND_HEIGHT_RATIO],
+		["ui_battle_log_expand_min_height", UiTheme.BATTLE_LOG_EXPAND_MIN_HEIGHT],
+		["ui_battle_log_expand_margin", UiTheme.BATTLE_LOG_EXPAND_MARGIN],
+		["ui_battle_log_toggle_seconds", UiTheme.BATTLE_LOG_TOGGLE_SECONDS],
 	]
 	for pair: Array in float_pairs:
 		var raw_float: Variant = cfg.get(pair[0])
@@ -1479,6 +1508,8 @@ static func _CheckCfgFallbacks(report: ValidationReport, game_data: Node) -> voi
 		# E1 战棋等距投影批：徽章底圈阵营双色锚定（调表须同步 UiTheme 兜底）
 		["ui_badge_base_ring_ally_color", UiTheme.BADGE_BASE_RING_ALLY],
 		["ui_badge_base_ring_enemy_color", UiTheme.BADGE_BASE_RING_ENEMY],
+		# 布局三改批：日志卷轴未读 badge 提醒色锚定（调表须同步 UiTheme 兜底）
+		["ui_battle_log_badge_color", UiTheme.BATTLE_LOG_BADGE],
 	]
 	for pair: Array in color_pairs:
 		var raw_color: Variant = cfg.get(pair[0])
@@ -3667,6 +3698,53 @@ static func _CheckIsoAssetGeometry(report: ValidationReport, game_data: Node) ->
 		if not naming_ids.has(asset_id):
 			report.add_error("V-M6-iso-asset-geometry", asset_id,
 					"菱形键未在 naming_registry 登记（命名规范破坏）")
+
+
+# --------------------------------------------------------------------------
+# 布局三改批（V-M6-log-cfg 战斗日志卷轴参数值域）
+# --------------------------------------------------------------------------
+
+static func _CheckLogCfg(report: ValidationReport, game_data: Node) -> void:
+	## V-M6-log-cfg（布局三改批）：战斗日志卷轴 ui_battle_log_* 十键值域全检
+	##——锚点条宽 [96,280] / 高 [20,48] / 锚点边距 [0,64] / 热区下限 [48,96]
+	##（触控硬条款 ≥48）/ 展开宽 [240,480] / 高比 [0.3,0.9] / 最小高 [160,480]
+	## / 展开边距 [0,64] / 动画时长 [0,1]（0=即时）/ badge 色 a > 0
+	##（错误级——值域破坏触控面积/展开钳制数学/提醒可见性）
+	## 参数：报告 / GameData
+	## 返回：无
+	var cfg: CoreConfig = game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
+	if cfg == null:
+		return
+	if cfg.ui_battle_log_anchor_width < 96.0 or cfg.ui_battle_log_anchor_width > 280.0:
+		report.add_error("V-M6-log-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_log_anchor_width %f 越界 [96, 280]" % cfg.ui_battle_log_anchor_width)
+	if cfg.ui_battle_log_anchor_height < 20.0 or cfg.ui_battle_log_anchor_height > 48.0:
+		report.add_error("V-M6-log-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_log_anchor_height %f 越界 [20, 48]" % cfg.ui_battle_log_anchor_height)
+	if cfg.ui_battle_log_anchor_margin < 0.0 or cfg.ui_battle_log_anchor_margin > 64.0:
+		report.add_error("V-M6-log-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_log_anchor_margin %f 越界 [0, 64]" % cfg.ui_battle_log_anchor_margin)
+	if cfg.ui_battle_log_hit_min_size < 48.0 or cfg.ui_battle_log_hit_min_size > 96.0:
+		report.add_error("V-M6-log-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_log_hit_min_size %f 越界 [48, 96]（触控硬条款）" % cfg.ui_battle_log_hit_min_size)
+	if cfg.ui_battle_log_expand_width < 240.0 or cfg.ui_battle_log_expand_width > 480.0:
+		report.add_error("V-M6-log-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_log_expand_width %f 越界 [240, 480]" % cfg.ui_battle_log_expand_width)
+	if cfg.ui_battle_log_expand_height_ratio < 0.3 or cfg.ui_battle_log_expand_height_ratio > 0.9:
+		report.add_error("V-M6-log-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_log_expand_height_ratio %f 越界 [0.3, 0.9]" % cfg.ui_battle_log_expand_height_ratio)
+	if cfg.ui_battle_log_expand_min_height < 160.0 or cfg.ui_battle_log_expand_min_height > 480.0:
+		report.add_error("V-M6-log-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_log_expand_min_height %f 越界 [160, 480]" % cfg.ui_battle_log_expand_min_height)
+	if cfg.ui_battle_log_expand_margin < 0.0 or cfg.ui_battle_log_expand_margin > 64.0:
+		report.add_error("V-M6-log-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_log_expand_margin %f 越界 [0, 64]" % cfg.ui_battle_log_expand_margin)
+	if cfg.ui_battle_log_toggle_seconds < 0.0 or cfg.ui_battle_log_toggle_seconds > 1.0:
+		report.add_error("V-M6-log-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_log_toggle_seconds %f 越界 [0, 1]（0=即时）" % cfg.ui_battle_log_toggle_seconds)
+	if cfg.ui_battle_log_badge_color.a <= 0.0:
+		report.add_error("V-M6-log-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_log_badge_color 未回填（alpha ≤ 0）")
 
 
 static func _AllDomains(game_data: Node) -> Array[StringName]:

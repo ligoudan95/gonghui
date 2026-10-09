@@ -4,8 +4,8 @@
 ## 两段式确认交互（选中→高亮→点目标预览→再点确认；取消=点其他区域/再点钮；
 ## 技能确认带血条伤害预览——2026-09-24 二轮反馈）、技能按钮态（资源不足灰显、
 ## hover 描述与预计伤害——二轮反馈）、蛊惑紫边提示、敌方延时点按跳过、
-## 敌方行动提示行（拍板 C 2026-10-01：敌方轮右栏提示行——批次 B 布局重构后
-## 居 RightLayout 首位，我方轮/终局清除）、
+## 敌方行动提示并入日志卷轴锚点条（拍板 C 2026-10-01；布局三改批随右栏
+## 退役迁 BattleLogScroller——敌方轮提示语、我方轮/终局恢复）、
 ## 撤退确认弹窗、结算面板路由回公会壳。
 ## 移动范围回显口径（2026-09-26 试玩反馈②③）：指令窗内全部取消路径
 ## （出格点按/不可达空格/执行被拒/技能取消）统一 R3-05「取消后回显」——
@@ -39,7 +39,9 @@ const TOOLTIP_TEMPLATES: Dictionary = {
 ## 普攻钮 fallback 文案（B-9：技能查无时的共享常量——tscn 占位留）
 const COMMON_ATTACK_NAME: String = "普攻"
 
-## UI 文案单源（M6 批 2 挂账 4.2：内联 UI 中文收编——改措辞只动此处）
+## UI 文案单源（M6 批 2 挂账 4.2：内联 UI 中文收编——改措辞只动此处；
+## enemy_turn_hint 布局三改批迁 BattleLogScroller.UI_TEXTS——敌方提示
+## 并入日志卷轴锚点条）
 const UI_TEXTS: Dictionary = {
 	&"round_label_format": "回合 %d",
 	&"degraded_retreat_button": "返回公会",
@@ -47,7 +49,6 @@ const UI_TEXTS: Dictionary = {
 	&"cost_mana_format": "法力 %d",
 	&"cost_stamina_format": "精力 %d",
 	&"range_self": "自身",
-	&"enemy_turn_hint": "敌方行动中…（点按战场可跳过演出）",
 }
 ## 降级返回公会失败提示（S3-06：go 失败的可见反馈——IdleLabel 通道呈现）
 const DEGRADED_RETURN_FAIL_TEXT: String = "返回公会失败（错误码 %d）——请重试。"
@@ -64,9 +65,6 @@ const RETREAT_CONFIRM_STATIC_TEXT: String = "确认撤退？撤退将按委托�
 var controller: BattleController = null
 ## GameData 单例引用
 var _game_data: Node = null
-## 右栏内容 min 宽基准（中4：_ready 自 tscn 值捕获——补偿后还原的零硬编码锚点；
-## 批次 B 布局重构：UnitInfoCard 迁左带，右栏仅 BattleLog 一项需补偿）
-var _right_log_min_base: Vector2 = Vector2.ZERO
 ## 当前技能选择（&"" = 移动模式）
 var _selected_skill_id: StringName = &""
 ## 技能选择模式下的范围格集
@@ -78,8 +76,6 @@ func _ready() -> void:
 	## 引擎回调：取跨场景参数 → 无参优雅降级（直开冒烟）；有参装配战斗并开战
 	## 参数：无
 	## 返回：无
-	# 中4：右栏矮窗滚动条补偿挂接（降级路径同样生效——面板存在于场景本身）
-	_SetupRightPanelScrollCompensation()
 	_ApplyBackgroundTexture()
 	var scene_manager: Node = get_node("/root/SceneManager")
 	var params: Dictionary = scene_manager.take_pending_params()
@@ -151,42 +147,12 @@ func _ApplyFontTiers() -> void:
 			UiTheme.font_of(cfg, &"ui_font_size_large", UiTheme.FONT_LARGE))
 	%IdleLabel.add_theme_font_size_override("font_size",
 			UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
-	# 拍板 C：敌方行动提示行与日志条目同档（minor——tscn 值留占位）
-	%EnemyTurnHint.add_theme_font_size_override("font_size",
-			UiTheme.font_of(cfg, &"ui_font_size_minor", UiTheme.FONT_MINOR))
 	var button_font: int = UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL)
 	%AttackButton.add_theme_font_size_override("font_size", button_font)
 	%SkillButtonA.add_theme_font_size_override("font_size", button_font)
 	%SkillButtonB.add_theme_font_size_override("font_size", button_font)
 	%EndTurnButton.add_theme_font_size_override("font_size", button_font)
 	%RetreatButton.add_theme_font_size_override("font_size", button_font)
-
-func _SetupRightPanelScrollCompensation() -> void:
-	## 右栏矮窗滚动条补偿挂接（中4 盲审修复：Godot 4 滚动条非 overlay——
-	## 竖滚动条出现占内容区宽，内容 min 宽 308 恒超剩余宽而 BattleLog 右缘
-	##（含面板边框）被恒裁不可达且 horizontal_scroll_mode 禁横滚无法到达）：
-	## 捕获 tscn min 宽基准 + 监听竖滚动条显隐动态补偿（可见 → 内容 min 宽
-	## 让出条宽恰满可视宽；隐藏 → 还原基准。宽度增减不影响内容高——滚动条
-	## 显隐无振荡回路）；批次 B：右栏仅 BattleLog（UnitInfoCard 迁左带）
-	## 参数：无
-	## 返回：无
-	_right_log_min_base = %BattleLog.custom_minimum_size
-	var right_panel: ScrollContainer = %RightPanel as ScrollContainer
-	right_panel.get_v_scroll_bar().visibility_changed.connect(
-			_ApplyRightPanelScrollCompensation)
-
-func _ApplyRightPanelScrollCompensation() -> void:
-	## 右栏内容 min 宽补偿应用（中4）：竖滚动条可见 → BattleLog min 宽 =
-	## 基准 − 条宽；隐藏 → 还原基准（常态窗口不损失宽度）
-	## 参数：无
-	## 返回：无
-	var right_panel: ScrollContainer = %RightPanel as ScrollContainer
-	var bar: VScrollBar = right_panel.get_v_scroll_bar()
-	var compensate: float = 0.0
-	if bar.is_visible_in_tree():
-		compensate = bar.size.x if bar.size.x > 0.0 else bar.get_minimum_size().x
-	%BattleLog.custom_minimum_size = Vector2(
-			maxf(0.0, _right_log_min_base.x - compensate), _right_log_min_base.y)
 
 func _StatusLookupOf() -> Callable:
 	## 状态解析闭包（信息卡消费；上下文未建时返回空解析）
@@ -274,6 +240,9 @@ func _ConnectController() -> void:
 	)
 	controller.battle_ended.connect(_OnBattleEnded)
 	%BattleLog.setup(controller, context, _game_data)
+	# 布局三改批：日志卷轴装配（cfg 几何十键 + 未读计数接线；降级路径不调
+	# ——组件存在保持收起、cfg 读取口 null 回退 UiTheme 兜底）
+	%LogScroller.setup(%BattleLog, context.cfg, _game_data)
 	%ResultPanel.return_pressed.connect(_OnReturnPressed)
 
 # --------------------------------------------------------------------------
@@ -308,11 +277,10 @@ func _OnTurnStarted(unit: BattleUnit) -> void:
 	_RefreshActionBar(unit)
 	if unit.is_controllable() and control == StatusDef.ControlKind.NONE:
 		%BoardLayer.show_move_range(context.grid.find_reachable(unit, unit.move_final()))
-	# 拍板 C（2026-10-01）：敌方行动提示行——敌方轮显示（日志栏顶部一行，
-	# 点按跳过演出的可发现性），轮到我方单位即清除；文案单源 UI_TEXTS
-	%EnemyTurnHint.visible = unit.side == SkillDef.SkillSide.ENEMY
-	if %EnemyTurnHint.visible:
-		%EnemyTurnHint.text = UI_TEXTS[&"enemy_turn_hint"]
+	# 拍板 C（2026-10-01，布局三改批并入卷轴锚点）：敌方轮锚点条切提示语
+	#（点按跳过演出的可发现性），轮到我方单位即恢复日志文案——文案单源
+	# BattleLogScroller.UI_TEXTS
+	%LogScroller.set_enemy_hint_active(unit.side == SkillDef.SkillSide.ENEMY)
 
 func _OnSkillExecuted(caster: BattleUnit, result: SkillExecutor.ExecutionResult) -> void:
 	## 技能执行后：伤害飘字 + 徽章刷新 + 动态地格标记 + 按钮组按真实可用性
@@ -402,8 +370,8 @@ func _OnBattleEnded(result: BattleResult) -> void:
 	## 解析——单源 BattleContext.display_name_of，批 4 C 组 M4）
 	## 参数 result：战斗结果
 	## 返回：无
-	# 拍板 C：终局清除敌方行动提示行（防终局面板背后残留「敌方行动中」）
-	%EnemyTurnHint.visible = false
+	# 拍板 C：终局恢复卷轴锚点文案（防终局面板背后残留「敌方行动中」）
+	%LogScroller.set_enemy_hint_active(false)
 	# M2 批 3+E3-01①：回传包**合并键**写入（战斗结果并入既有 expedition_run/
 	# 锚点——整体替换会丢 run 引用断续跑链）
 	_return_payload[&"battle_result"] = result

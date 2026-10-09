@@ -136,6 +136,29 @@ const BADGE_BASE_RING_ALLY: Color = Color(0.29, 0.49, 0.85, 0.85)
 ## 徽章底圈敌方色兜底
 const BADGE_BASE_RING_ENEMY: Color = Color(0.85, 0.32, 0.28, 0.85)
 
+# ---- 战斗日志卷轴兜底（布局三改批：cfg ui_battle_log_* 10 键——V-B2
+# # cfg-fallback 锚定，值 == cfg_main 表值）----
+## 收起态锚点条视觉宽兜底（像素）
+const BATTLE_LOG_ANCHOR_WIDTH: float = 150.0
+## 收起态锚点条视觉高兜底（像素）
+const BATTLE_LOG_ANCHOR_HEIGHT: float = 28.0
+## 锚点条距屏右上角边距兜底（像素）
+const BATTLE_LOG_ANCHOR_MARGIN: float = 12.0
+## 锚点热区最小边长兜底（像素——触控硬条款 ≥ 48）
+const BATTLE_LOG_HIT_MIN: float = 48.0
+## 展开面板宽兜底（像素——固定宽）
+const BATTLE_LOG_EXPAND_WIDTH: float = 320.0
+## 展开面板高占板区高比兜底（板区高 = 屏高 − 84）
+const BATTLE_LOG_EXPAND_HEIGHT_RATIO: float = 0.6
+## 展开面板最小高兜底（像素——极矮窗）
+const BATTLE_LOG_EXPAND_MIN_HEIGHT: float = 240.0
+## 展开面板与屏缘边距兜底（像素）
+const BATTLE_LOG_EXPAND_MARGIN: float = 12.0
+## 展开/收起动画时长兜底（秒——0 = 即时）
+const BATTLE_LOG_TOGGLE_SECONDS: float = 0.18
+## 未读计数 badge 提醒色兜底
+const BATTLE_LOG_BADGE: Color = Color(1.0, 0.55, 0.3, 1.0)
+
 # ---- 探索层（M3——cfg ui_fog_*/ui_explore_* 兜底）----
 ## 探索逐格步进演出时长兜底（秒/格）
 const EXPLORE_MOVE_STEP_SECONDS: float = 0.18

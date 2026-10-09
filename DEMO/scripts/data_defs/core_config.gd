@@ -264,6 +264,31 @@ enum Mode {
 ## 徽章底圈敌方色
 @export var ui_badge_base_ring_enemy_color: Color = Color(0, 0, 0, 0)
 
+# ---- 战斗日志卷轴参数（布局三改批：ui_battle_log_* 10 键——右栏退役、日志
+# # 改右上锚点条+点击展开浮层；铁律①：卷轴几何数值入表；默认 0/透明 =
+# # 未回填，UiTheme BATTLE_LOG_* 兜底——V-M6-log-cfg 值域 / V-B2-cfg-fallback
+# # 锚定双校验）----
+## 收起态锚点条视觉宽（像素——横条 150×28 的横边）
+@export var ui_battle_log_anchor_width: float = 0.0
+## 收起态锚点条视觉高（像素）
+@export var ui_battle_log_anchor_height: float = 0.0
+## 锚点条距屏右上角边距（像素）
+@export var ui_battle_log_anchor_margin: float = 0.0
+## 锚点热区最小边长（像素——触控硬条款下限 48：热区 = max(锚点视觉, 本值)）
+@export var ui_battle_log_hit_min_size: float = 0.0
+## 展开面板宽（像素——固定宽，高按板区比例钳制）
+@export var ui_battle_log_expand_width: float = 0.0
+## 展开面板高占板区高比（板区高 = 屏高 − 按钮行区 84）
+@export var ui_battle_log_expand_height_ratio: float = 0.0
+## 展开面板最小高（像素——极矮窗兜底下限）
+@export var ui_battle_log_expand_min_height: float = 0.0
+## 展开面板与屏缘边距（像素——右缘 = 屏宽 − 锚点边距 − 本值）
+@export var ui_battle_log_expand_margin: float = 0.0
+## 展开/收起动画时长（秒——0 = 即时无动画）
+@export var ui_battle_log_toggle_seconds: float = 0.0
+## 未读计数 > 0 时锚点文案染色（badge 提醒色）
+@export var ui_battle_log_badge_color: Color = Color(0, 0, 0, 0)
+
 # ---- UI 徽章配色（B-1/B-2/B-3：unit_badge 全部内联色入表；默认透明 = 未回填）----
 @export var ui_badge_hp_low_color: Color = Color(0, 0, 0, 0)
 @export var ui_badge_hp_ok_color: Color = Color(0, 0, 0, 0)

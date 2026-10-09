@@ -1,16 +1,20 @@
 ## 战斗场景布局契约测试（M1 硬验收门点击无反应 BUG 修复防回归，2026-09-24；
 ## 批次 B 布局重构改版 2026-10-07：回合大字+竖排序条+信息卡归左带、五钮
-## ButtonRow 左下贴底、棋盘上下撑满、右栏提示行首位+日志加宽；
-## E1 批 2026-10-09：棋盘改剩余区适配居中——底边扣按钮行区 -84、顶边贴屏顶）
+## ButtonRow 左下贴底、棋盘上下撑满；E1 批 2026-10-09：棋盘改剩余区适配
+## 居中——底边扣按钮行区 -84、顶边贴屏顶；布局三改批 2026-10-09：右栏退役
+## 日志卷轴化——LeftPanel 收窄 220/信息卡 min 212/棋盘右扩 240→-12/日志改
+## LogScroller 浮层（z=300）+敌方提示并入锚点条）
 ## 覆盖：battle_screen.tscn 静态布局契约——ResultLayer（全屏 CenterContainer）
 ## 必须 IGNORE（树序顶层若为默认 PASS 会截获全屏点击，导致棋盘/底栏全部
-## 无反应，即 2026-09-24 实锤的"战斗场景点击无响应"根因）；ResultPanel
-## 保持 STOP（父级 IGNORE 不遮子树命中，结算面板与返回按钮正常可点）；
-## 关键输入节点在位且 BoardLayer.gui_input 已连接 battle_screen；右栏
-## 新锚定契约（-332/12/-12/-12 竖撑满+EnemyTurnHint 首子+BattleLog 正尺寸）；
-## 左带契约（BoardLayer 满高扣两侧/LeftPanel 304/RoundLabel 首子/TurnOrderBar
-## 在 LeftScroll/UnitInfoCard 末子/ButtonRow 五钮贴底对齐+树序浮层）；按钮行
-## natural 宽契约（复核缺陷修复：长技能名替换后盒容纳/屏内/互不重叠/贴底维持）。
+## 无反应，即 2026-09-24 实锤的"战斗场景点击无响应"根因）且 z=400 压卷轴；
+## ResultPanel 保持 STOP（父级 IGNORE 不遮子树命中，结算面板与返回按钮正常
+## 可点）；关键输入节点在位且 BoardLayer.gui_input 已连接 battle_screen；
+## 日志卷轴契约（LogScroller 挂 BattleScreen 直下/z=300/根 IGNORE/ExpandPanel
+## 默认 invisible 且 STOP/BattleLog 迁 ExpandPanel/AnchorLabel 占位；
+## RightPanel/EnemyTurnHint 退役不再存在）；左带契约（BoardLayer 满高扣两侧
+## 240/-12/LeftPanel 220/RoundLabel 首子/TurnOrderBar 在 LeftScroll/
+## UnitInfoCard 末子/ButtonRow 五钮贴底对齐+树序浮层）；按钮行 natural 宽
+## 契约（复核缺陷修复：长技能名替换后盒容纳/屏内/互不重叠/贴底维持）。
 ## headless 无法模拟真实鼠标 GUI 派发（push_input 不触发派发），只做静态契约断言。
 extends GdUnitTestSuite
 
@@ -19,7 +23,9 @@ const BATTLE_SCENE: String = "res://scenes/battle/battle_screen.tscn"
 
 func test_result_layer_mouse_filter_contract() -> void:
 	## 防回归核心：ResultLayer 必须 IGNORE、ResultPanel 必须 STOP——
-	## "平时不挡棋盘"与"弹出时可点"两条命中契约一次锁死
+	## "平时不挡棋盘"与"弹出时可点"两条命中契约一次锁死；布局三改批补
+	## z 序：ResultLayer z=400 恒压日志卷轴浮层（z=300）——结算弹出不被
+	## 卷轴遮挡
 	var runner: GdUnitSceneRunner = scene_runner(BATTLE_SCENE)
 	var battle: Control = runner.scene() as Control
 	assert_object(battle).is_not_null()
@@ -27,6 +33,8 @@ func test_result_layer_mouse_filter_contract() -> void:
 	var result_layer: CenterContainer = battle.get_node("ResultLayer") as CenterContainer
 	assert_object(result_layer).is_not_null()
 	assert_int(result_layer.mouse_filter).is_equal(Control.MOUSE_FILTER_IGNORE)
+	assert_int(result_layer.z_index).is_equal(400) \
+			.override_failure_message("ResultLayer z_index 应为 400（压日志卷轴 300）")
 	var result_panel: PanelContainer = battle.get_node("%ResultPanel") as PanelContainer
 	assert_object(result_panel).is_not_null()
 	assert_int(result_panel.mouse_filter).is_equal(Control.MOUSE_FILTER_STOP)
@@ -58,54 +66,55 @@ func test_input_nodes_and_connections_contract() -> void:
 		assert_object(battle.get_node_or_null(button_name)).is_not_null()
 
 func test_battle_log_layout_contract() -> void:
-	## 右侧栏布局契约（批次 B 布局重构改版：RightPanel 右侧上下撑满——
-	## 提示行+日志加宽贴右）：RightPanel 右锚定（top=12/bottom=-12 竖撑满）
-	## + 横向滚动禁用；EnemyTurnHint 升 RightLayout 首子；BattleLog STOP
-	##（要滚动）+ 正尺寸；BoardLayer 正尺寸断言防锚点塌缩类 BUG
+	## 战斗日志卷轴契约（布局三改批：右栏退役、日志卷轴化）：LogScroller 挂
+	## BattleScreen 直下（不挂 BoardLayer——_ApplyResizeRebuild 会全量
+	## queue_free 子节点）+ z=Z_LOG_OVERLAY(300) 压棋盘 tips/飘字 + 根
+	## IGNORE 全穿透；ExpandPanel 默认 invisible 且 STOP（展开态才命中）；
+	## BattleLog 迁 ExpandPanel 内（unique_name 迁父后 %BattleLog 引用不变）；
+	## AnchorLabel 占位「战斗日志 (0)」；RightPanel/RightLayout/EnemyTurnHint
+	## 整树已删；板面正尺寸护栏保留（防锚点塌缩类 BUG）
 	var runner: GdUnitSceneRunner = scene_runner(BATTLE_SCENE)
 	var battle: Control = runner.scene() as Control
 	assert_object(battle).is_not_null()
-	var right_panel: ScrollContainer = battle.get_node("%RightPanel") as ScrollContainer
-	assert_object(right_panel).is_not_null()
-	assert_float(right_panel.anchor_left).is_equal(1.0)
-	assert_float(right_panel.anchor_right).is_equal(1.0)
-	assert_float(right_panel.anchor_top).is_equal(0.0)
-	assert_float(right_panel.anchor_bottom).is_equal(1.0)
-	assert_float(right_panel.offset_left).is_equal(-332.0)
-	assert_float(right_panel.offset_top).is_equal(12.0)
-	assert_float(right_panel.offset_right).is_equal(-12.0)
-	assert_float(right_panel.offset_bottom).is_equal(-12.0)
-	assert_int(right_panel.horizontal_scroll_mode) \
-			.is_equal(ScrollContainer.SCROLL_MODE_DISABLED)
-	# 提示行升首位（批次 B：日志上方常驻位）
-	var right_layout: VBoxContainer = battle.get_node(
-			"%RightPanel/RightLayout") as VBoxContainer
-	var hint: Label = battle.get_node("%EnemyTurnHint") as Label
-	assert_object(hint).is_not_null()
-	assert_str(hint.get_parent().name).is_equal("RightLayout")
-	assert_int(hint.get_index()).is_equal(0) \
-			.override_failure_message("EnemyTurnHint 应为 RightLayout 首子")
+	var scroller: Control = battle.get_node("%LogScroller")
+	assert_object(scroller).is_not_null()
+	# 父 == 场景根本体（is_same——gdUnit 同套件多实例根节点会带 @id 防重名
+	# 后缀，字面名断言脆；实例同一性才是「挂 BattleScreen 直下」的契约本体）
+	assert_object(scroller.get_parent()).is_same(battle) \
+			.override_failure_message("LogScroller 应挂 BattleScreen 直下（不挂 BoardLayer）")
+	assert_int(scroller.z_index).is_equal(BattleLogScroller.Z_LOG_OVERLAY) \
+			.override_failure_message("LogScroller z_index 应为 Z_LOG_OVERLAY %d" % BattleLogScroller.Z_LOG_OVERLAY)
+	assert_int(scroller.mouse_filter).is_equal(Control.MOUSE_FILTER_IGNORE) \
+			.override_failure_message("LogScroller 根必须 IGNORE（收起态棋盘零遮挡）")
+	var expand_panel: PanelContainer = battle.get_node("%ExpandPanel") as PanelContainer
+	assert_object(expand_panel).is_not_null()
+	assert_bool(expand_panel.visible).is_false() \
+			.override_failure_message("ExpandPanel 默认应 invisible（新日志不自动展开）")
+	assert_int(expand_panel.mouse_filter).is_equal(Control.MOUSE_FILTER_STOP)
 	var log_panel: PanelContainer = battle.get_node("%BattleLog") as PanelContainer
 	assert_object(log_panel).is_not_null()
-	assert_str(log_panel.get_parent().name).is_equal("RightLayout")
+	assert_str(log_panel.get_parent().name).is_equal("ExpandPanel")
 	assert_int(log_panel.mouse_filter).is_equal(Control.MOUSE_FILTER_STOP)
-	# 正尺寸契约（headless 布局照常计算；视口无关——只断言明显大于可显示下限）
-	assert_float(log_panel.size.y).is_greater(200.0) \
-			.override_failure_message("BattleLog 高度塌缩（%s）——检查右栏容器" % log_panel.size)
-	assert_float(log_panel.size.x).is_greater(200.0)
+	var anchor_label: Label = battle.get_node("%AnchorLabel") as Label
+	assert_object(anchor_label).is_not_null()
+	assert_str(anchor_label.text).is_equal("战斗日志 (0)")
+	# 退役节点不再存在（右栏整树删除——残留即场景未同步）
+	assert_object(battle.get_node_or_null("%RightPanel")).is_null()
+	assert_object(battle.get_node_or_null("%EnemyTurnHint")).is_null()
+	# 板面正尺寸护栏（headless 布局照常计算；视口无关——只断言明显大于可显示下限）
 	var board: Control = battle.get_node("%BoardLayer") as Control
 	assert_float(board.size.x).is_greater(200.0) \
 			.override_failure_message("BoardLayer 宽度塌缩（%s）" % board.size)
 	assert_float(board.size.y).is_greater(200.0)
 
 func test_left_belt_layout_contract() -> void:
-	## 左带布局契约（批次 B 布局重构 + E1 剩余区适配居中改版）：BoardLayer
-	## 顶边贴屏顶（顶部无回合条区——回合大字在左带，方案 §〇.6 实测修正）、
-	## 底边扣按钮行区（offset_bottom == -84——ButtonRow 占屏底 84px 起，棋盘
-	## 不再被按钮行遮挡）且水平扣两侧 UI（left=324/right=-340 不变）；
-	## LeftPanel 宽 304（回合大字首子 + LeftScroll 竖排序条 + UnitInfoCard
-	## 末子）；TurnOrderBar 父 == LeftScroll 且横滚禁用；ButtonRow 五钮在位、
-	## 贴屏底（offset_bottom=-12 ± 0.5）且左缘与信息卡左缘对齐
+	## 左带布局契约（批次 B 布局重构 + E1 剩余区适配居中 + 布局三改批收窄/
+	## 右扩）：BoardLayer 顶边贴屏顶（顶部无回合条区——回合大字在左带）、
+	## 底边扣按钮行区（offset_bottom == -84）且水平扣两侧 UI（left=240/
+	## right=-12——左列收窄 220 + 右栏退役棋盘右扩贴边）；LeftPanel 宽 220
+	##（回合大字首子 + LeftScroll 竖排序条 + UnitInfoCard 末子 min 212）；
+	## TurnOrderBar 父 == LeftScroll 且横滚禁用；ButtonRow 五钮在位、贴屏底
+	##（offset_bottom=-12 ± 0.5）且左缘与信息卡左缘对齐
 	var runner: GdUnitSceneRunner = scene_runner(BATTLE_SCENE)
 	var battle: Control = runner.scene() as Control
 	assert_object(battle).is_not_null()
@@ -115,13 +124,13 @@ func test_left_belt_layout_contract() -> void:
 			.override_failure_message("BoardLayer 顶边应贴屏顶（顶部无回合条区——左带结构）")
 	assert_float(board.offset_bottom).is_equal(-84.0) \
 			.override_failure_message("BoardLayer 底边应扣按钮行区 -84（剩余区适配居中）")
-	assert_float(board.offset_left).is_equal(324.0)
-	assert_float(board.offset_right).is_equal(-340.0)
-	# 左带容器：定宽 304（12→316 锚定，分辨率无关）
+	assert_float(board.offset_left).is_equal(240.0)
+	assert_float(board.offset_right).is_equal(-12.0)
+	# 左带容器：定宽 220（12→232 锚定，分辨率无关）
 	var left_panel: VBoxContainer = battle.get_node("%LeftPanel") as VBoxContainer
 	assert_object(left_panel).is_not_null()
-	assert_float(absf(left_panel.size.x - 304.0)).is_less_equal(0.5) \
-			.override_failure_message("LeftPanel 宽度应为 304（实际 %s）" % left_panel.size)
+	assert_float(absf(left_panel.size.x - 220.0)).is_less_equal(0.5) \
+			.override_failure_message("LeftPanel 宽度应为 220（实际 %s）" % left_panel.size)
 	# 回合大字首子 / 序条在 LeftScroll 内 / 信息卡 LeftPanel 末子
 	var round_label: Label = battle.get_node("%RoundLabel") as Label
 	assert_str(round_label.get_parent().name).is_equal("LeftPanel")
