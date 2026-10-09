@@ -201,6 +201,15 @@ func test_tile_tooltip_contract() -> void:
 	assert_object(plain).is_not_null()
 	assert_int(plain.mouse_filter).is_equal(Control.MOUSE_FILTER_IGNORE)
 	assert_str(plain.tooltip_text).is_empty()
+	# E1 角外三角负例：格盒四角（菱形外三角区）反投影不得命中本格
+	#（咬合区归邻格或界外哨兵——详见 test_battle_iso_projection 全图锚定）
+	var corner_cell: Vector2i = Vector2i(3, 3)
+	var corner_rect: Rect2 = board.cell_rect(corner_cell)
+	for corner: Vector2 in [corner_rect.position, corner_rect.end,
+			corner_rect.position + Vector2(corner_rect.size.x, 0.0),
+			corner_rect.position + Vector2(0.0, corner_rect.size.y)]:
+		assert_vector(board.cell_from_local(corner)).is_not_equal(corner_cell) \
+				.override_failure_message("盒角 %s 命中本格（菱形外三角误归属）" % str(corner))
 	battle.controller.abort_battle()
 
 func test_skill_button_tooltip_contract() -> void:
@@ -414,7 +423,10 @@ func test_los_blocked_range_rendering_and_tap() -> void:
 	for holder: Node in layer.get_children():
 		if holder.is_queued_for_deletion():
 			continue
-		var cell: Vector2i = board.cell_from_local((holder as Control).position)
+		# E1：holder.position 为菱形盒角（咬合区）——反查格取盒中心
+		var holder_control: Control = holder as Control
+		var cell: Vector2i = board.cell_from_local(
+				holder_control.position + holder_control.size * 0.5)
 		if holder.get_meta(&"los_blocked", false):
 			blocked_cells.append(cell)
 			# 斜杠标记存在（旋转子节点）
@@ -518,21 +530,22 @@ func test_batch_a_table_driven_contract() -> void:
 	# ①表驱动渲染：草丛表改红 → 重建 → 渲染色 == 表值；恢复再断回原色
 	# M6 批 3.5b 组 3 适配：tile 表 asset_id 在档时地格走贴图分支（渲染由贴图
 	# 决定、fill_color 不消费）——本用例锚定「色块表驱动」语义，注入贴图
-	# 缺件走降级色块分支验证（缓存注入——autoload 进程级，用例尾清缓存还原）
+	# 缺件走降级色块分支验证（缓存注入——autoload 进程级，用例尾清缓存还原；
+	# E1：降级色块 = DiamondFill 菱形色面——fill_color 断言口径）
 	var grass_tile: TileTypeDef = game_data.get_record(&"tile_grass") as TileTypeDef
 	var original_fill: Color = grass_tile.fill_color
 	AssetTex._cache[&"tile_battle_bush"] = null
-	AssetTex._cache[&"tile_mine_floor_01"] = null
-	AssetTex._cache[&"tile_mine_floor_02"] = null
+	AssetTex._cache[&"tile_mine_floor_01_iso"] = null
+	AssetTex._cache[&"tile_mine_floor_02_iso"] = null
 	grass_tile.fill_color = Color(1.0, 0.2, 0.2, 1.0)
 	board._BuildCells()
-	var cell_rect: ColorRect = board.cell_visual(Vector2i(5, 2)) as ColorRect
-	assert_bool(cell_rect != null).is_true()
-	assert_bool(cell_rect.color.is_equal_approx(Color(1.0, 0.2, 0.2, 1.0))) \
-			.override_failure_message("改表色后渲染未跟随：%s" % cell_rect.color).is_true()
+	var cell_diamond: BattleBoard.DiamondFill = board.cell_visual(Vector2i(5, 2)) as BattleBoard.DiamondFill
+	assert_object(cell_diamond).is_not_null()
+	assert_bool(cell_diamond.fill_color.is_equal_approx(Color(1.0, 0.2, 0.2, 1.0))) \
+			.override_failure_message("改表色后渲染未跟随：%s" % cell_diamond.fill_color).is_true()
 	grass_tile.fill_color = original_fill
 	board._BuildCells()
-	assert_bool((board.cell_visual(Vector2i(5, 2)) as ColorRect).color \
+	assert_bool((board.cell_visual(Vector2i(5, 2)) as BattleBoard.DiamondFill).fill_color \
 			.is_equal_approx(original_fill)).is_true()
 	AssetTex.clear_cache()
 	# ②sprite 表驱动读取链（B-18：薄壳已删——直呼 SpriteResolver 单源；
@@ -962,14 +975,15 @@ func test_board_input_gated_after_battle_over() -> void:
 	assert_bool(battle.controller.awaiting_command) \
 			.override_failure_message("终局同帧组合前提：指令窗标记应残留 true").is_true()
 	battle.controller._delay_skip_requested = false
-	# 可达格点按（无守卫时首点走 show_path_preview 画路径层——用例失败锚点）
+	# 可达格点按（无守卫时首点走 show_path_preview 画路径层——用例失败锚点；
+	## E1：点按坐标 = 菱形盒中心（cell_rect 取值——消除用例内联数学））
 	var reachable: Array[Vector2i] = battle.context.grid.find_reachable(unit, unit.move_final())
 	assert_int(reachable.size()).is_greater(0)
 	var target_cell: Vector2i = reachable[0]
 	var event := InputEventMouseButton.new()
 	event.button_index = MOUSE_BUTTON_LEFT
 	event.pressed = true
-	event.position = board.origin + (Vector2(target_cell) + Vector2(0.5, 0.5)) * board.cell_size
+	event.position = board.cell_rect(target_cell).get_center()
 	assert_vector(board.cell_from_local(event.position)).is_equal(target_cell)
 	battle._on_board_gui_input(event)
 	assert_bool(battle.controller._delay_skip_requested) \

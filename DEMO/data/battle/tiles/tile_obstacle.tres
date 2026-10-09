@@ -6,8 +6,8 @@
 script = ExtResource("1_iyjls")
 id = &"tile_obstacle"
 display_name = "障碍"
-asset_id = &"tile_mine_rock"
-asset_variants = Array[StringName]([&"tile_mine_cart"])
+asset_id = &"tile_mine_rock_iso"
+asset_variants = Array[StringName]([&"tile_mine_cart_iso"])
 kind = 1
 walkable = false
 fill_color = Color(0.2, 0.19, 0.17, 1)

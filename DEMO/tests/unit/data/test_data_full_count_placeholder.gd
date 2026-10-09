@@ -48,6 +48,8 @@ func test_enemy_pack_and_naming_counts() -> void:
 	##（M6 批 3 首批背景入库 +bg_guild_hall 1 条，205→206）
 	##（M6 批 3.5a：+5 etile 数据条目（隐秘通道拆分 + 装饰格 ×4）+ 63 资产条目
 	##（62 件占位 PNG + ui_main_theme 主题），206→274）
+	##（E1 批：+12 战棋菱形 tile 资产条目（矿洞 _iso 5 + 村子 _iso 7 完整版
+	## 预备），274→286）
 	assert_int(_game_data.get_domain(&"battle/enemy_packs").size()).is_equal(3)
 	var registry: NamingRegistry = _game_data.get_record(&"naming_registry")
-	assert_int(registry.entries.size()).is_equal(274)
+	assert_int(registry.entries.size()).is_equal(286)

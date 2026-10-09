@@ -243,6 +243,27 @@ enum Mode {
 ## 与移动过程共用）
 @export var ui_battle_path_highlight_trans: int = 0
 
+# ---- E1 战棋等距投影参数（ui_battle_iso_* 六键 + 徽章底圈双色；E1 批：
+# # 2:1 等距菱形网格——逻辑坐标不动、纯渲染层投影；铁律①：投影几何数值
+# # 入表；默认 0/透明 = 未回填，UiTheme ISO_* 兜底——V-M6-iso-cfg 值域 /
+# # V-B2-cfg-fallback 锚定双校验）----
+## 菱形纵横比（cell_height = cell_width × 本值；2:1 等距 = 0.5）
+@export var ui_battle_iso_ratio: float = 0.0
+## 菱形全宽钳制带下限（像素——保底触控面积；fit 不足时让位护栏见板层）
+@export var ui_battle_iso_cell_width_min: float = 0.0
+## 菱形全宽钳制带上限（像素）
+@export var ui_battle_iso_cell_width_max: float = 0.0
+## 徽章 sprite 显示宽占格宽比（帧方形——高同比；精英 ×1.3 沿用）
+@export var ui_battle_iso_sprite_width_ratio: float = 0.0
+## 徽章脚踩线占格高比（sprite 底边 y = cell_height × 本值；0.5 = 菱形中心）
+@export var ui_battle_iso_feet_y_ratio: float = 0.0
+## 徽章椭圆底圈半径占半轴比（rx = cell_width/2 × 本值、ry 同比）
+@export var ui_battle_iso_ring_ratio: float = 0.0
+## 徽章底圈我方色（E1：阵营辨识椭圆底圈）
+@export var ui_badge_base_ring_ally_color: Color = Color(0, 0, 0, 0)
+## 徽章底圈敌方色
+@export var ui_badge_base_ring_enemy_color: Color = Color(0, 0, 0, 0)
+
 # ---- UI 徽章配色（B-1/B-2/B-3：unit_badge 全部内联色入表；默认透明 = 未回填）----
 @export var ui_badge_hp_low_color: Color = Color(0, 0, 0, 0)
 @export var ui_badge_hp_ok_color: Color = Color(0, 0, 0, 0)

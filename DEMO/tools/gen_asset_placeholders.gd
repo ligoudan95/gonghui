@@ -62,18 +62,58 @@ const SPECS: Dictionary = {
 	"tile_mine_cart": {"group": "tiles", "size": Vector2i(128, 128), "kind": "tile_motif",
 			"base": Color(0.431, 0.29, 0.208), "accent": Color(0.659, 0.518, 0.235),
 			"name": "障碍·废弃矿车"},
-	"tile_battle_bush": {"group": "tiles", "size": Vector2i(128, 128), "kind": "tile",
+	"tile_battle_bush": {"group": "tiles", "size": Vector2i(256, 128), "kind": "iso_tile",
 			"base": Color(0.298, 0.478, 0.22), "accent": Color(0.486, 0.659, 0.353),
 			"name": "战棋草丛 tile"},
-	"tile_battle_highground": {"group": "tiles", "size": Vector2i(128, 128), "kind": "tile_motif",
+	"tile_battle_highground": {"group": "tiles", "size": Vector2i(256, 128), "kind": "iso_tile_motif",
 			"base": Color(0.69, 0.604, 0.282), "accent": Color(0.541, 0.463, 0.22),
 			"name": "战棋高地 tile"},
 	"tile_battle_poison_swamp": {"group": "tiles", "size": Vector2i(128, 128), "kind": "tile",
 			"base": Color(0.478, 0.18, 0.208), "accent": Color(0.298, 0.604, 0.373),
 			"name": "战棋毒沼 tile"},
-	"tile_battle_trap": {"group": "tiles", "size": Vector2i(128, 128), "kind": "tile_motif",
+	"tile_battle_trap": {"group": "tiles", "size": Vector2i(256, 128), "kind": "iso_tile_motif",
 			"base": Color(0.333, 0.376, 0.451), "accent": Color(0.878, 0.482, 0.224),
 			"name": "战棋陷阱 tile"},
+	# ---- E1 矿洞战棋菱形组（5 件·256×128——战斗屏等距投影专用；探索屏
+	# # 继续消费上方 128×128 方形键，零改）----
+	"tile_mine_floor_01_iso": {"group": "tiles", "size": Vector2i(256, 128), "kind": "iso_tile",
+			"base": Color(0.353, 0.392, 0.447), "accent": Color(0.243, 0.271, 0.314),
+			"name": "矿洞地面·基岩（战棋菱形）"},
+	"tile_mine_floor_02_iso": {"group": "tiles", "size": Vector2i(256, 128), "kind": "iso_tile",
+			"base": Color(0.337, 0.376, 0.431), "accent": Color(0.29, 0.333, 0.408),
+			"name": "矿洞地面·碎石变体（战棋菱形）"},
+	"tile_mine_rock_iso": {"group": "tiles", "size": Vector2i(256, 128), "kind": "iso_tile_motif",
+			"base": Color(0.29, 0.322, 0.376), "accent": Color(0.243, 0.271, 0.314),
+			"name": "障碍·塌方碎石堆（战棋菱形）"},
+	"tile_mine_cart_iso": {"group": "tiles", "size": Vector2i(256, 128), "kind": "iso_tile_motif",
+			"base": Color(0.431, 0.29, 0.208), "accent": Color(0.659, 0.518, 0.235),
+			"name": "障碍·废弃矿车（战棋菱形）"},
+	"tile_battle_poison_swamp_iso": {"group": "tiles", "size": Vector2i(256, 128), "kind": "iso_tile",
+			"base": Color(0.478, 0.18, 0.208), "accent": Color(0.298, 0.604, 0.373),
+			"name": "战棋毒沼 tile（菱形）"},
+	# ---- E1 村子战棋菱形组（7 件·256×128——完整版预备：登记为占位在册
+	# # 无战斗消费点（村子图战斗化时启用）；正式素材同 id 原位替换）----
+	"tile_village_grass_01_iso": {"group": "tiles", "size": Vector2i(256, 128), "kind": "iso_tile",
+			"base": Color(0.486, 0.659, 0.353), "accent": Color(0.369, 0.541, 0.267),
+			"name": "草地·基色（战棋菱形）"},
+	"tile_village_grass_02_iso": {"group": "tiles", "size": Vector2i(256, 128), "kind": "iso_tile_motif",
+			"base": Color(0.455, 0.627, 0.322), "accent": Color(0.831, 0.686, 0.216),
+			"name": "草地·野花变体（战棋菱形）"},
+	"tile_village_path_iso": {"group": "tiles", "size": Vector2i(256, 128), "kind": "iso_tile",
+			"base": Color(0.725, 0.608, 0.42), "accent": Color(0.588, 0.474, 0.306),
+			"name": "土路 tile（战棋菱形）"},
+	"tile_village_well_iso": {"group": "tiles", "size": Vector2i(256, 128), "kind": "iso_tile_motif",
+			"base": Color(0.541, 0.561, 0.596), "accent": Color(0.431, 0.29, 0.208),
+			"name": "水井 tile（战棋菱形）"},
+	"tile_village_house_iso": {"group": "tiles", "size": Vector2i(256, 128), "kind": "iso_tile_motif",
+			"base": Color(0.769, 0.635, 0.396), "accent": Color(0.431, 0.29, 0.208),
+			"name": "农舍 tile（战棋菱形）"},
+	"tile_village_tree_01_iso": {"group": "tiles", "size": Vector2i(256, 128), "kind": "iso_tile_motif",
+			"base": Color(0.306, 0.478, 0.227), "accent": Color(0.431, 0.29, 0.208),
+			"name": "树木·阔叶单株（战棋菱形）"},
+	"tile_village_tree_02_iso": {"group": "tiles", "size": Vector2i(256, 128), "kind": "iso_tile_motif",
+			"base": Color(0.275, 0.439, 0.208), "accent": Color(0.431, 0.29, 0.208),
+			"name": "树木·双株变体（战棋菱形）"},
 	# ---- 03 村子 tile 组（7 件·128×128）----
 	"tile_village_grass_01": {"group": "tiles", "size": Vector2i(128, 128), "kind": "tile",
 			"base": Color(0.486, 0.659, 0.353), "accent": Color(0.369, 0.541, 0.267),
@@ -211,10 +251,10 @@ const SPECS: Dictionary = {
 	"fx_fog_dim": {"group": "fx", "size": Vector2i(512, 512), "kind": "fog",
 			"base": Color(1, 1, 1, 1.0), "accent": Color(0.72, 0.72, 0.72, 1.0),
 			"name": "已探索暗态滤镜"},
-	"fx_battle_select": {"group": "fx", "size": Vector2i(128, 128), "kind": "select",
+	"fx_battle_select": {"group": "fx", "size": Vector2i(256, 128), "kind": "iso_select",
 			"base": Color(0.961, 0.784, 0.412, 0.9), "accent": Color(0.961, 0.784, 0.412, 0.9),
 			"name": "选中框叠加件"},
-	"fx_battle_range": {"group": "fx", "size": Vector2i(128, 128), "kind": "range",
+	"fx_battle_range": {"group": "fx", "size": Vector2i(256, 128), "kind": "iso_range",
 			"base": Color(1, 1, 1, 1.0), "accent": Color(0.78, 0.78, 0.78, 1.0),
 			"name": "范围指示格面"},
 	"fx_battle_path_arrow": {"group": "fx", "size": Vector2i(128, 128), "kind": "arrow",
@@ -281,6 +321,10 @@ func _GeneratePlaceholder(asset_id: String, spec: Dictionary) -> bool:
 			_ComposeTile(img, spec, seed_value, false)
 		"tile_motif":
 			_ComposeTile(img, spec, seed_value, true)
+		"iso_tile":
+			_ComposeIsoTile(img, spec, seed_value, false)
+		"iso_tile_motif":
+			_ComposeIsoTile(img, spec, seed_value, true)
 		"icon":
 			_ComposeIcon(img, spec)
 		"panel":
@@ -295,6 +339,10 @@ func _GeneratePlaceholder(asset_id: String, spec: Dictionary) -> bool:
 			_ComposeSelect(img, spec)
 		"range":
 			_ComposeRange(img, spec)
+		"iso_select":
+			_ComposeIsoSelect(img, spec)
+		"iso_range":
+			_ComposeIsoRange(img, spec)
 		"arrow":
 			_ComposeArrow(img, spec)
 		"d20":
@@ -383,6 +431,84 @@ func _ComposeIcon(img: Image, spec: Dictionary) -> void:
 				img.set_pixel(x, y, base)
 			elif dist <= 11.0:
 				img.set_pixel(x, y, accent)
+
+func _DiamondMask(x: int, y: int, width: int, height: int) -> float:
+	## 菱形遮罩值（E1）：像素到菱形边缘的归一化距离——|dx|/(w/2)+|dy|/(h/2)
+	## ≤ 1 在菱形内、> 1 在外；与运行时 BattleBoard._CellAnchor 反投影数学
+	## 同构（数学单源锚点 = E1 方案 §二——工具是 SceneTree 脚本无法 import
+	## 运行时类，两处互引注释锚定）
+	## 参数 x/y：像素坐标；width/height：图幅（菱形包围盒）
+	## 返回：遮罩值（≤ 1 菱形内）
+	var dx: float = absf(float(x - width / 2)) / (float(width) * 0.5)
+	var dy: float = absf(float(y - height / 2)) / (float(height) * 0.5)
+	return dx + dy
+
+func _ComposeIsoTile(img: Image, spec: Dictionary, seed_value: int,
+		motif: bool) -> void:
+	## E1 战棋菱形 tile 组：菱形底色 + 确定性斑点纹样（碎石/草簇意象——
+	## _Hash2 同款）+ 深色菱形描边（格界辨识）；物件件（motif=true）加
+	## 菱形中心母题（内缩菱形 accent + 深色内缘——同构内缩，与运行时
+	## 降级态 _MakeInnerDiamond 观感对齐）
+	## 参数 img：目标图；spec：规格；seed_value：确定性种子；motif：物件件标记
+	## 返回：无
+	var base: Color = spec["base"]
+	var accent: Color = spec["accent"]
+	var width: int = img.get_width()
+	var height: int = img.get_height()
+	for y: int in height:
+		for x: int in width:
+			var mask: float = _DiamondMask(x, y, width, height)
+			if mask > 1.0:
+				continue
+			var color: Color = base
+			if mask > 0.92:
+				# 菱形描边带（深色——格界辨识）
+				color = base.darkened(0.4)
+			else:
+				var h: int = _Hash2(x, y, seed_value)
+				if h % 100 < 7:
+					color = base.darkened(0.22)
+				elif h % 100 < 11:
+					color = accent.lightened(0.12)
+				if motif and mask <= 0.5:
+					# 中心母题：内缩菱形 accent + 更内层深色（物件剪影占位）
+					color = accent if mask > 0.34 else accent.darkened(0.15)
+			img.set_pixel(x, y, color)
+
+func _ComposeIsoSelect(img: Image, spec: Dictionary) -> void:
+	## E1 选中框叠加件（菱形版）：中央镂空 + 菱形四角灯火黄角括（沿菱形边
+	## 方向的 V 形短臂——不遮单位；旋转 45° 的方形角括口径退役）
+	## 参数 img：目标图；spec：规格
+	## 返回：无
+	var color: Color = spec["base"]
+	var width: int = img.get_width()
+	var height: int = img.get_height()
+	for y: int in height:
+		for x: int in width:
+			# 四角括 = 菱形四顶点附近沿两条邻边的短臂（mask ∈ (0.55, 0.75]
+			## 且靠近菱形轴（|dx| 或 |dy| 小——顶点两翼）
+			var dx: float = absf(float(x - width / 2)) / (float(width) * 0.5)
+			var dy: float = absf(float(y - height / 2)) / (float(height) * 0.5)
+			var mask: float = dx + dy
+			if mask > 0.55 and mask <= 0.75 and (dx >= 0.45 or dy >= 0.45):
+				img.set_pixel(x, y, color)
+
+func _ComposeIsoRange(img: Image, spec: Dictionary) -> void:
+	## E1 范围指示格面（菱形版，v1.3 口径维持）：全不透明中性白菱形面
+	##（α=1.0）+ 灰细菱形描边（亮度差格界辨识）；运行时 modulate=cfg 填充色
+	## 染色（净 α 完全由 modulate 承载 = cfg 调定值）
+	## 参数 img：目标图；spec：规格（base/accent 中性白灰全不透明）
+	## 返回：无
+	var base: Color = spec["base"]
+	var accent: Color = spec["accent"]
+	var width: int = img.get_width()
+	var height: int = img.get_height()
+	for y: int in height:
+		for x: int in width:
+			var mask: float = _DiamondMask(x, y, width, height)
+			if mask > 1.0:
+				continue
+			img.set_pixel(x, y, accent if mask > 0.92 else base)
 
 func _ComposePanel(img: Image, spec: Dictionary) -> void:
 	## UI 面板九宫格：深色半透明底 + 金属包边描边 + 四角包角件（24px 九宫格切角
@@ -577,7 +703,10 @@ func _SyncAssetRegistry() -> bool:
 func _SyncNamingRegistry() -> bool:
 	## 同步 naming_registry：62 条资产条目 + ui_main_theme 条目（domain=&"assets"）
 	## 只补缺——已齐时不保存（重跑零 diff）；**保留既有 comment**（低3 先例：
-	## comment 是人工演进的历史叙述，工具只同步条目不动 comment 字段）
+	## comment 是人工演进的历史叙述，工具只同步条目不动 comment 字段）；
+	## E1 例外（顺手修）：菱形键 17 键（_iso 12 + 同 id 重制 5）rule_note
+	## 过时文本对齐刷新——「128×128」方形注记 → 256×128 菱形注记（对齐后
+	## 幂等零 diff；display_name 同步 SPECS 现值）
 	## 参数：无
 	## 返回：true = 成功（或无需落盘）
 	var naming: NamingRegistry = null
@@ -587,8 +716,10 @@ func _SyncNamingRegistry() -> bool:
 		printerr("gen_asset_placeholders: naming_registry 缺失 %s" % NAMING_PATH)
 		return false
 	var existing: Dictionary = {}
+	var entry_of: Dictionary = {}
 	for entry: NamingEntry in naming.entries:
 		existing[entry.resource_id] = true
+		entry_of[entry.resource_id] = entry
 	var added: int = 0
 	for asset_id: String in SPECS:
 		var key: StringName = StringName(asset_id)
@@ -609,21 +740,59 @@ func _SyncNamingRegistry() -> bool:
 		theme_entry.rule_note = "ui_<语义>：UI 主题资源（M6 批 3.5a；project.godot [gui] theme/custom 直引路径消费，registry 登记仅为 assets 目录反查闭合——直引路径豁免注记归 docs）"
 		naming.entries.append(theme_entry)
 		added += 1
-	if added == 0:
+	# E1 菱形键 rule_note 对齐刷新（17 键——见函数头注；对齐后幂等）
+	var refreshed: int = _RefreshIsoRuleNotes(naming, entry_of)
+	if added == 0 and refreshed == 0:
 		print("gen_asset_placeholders: naming_registry 已齐（%d 条）——无需落盘" % naming.entries.size())
 		return true
 	var err: Error = ResourceSaver.save(naming, NAMING_PATH)
 	if err != OK:
 		printerr("gen_asset_placeholders: naming_registry 保存失败 %s（错误码 %d）" % [NAMING_PATH, err])
 		return false
-	print("gen_asset_placeholders: naming_registry 增 %d 条（现共 %d 条；comment 未改动）" % [
-			added, naming.entries.size()])
+	print("gen_asset_placeholders: naming_registry 增 %d 条、菱形 rule_note 刷新 %d 条（现共 %d 条；comment 未改动）" % [
+			added, refreshed, naming.entries.size()])
 	return true
 
+## E1 同 id 菱形重制 5 键（tile_battle_bush/highground/trap +
+## fx_battle_select/range）——rule_note 过时文本对齐目标（「程序纹样
+## 128×128」→ 菱形重制注记）
+const ISO_REMADE_RULE_NOTES: Dictionary = {
+	"tile_battle_bush": "tile_<语义>：战棋菱形 tile（E1 批重制——程序菱形纹样 256×128 同 id 替换原 128×128 方形；正式素材同 id 原位替换）",
+	"tile_battle_highground": "tile_<语义>：战棋菱形 tile（E1 批重制——程序菱形纹样 256×128 同 id 替换原 128×128 方形；正式素材同 id 原位替换）",
+	"tile_battle_trap": "tile_<语义>：战棋菱形 tile（E1 批重制——程序菱形纹样 256×128 同 id 替换原 128×128 方形；正式素材同 id 原位替换）",
+	"fx_battle_select": "fx_<语义>：战棋菱形叠加件（E1 批重制——程序菱形 256×128 同 id 替换原 128×128 方形；正式素材同 id 原位替换）",
+	"fx_battle_range": "fx_<语义>：战棋菱形叠加件（E1 批重制——程序菱形 256×128 同 id 替换原 128×128 方形；正式素材同 id 原位替换）",
+}
+
+func _RefreshIsoRuleNotes(naming: NamingRegistry, entry_of: Dictionary) -> int:
+	## 菱形键 rule_note 对齐刷新（E1 顺手修）：17 键已存在条目 rule_note
+	## 非 _RuleNoteOf/ISO_REMADE_RULE_NOTES 现值时刷新（重制 5 键过时
+	## 「128×128」文本 + _iso 键漂移；幂等——对齐后重跑零 diff）
+	## 参数 naming：登记表；entry_of：resource_id -> NamingEntry 索引
+	## 返回：刷新条数
+	var refreshed: int = 0
+	for asset_id: String in SPECS:
+		var key: StringName = StringName(asset_id)
+		var target: String = String(ISO_REMADE_RULE_NOTES.get(asset_id,
+				_RuleNoteOf(asset_id)))
+		if not entry_of.has(key):
+			continue
+		var entry: NamingEntry = entry_of[key]
+		if entry.rule_note != target:
+			entry.rule_note = target
+			refreshed += 1
+	return refreshed
+
 func _RuleNoteOf(asset_id: String) -> String:
-	## 资产 id → 分组 rule_note（前缀最长匹配——tile_battle_* 归 tile_ 组）
+	## 资产 id → 分组 rule_note（前缀最长匹配——tile_battle_* 归 tile_ 组；
+	## E1：_iso 后缀键归战棋菱形注记——村子 _iso 七键另注「完整版预备」
+	##（登记为占位在册无战斗消费点））
 	## 参数 asset_id：资产 id
 	## 返回：rule_note 文本
+	if asset_id.ends_with("_iso"):
+		if asset_id.begins_with("tile_village_"):
+			return "tile_<语义>_iso：战棋菱形 tile·完整版预备（E1 批占位——程序菱形纹样 256×128；无战斗消费点——村子图战斗化时启用；正式素材同 id 原位替换）"
+		return "tile_<语义>_iso：战棋菱形 tile（E1 批占位——程序菱形纹样 256×128；正式素材同 id 原位替换）"
 	for prefix: String in RULE_NOTES:
 		if asset_id.begins_with(prefix):
 			return String(RULE_NOTES[prefix])

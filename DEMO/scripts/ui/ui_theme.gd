@@ -117,6 +117,25 @@ const BATTLE_PATH_HIGHLIGHT_TRANS_VALID: Array[int] = [
 const RESULT_DEFEAT: Color = Color(0.95, 0.4, 0.35)
 const RESULT_RETREAT: Color = Color(0.7, 0.8, 0.95)
 
+# ---- E1 战棋等距投影兜底（cfg ui_battle_iso_* + 徽章底圈双色——V-B2
+# # cfg-fallback 锚定，值 == cfg_main 表值；数学单源锚点 = E1 方案 §二）----
+## 菱形纵横比兜底（cell_height = cell_width × 本值；2:1 等距）
+const ISO_RATIO: float = 0.5
+## 菱形全宽钳制带下限兜底（像素）
+const ISO_CELL_WIDTH_MIN: float = 72.0
+## 菱形全宽钳制带上限兜底（像素）
+const ISO_CELL_WIDTH_MAX: float = 176.0
+## 徽章 sprite 显示宽占格宽比兜底
+const ISO_SPRITE_WIDTH_RATIO: float = 0.9
+## 徽章脚踩线占格高比兜底（0.5 = 脚踩菱形中心）
+const ISO_FEET_Y_RATIO: float = 0.5
+## 徽章椭圆底圈半径占半轴比兜底
+const ISO_RING_RATIO: float = 0.42
+## 徽章底圈我方色兜底（E1：阵营辨识椭圆底圈）
+const BADGE_BASE_RING_ALLY: Color = Color(0.29, 0.49, 0.85, 0.85)
+## 徽章底圈敌方色兜底
+const BADGE_BASE_RING_ENEMY: Color = Color(0.85, 0.32, 0.28, 0.85)
+
 # ---- 探索层（M3——cfg ui_fog_*/ui_explore_* 兜底）----
 ## 探索逐格步进演出时长兜底（秒/格）
 const EXPLORE_MOVE_STEP_SECONDS: float = 0.18

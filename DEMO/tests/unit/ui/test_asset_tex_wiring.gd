@@ -379,12 +379,12 @@ func test_fog_state_missing_texture_parent_visible() -> void:
 
 func _MakeBattleBoard(inject_floor_missing: bool) -> BattleBoard:
 	## 构建战斗板层（随机遭遇包真装配；inject_floor_missing = floor 双变体
-	## 缺件注入——降级分支用）
+	## 缺件注入——降级分支用；E1：battle tile 表改指 _iso 菱形键）
 	## 参数 inject_floor_missing：是否注入 floor 贴图缺件
 	## 返回：已 setup 的 BattleBoard（auto_free 释放）
 	if inject_floor_missing:
-		_InjectMissing(&"tile_mine_floor_01")
-		_InjectMissing(&"tile_mine_floor_02")
+		_InjectMissing(&"tile_mine_floor_01_iso")
+		_InjectMissing(&"tile_mine_floor_02_iso")
 	var params := BattleParams.new()
 	params.pack_id = &"enc_m1_random_pack"
 	params.party = [AdventurerData.create_debug(&"warrior", &"cls_warrior", {
@@ -402,8 +402,8 @@ func _MakeBattleBoard(inject_floor_missing: bool) -> BattleBoard:
 	return board
 
 func test_battle_cell_texture_branch() -> void:
-	## 贴图分支：tile 表 asset_id 在档的格 → Control 根 + 满格 TextureRect 子
-	##（贴图态 gap=0 无缝——子尺寸 == cell_size）
+	## 贴图分支：tile 表 asset_id 在档的格 → Control 根 + 满盒 TextureRect 子
+	##（贴图态 gap=0 无缝——E1：子尺寸 == 菱形盒 (cell_width, cell_height)）
 	var board: BattleBoard = _MakeBattleBoard(false)
 	var textured_cells: int = 0
 	for cell: Vector2i in board._cells:
@@ -412,21 +412,55 @@ func test_battle_cell_texture_branch() -> void:
 			textured_cells += 1
 			var rect: TextureRect = visual.get_child(0) as TextureRect
 			assert_object(rect.texture).is_not_null()
-			assert_bool(rect.size == Vector2(board.cell_size, board.cell_size)).is_true()
-			# 贴图态 gap=0：根尺寸 == 满格 cell_size（无缝铺贴）
-			assert_bool(visual.size == Vector2(board.cell_size, board.cell_size)).is_true()
+			assert_bool(rect.size == Vector2(board.cell_width, board.cell_height)).is_true()
+			# 贴图态 gap=0：根尺寸 == 满盒（无缝铺贴）
+			assert_bool(visual.size == Vector2(board.cell_width, board.cell_height)).is_true()
 	assert_int(textured_cells).is_greater(0)
 
 func test_battle_cell_fallback_color_rect() -> void:
-	## 缺件降级：floor 双变体注入 null → 普通格回落现状色块（ColorRect 根）
-	_InjectMissing(&"tile_mine_floor_01")
-	_InjectMissing(&"tile_mine_floor_02")
+	## 缺件降级：floor 双变体注入 null → 普通格回落菱形色面
+	##（E1：DiamondFill 根——原 ColorRect 方形口径退役）
+	_InjectMissing(&"tile_mine_floor_01_iso")
+	_InjectMissing(&"tile_mine_floor_02_iso")
 	var board: BattleBoard = _MakeBattleBoard(false)
 	var plain_cells: int = 0
 	for cell: Vector2i in board._cells:
-		if board._cells[cell] is ColorRect:
+		if board._cells[cell] is BattleBoard.DiamondFill:
 			plain_cells += 1
 	assert_int(plain_cells).is_greater(0)
+
+func test_battle_iso_diamond_asset_geometry_and_wiring() -> void:
+	## E1 菱形键契约：①源图几何——17 键经 registry 路径 Image 直读尺寸
+	## == 256×128（2:1 等距）；②battle tile 表接线——tile_normal/obstacle/
+	## poison_swamp 三表 asset_id 指向 _iso 菱形键、grass/highground/trap
+	## 三表沿用同 id 重制键（改指断言锚定防漂移）
+	var registry: AssetRegistry = _game_data.get_record(&"registry") as AssetRegistry
+	var diamond_ids: Array[StringName] = DataValidator.ISO_DIAMOND_ASSET_IDS.duplicate()
+	for asset_id: StringName in diamond_ids:
+		var path: String = registry.mapping.get(asset_id, "")
+		assert_str(path).is_not_empty() \
+				.override_failure_message("菱形键 %s 未在 registry 登记" % asset_id)
+		var texture: Texture2D = AssetTex.texture_of(asset_id, _game_data)
+		assert_object(texture) \
+				.override_failure_message("菱形键 %s 纹理加载失败" % asset_id).is_not_null()
+		assert_int(int(texture.get_size().x)).is_equal(256)
+		assert_int(int(texture.get_size().y)).is_equal(128)
+	# battle tile 三表 → _iso 键接线（E1 表值改指）
+	var tile_normal: TileTypeDef = _game_data.get_record(&"tile_normal") as TileTypeDef
+	assert_str(String(tile_normal.asset_id)).is_equal("tile_mine_floor_01_iso")
+	assert_str(String(tile_normal.asset_variants[0])).is_equal("tile_mine_floor_02_iso")
+	var tile_obstacle: TileTypeDef = _game_data.get_record(&"tile_obstacle") as TileTypeDef
+	assert_str(String(tile_obstacle.asset_id)).is_equal("tile_mine_rock_iso")
+	assert_str(String(tile_obstacle.asset_variants[0])).is_equal("tile_mine_cart_iso")
+	var tile_swamp: TileTypeDef = _game_data.get_record(&"tile_poison_swamp") as TileTypeDef
+	assert_str(String(tile_swamp.asset_id)).is_equal("tile_battle_poison_swamp_iso")
+	# 同 id 重制三键沿用（表值不改——源 PNG 已重制菱形）
+	var tile_grass: TileTypeDef = _game_data.get_record(&"tile_grass") as TileTypeDef
+	assert_str(String(tile_grass.asset_id)).is_equal("tile_battle_bush")
+	var tile_high: TileTypeDef = _game_data.get_record(&"tile_highground") as TileTypeDef
+	assert_str(String(tile_high.asset_id)).is_equal("tile_battle_highground")
+	var tile_trap: TileTypeDef = _game_data.get_record(&"tile_trap") as TileTypeDef
+	assert_str(String(tile_trap.asset_id)).is_equal("tile_battle_trap")
 
 func test_trap_mark_texture_and_fallback() -> void:
 	## 陷阱标记两态：贴图在档 → 整格半透明 TextureRect（meta trap_mark 沿用 +
@@ -465,8 +499,8 @@ func _FindTrapMark(board: BattleBoard) -> Control:
 # --------------------------------------------------------------------------
 
 func test_unit_badge_select_ring_texture_branch() -> void:
-	## 选中框贴图态：game_data 注入 → _ring 单元素 TextureRect（格尺寸
-	## STRETCH_SCALE、贴图非空）
+	## 选中框贴图态：game_data 注入 → _ring 单元素 TextureRect（E1：满盒
+	## 菱形尺寸 (cell_width, cell_height) STRETCH_SCALE、贴图非空）
 	var unit := BattleUnit.new()
 	unit.unit_id = &"test_unit"
 	unit.current_hp = 50
@@ -479,7 +513,7 @@ func test_unit_badge_select_ring_texture_branch() -> void:
 	var ring: Control = badge._ring[0]
 	assert_bool(ring is TextureRect).is_true()
 	assert_object((ring as TextureRect).texture).is_not_null()
-	assert_bool(ring.size == Vector2(72.0, 72.0)).is_true()
+	assert_bool(ring.size == Vector2(72.0, 36.0)).is_true()
 
 func test_unit_badge_select_ring_fallback_four_edges() -> void:
 	## 选中框缺件态：无 game_data（纯兜底模式）→ 现状金色四边带（4 条
@@ -517,9 +551,10 @@ func test_unit_badge_ring_breath_generalized() -> void:
 
 func test_battle_overlay_range_texture_and_fallback() -> void:
 	## 范围覆盖两态：fx_battle_range 在档 → 填充块 TextureRect + modulate =
-	## cfg 填充色（染蓝）；缺件注入 → 现状 ColorRect 填充块
+	## cfg 填充色（染蓝）；缺件注入 → E1 菱形色面（DiamondFill——原
+	## ColorRect 方形口径退役）
 	var board: BattleBoard = auto_free(BattleBoard.new())
-	board.cell_size = 64.0
+	board.cell_width = 64.0
 	board.origin = Vector2.ZERO
 	board._game_data = _game_data
 	var cells: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0)]
@@ -531,10 +566,10 @@ func test_battle_overlay_range_texture_and_fallback() -> void:
 	var move_fill: Color = UiTheme.color_of(null,
 			&"ui_overlay_move_fill_color", UiTheme.OVERLAY_MOVE_FILL)
 	assert_bool(fill_tex.modulate.is_equal_approx(move_fill)).is_true()
-	# 缺件降级：现状 ColorRect
+	# 缺件降级：菱形色面
 	_InjectMissing(&"fx_battle_range")
 	board.show_move_range(cells)
-	var fill_rect: ColorRect = board._move_overlays[0].get_child(0) as ColorRect
+	var fill_rect: BattleBoard.DiamondFill = board._move_overlays[0].get_child(0) as BattleBoard.DiamondFill
 	assert_object(fill_rect).is_not_null()
 
 # --------------------------------------------------------------------------

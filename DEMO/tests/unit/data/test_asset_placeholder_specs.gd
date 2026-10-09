@@ -67,12 +67,14 @@ func test_fog_png_pixels_opaque_neutral() -> void:
 					"%s (%d,%d) 像素应通道中性" % [path, point.x, point.y]).is_true()
 
 func test_range_png_pixels_opaque_neutral() -> void:
-	## 中3 文件锚：范围格面入库 PNG 像素全不透明中性——填充与描边两类像素
-	## 采样（(2,2) 描边带 / (64,64) 填充心），净观感 = modulate（cfg 色）单乘
+	## 中3 文件锚（E1 菱形版 256×128）：范围格面入库 PNG **菱形内**像素全不
+	## 透明中性——填充与描边两类像素采样（(128,3) 描边带 / (128,64) 填充心 /
+	## (200,48) 偏心填充），净观感 = modulate（cfg 色）单乘；菱形外透明属
+	## 正常（_DiamondMask 裁剪）
 	var img: Image = _LoadPng("res://assets/fx/fx_battle_range.png")
-	assert_int(img.get_width()).is_equal(128)
+	assert_int(img.get_width()).is_equal(256)
 	assert_int(img.get_height()).is_equal(128)
-	for point: Vector2i in [Vector2i(2, 2), Vector2i(64, 64), Vector2i(120, 64)]:
+	for point: Vector2i in [Vector2i(128, 3), Vector2i(128, 64), Vector2i(200, 48)]:
 		var color: Color = img.get_pixel(point.x, point.y)
 		assert_int(int(round(color.a * 255.0))).override_failure_message(
 				"fx_battle_range.png (%d,%d) 像素应全不透明" % [point.x, point.y]) \

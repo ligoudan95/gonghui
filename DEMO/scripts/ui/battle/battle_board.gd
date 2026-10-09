@@ -1,26 +1,37 @@
 ## 战场板层（BattleBoard，Control——格子网格 + 覆盖层 + 单位徽章容器）
 ## 职责：按 BattleContext 渲染战场——地格池（M6 批 3.5b 组 3 贴图接线：
-## tile.asset_id/asset_variants → pick_variant 混铺 → Control 根+满格贴图，
-## gap=0 无缝；缺件降级色块池 kind/status_id 驱动：草丛绿/高地亮黄凸边/
-## 毒沼紫黑/障碍深灰岩块描边/普通土色）、地格 hover 描述
+## tile.asset_id/asset_variants → pick_variant 混铺 → Control 根+满盒贴图；
+## E1 批：2:1 等距菱形网格——逻辑坐标不动、纯渲染层投影（_CellAnchor 正
+## 投影单源，11 处内联摆放公式收口消费；tile 源 256×128 菱形；缺件降级
+## 菱形色面 _MakeDiamondFill：草丛绿/高地亮黄内缩母题/毒沼紫黑/障碍深灰
+## 岩块内缩母题/普通土色+深色菱形描边保格界）、地格 hover 描述
 ## （特殊/障碍格 PASS + tooltip_text，文案取 tile 表 description——UI 零硬编码；
-## 2026-09-24 试玩反馈）、动态地格标记（陷阱点——贴图态整格半透明/缺件角块）、
-## 覆盖层（移动范围高亮+亮边框/技能范围红显——组 8 fx_battle_range 染色态/
+## 2026-09-24 试玩反馈）、动态地格标记（陷阱点——贴图态整盒半透明/缺件
+## 菱形下角角块）、覆盖层（移动范围高亮/技能范围红显——组 8 fx_battle_range
+## 菱形染色态；E1：程序四边框带退役——菱形描边随贴图自带/
 ## 路径预览高光与移动燃线（试玩反馈批：A8 箭头表现改呼吸式高光标记——D4
 ## 契约修订，移动过程真实路径逐格熄灭；漏洞1 修复：燃线挂独立生命周期——
 ## 与 clear_overlays/_ClearSelection 解耦，由逐格熄灭回调与移动 tween
 ## finished 自然烧完自清，行动轮切换不截断在途燃线）/二次确认提示）、
-## 单位徽章池、飘字伤害数字；提供本地坐标 → 格坐标换算（点击命中入口）。
-## 数据来源：M1 批 3 方案 §7.1；格子尺寸自适应版面（40-88px 钳制）。
+## 单位徽章池、飘字伤害数字；提供本地坐标 → 格坐标换算（点击命中入口——
+## E1：菱形反投影 round 判据，共享边确定性归属单格）。
+## E1 深度排序 = 手动 z_index（等距深度 = x+y，不用 Y-sort——子节点异质
+## 重排破坏树序契约；探索屏 Z_* 先例）：格/陷阱标记/徽章 z = x+y、
+## 覆盖层容器 Z_OVERLAY=100、tips/飘字 Z_TEXT=200（树序置顶逻辑保留双保险）。
+## 数据来源：M1 批 3 方案 §7.1 + E1 方案 §二（投影数学单源锚点）；
+## 菱形全宽自适应版面（cfg 钳制带 [min,max] + fit 不足让位护栏）。
 ## 输入口径：本层 gui_input 统一接点按（battle_screen 分发两段式确认）；
 ## 徽章与覆盖块均不消费鼠标；地格块 PASS 参与命中后冒泡回本层（点击链路不变）。
 class_name BattleBoard
 extends Control
 
-## 格子尺寸钳制带（像素）
-const CELL_SIZE_MIN: float = 40.0
-const CELL_SIZE_MAX: float = 88.0
-## 覆盖层边框条宽（像素）
+## 覆盖层容器 z_index（恒压一切格/徽章深度——12×12 上限 x+y=22）
+const Z_OVERLAY: int = 100
+## tips 面板/飘字 z_index（恒压覆盖层——树序置顶逻辑保留作双保险）
+const Z_TEXT: int = 200
+## 菱形命中判据浮点容差（边界点 round 归属的数值抖动护栏）
+const HIT_EPS: float = 0.0001
+## 覆盖层边框条宽（像素——E1 程序四边框带退役后仅 _MakeEdgeStrips 签名默认值保留）
 const OVERLAY_BORDER_WIDTH: float = 2.0
 ## 陷阱标记色兜底（S1-4：主值入 tile 表 mark_color——tile_trap.tres；
 ## 表值缺失时的回退护栏）
@@ -28,17 +39,21 @@ const COLOR_TRAP_MARK_FALLBACK: Color = Color(1.0, 0.5, 0.1, 0.8)
 ## 地格解析失败兜底色兜底（S1-4/#8：主值入 cfg_main.ui_tile_fallback_color；
 ## 常量单源在 UiTheme.TILE_FALLBACK——DataValidator C-3 同引）
 const TILE_FALLBACK_COLOR_FALLBACK: Color = UiTheme.TILE_FALLBACK
-## 范围层边框条宽（像素——加粗以显边界）
+## 范围层边框条宽（像素——E1 同上退役，签名默认值保留）
 const RANGE_BORDER_WIDTH: float = 3.0
 ## 视线阻断格中心斜杠条高（像素）
 const BLOCKED_SLASH_WIDTH: float = 3.0
-## 格间缝宽（B-17：PLAIN 色块缝隙几何提名）
-const CELL_GAP: float = 2.0
-## 障碍/凸边内层缩进（B-17：BLOCK 内块与 RAISED 内层同几何）
-const TILE_INNER_INSET: float = 6.0
-## 陷阱标记尺寸与角偏移（B-17）
+## 阻断斜杠长占菱形全宽比（E1 复核：2:1 菱形内 45° 可容线段全长 =
+## √2×w×ratio/(1+ratio) ≈ 0.471w——0.45 留安全余量不越菱形）
+const BLOCKED_SLASH_LENGTH_RATIO: float = 0.45
+## 降级菱形色面描边宽（像素——格界辨识）
+const DIAMOND_BORDER_WIDTH: float = 2.0
+## 降级菱形母题内缩比（BLOCK/RAISED 内层菱形 = 外层 × (1−本值×2)——
+## E1 退役 CELL_GAP/TILE_INNER_INSET 方形内缩口径改比例）
+const DIAMOND_INNER_INSET_RATIO: float = 0.12
+## 陷阱标记尺寸（B-17；E1：定位改菱形下角内侧——TRAP_MARK_CORNER_OFFSET
+## 方形角偏移口径退役）
 const TRAP_MARK_SIZE: float = 12.0
-const TRAP_MARK_CORNER_OFFSET: float = 18.0
 ## tips 定位边距与左右钳位边距（B-17）
 const TIPS_MARGIN: float = 8.0
 const TIPS_CLAMP_MARGIN: float = 4.0
@@ -80,9 +95,13 @@ const PATH_HIGHLIGHT_TROUGH_RATIO: float = 0.3
 ## 消费经 _OverlayColor 同款 color_of 读取口；UiTheme 兜底常量锚定）
 ## 战斗上下文（setup 注入）
 var context: BattleSetup.BattleContext = null
-## 格子像素尺寸
-var cell_size: float = 72.0
-## 板面原点（本地坐标）
+## 菱形全宽（像素——E1 改造：原 cell_size 方形边长口径退役）
+var cell_width: float = 72.0
+## 菱形全高（像素——派生只读：cell_width × iso_ratio，cfg 驱动即时反映）
+var cell_height: float:
+	get:
+		return cell_width * _IsoRatio()
+## 板面原点（本地坐标——E1：全棋盘菱形包围盒左上角）
 var origin: Vector2 = Vector2.ZERO
 
 ## 地格色块池（Vector2i -> Control）
@@ -167,6 +186,42 @@ var _game_data: Node = null
 ## call_deferred——重复排队前查此标记防重入；帧末执行体置回）
 var _resize_rebuild_queued: bool = false
 
+## E1 等距投影参数读取口（cfg ui_battle_iso_* 优先、UiTheme ISO_* 兜底；
+## 值域外非法值回退兜底——与 _PathHighlight* 三口同模式；徽章侧
+## sprite/feet/ring 三参读取口在 UnitBadge 自建同款，本层不重复）
+func _IsoRatio() -> float:
+	## 菱形纵横比（cell_height = cell_width × 本值；2:1 等距 = 0.5）
+	## 参数：无
+	## 返回：生效比例（(0, 1]）
+	var raw: float = UiTheme.ISO_RATIO
+	if context != null and context.cfg != null:
+		raw = context.cfg.ui_battle_iso_ratio
+	if raw <= 0.0 or raw > 1.0:
+		return UiTheme.ISO_RATIO
+	return raw
+
+func _IsoCellWidthMin() -> float:
+	## 菱形全宽钳制带下限（像素——保底触控面积）
+	## 参数：无
+	## 返回：生效下限（> 0）
+	var raw: float = UiTheme.ISO_CELL_WIDTH_MIN
+	if context != null and context.cfg != null:
+		raw = context.cfg.ui_battle_iso_cell_width_min
+	if raw <= 0.0:
+		return UiTheme.ISO_CELL_WIDTH_MIN
+	return raw
+
+func _IsoCellWidthMax() -> float:
+	## 菱形全宽钳制带上限（像素）
+	## 参数：无
+	## 返回：生效上限（> 0）
+	var raw: float = UiTheme.ISO_CELL_WIDTH_MAX
+	if context != null and context.cfg != null:
+		raw = context.cfg.ui_battle_iso_cell_width_max
+	if raw <= 0.0:
+		return UiTheme.ISO_CELL_WIDTH_MAX
+	return raw
+
 func _ready() -> void:
 	## 引擎回调：尺寸变化监听挂接（W3-04——窗口/容器尺寸变化后格子几何、
 	## 徽章与动态标记须重算落位，此前仅 setup 时布局一次）
@@ -212,10 +267,10 @@ func _ApplyResizeRebuild() -> void:
 	_resize_rebuild_queued = false
 	if context == null or context.grid == null:
 		return
-	var old_cell: float = cell_size
+	var old_width: float = cell_width
 	var old_origin: Vector2 = origin
 	_BuildLayout()
-	if is_equal_approx(old_cell, cell_size) and old_origin == origin:
+	if is_equal_approx(old_width, cell_width) and old_origin == origin:
 		return
 	_KillFloatingTweens()
 	for unit_id: StringName in _move_tweens.keys():
@@ -245,24 +300,62 @@ func _ApplyResizeRebuild() -> void:
 	RefreshDynamicMarks()
 
 func cell_from_local(local_pos: Vector2) -> Vector2i:
-	## 本地坐标 → 格坐标（界外返回 (-1, -1)；降级路径 context 空守卫——
-	## 盲审批 1-6：直开场景点击不崩，返回界外哨兵）
+	## 本地坐标 → 格坐标（E1 菱形反投影——_CellAnchor 正投影的严格逆变换：
+	## 连续格坐标 (x_f, y_f) 下菱形格区域 = 轴对齐单位方形，round 最近格即
+	## 命中；共享边由 round 远零侧确定性归属单格、菱形咬合区（盒四角外三角）
+	## 归属邻格——全平面无空隙无重叠；界外返回 (-1, -1)；降级路径 context 空
+	## 守卫——盲审批 1-6：直开场景点击不崩，返回界外哨兵）
+	## 数学单源锚点 = E1 方案 §二（正投影公式）；实现偏离注：方案判据原文为
+	## L1 ≤ 0.5，与本板正投影不自洽（L1 内切菱形会丢方形角部 = 菱形顶点
+	## 死区），按正投影严格逆变换取 round + 方形判据（|dx|/|dy| ≤ 0.5+HIT_EPS
+	## 正常恒真，仅浮点边界护栏）——已上报记录
 	## 参数 local_pos：BoardLayer 本地坐标
 	## 返回：格坐标
 	if context == null or context.grid == null:
 		return Vector2i(-1, -1)
 	var grid_size: Vector2i = context.grid.size
-	var cell: Vector2i = Vector2i(int(floor((local_pos - origin).x / cell_size)),
-			int(floor((local_pos - origin).y / cell_size)))
-	if cell.x < 0 or cell.x >= grid_size.x or cell.y < 0 or cell.y >= grid_size.y:
+	if cell_width <= 0.0 or cell_height <= 0.0:
 		return Vector2i(-1, -1)
-	return cell
+	var d: Vector2 = local_pos - origin
+	var p_axis: float = d.x / (cell_width * 0.5)
+	var q_axis: float = d.y / (cell_height * 0.5)
+	var x_f: float = (p_axis + q_axis - float(grid_size.y) - 1.0) * 0.5
+	var y_f: float = (q_axis - p_axis + float(grid_size.y) - 1.0) * 0.5
+	var rx: int = roundi(x_f)
+	var ry: int = roundi(y_f)
+	# 三格共享顶点仲裁：x/y 双 0.5 恰界（连续坐标四方格公共角——真实几何
+	# 为 (cx,cy)/(cx+1,cy)/(cx,cy+1) 三菱形共享顶点，双上取会误归第 4 格
+	# (cx+1,cy+1)——该点不在其菱形内）；y 回退下侧归东邻（其菱形左上边
+	# 端点=本顶点，几何合法归属）
+	if absf(absf(x_f - float(rx)) - 0.5) < HIT_EPS \
+			and absf(absf(y_f - float(ry)) - 0.5) < HIT_EPS:
+		ry -= 1
+	if rx < 0 or rx >= grid_size.x or ry < 0 or ry >= grid_size.y:
+		return Vector2i(-1, -1)
+	if absf(x_f - float(rx)) > 0.5 + HIT_EPS \
+			or absf(y_f - float(ry)) > 0.5 + HIT_EPS:
+		return Vector2i(-1, -1)
+	return Vector2i(rx, ry)
+
+func _CellAnchor(cell: Vector2i) -> Vector2:
+	## 格坐标 → 菱形包围盒左上角（E1 正投影单源——与现行 holder.position
+	## 语义无缝对接；全图包围盒 = origin 起 (gw+gh)×w/2 × (gw+gh)×h/2）；
+	## 降级守卫：context/grid 空返回 ZERO（cell_from_local 哨兵先例同式）
+	## 数学单源锚点 = E1 方案 §二（反投影/生成器 _DiamondMask 同构互引）
+	## 参数 cell：格坐标
+	## 返回：该格菱形包围盒左上角（本地坐标）
+	if context == null or context.grid == null:
+		return Vector2.ZERO
+	var gh: int = context.grid.size.y
+	return Vector2(
+			origin.x + (float(cell.x - cell.y) + float(gh - 1)) * cell_width * 0.5,
+			origin.y + float(cell.x + cell.y) * cell_height * 0.5)
 
 func cell_rect(cell: Vector2i) -> Rect2:
-	## 格坐标 → 本地像素矩形
+	## 格坐标 → 本地像素矩形（E1：菱形包围盒——签名与外部消费口径不变）
 	## 参数 cell：格坐标
-	## 返回：Rect2
-	return Rect2(origin + Vector2(cell) * cell_size, Vector2(cell_size, cell_size))
+	## 返回：Rect2（盒尺寸 = (cell_width, cell_height)）
+	return Rect2(_CellAnchor(cell), Vector2(cell_width, cell_height))
 
 func cell_visual(cell: Vector2i) -> Control:
 	## 取地格视觉根节点（tooltip/输入契约测试与 UI 查询入口）
@@ -333,11 +426,10 @@ func _ShowPathHighlights(cells: Array[Vector2i], pool: Array[Control],
 	var trans: int = _PathHighlightTrans()
 	for cell: Vector2i in cells:
 		var holder := Control.new()
-		holder.position = origin + Vector2(cell) * cell_size
-		holder.size = Vector2(cell_size, cell_size)
+		holder.position = _CellAnchor(cell)
+		holder.size = Vector2(cell_width, cell_height)
 		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var glow := ColorRect.new()
-		glow.color = _PathHighlightColor()
+		var glow: Control = _MakeDiamondFill(_PathHighlightColor())
 		glow.size = holder.size
 		glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		glow.modulate.a = peak
@@ -528,6 +620,8 @@ func _EnsureTipsPanel() -> void:
 			UiTheme.make_dark_panel_style(context.cfg if context != null else null,
 					_game_data))
 	_tips_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# E1：tips 恒压覆盖层容器（z 带显式设定——树序置顶逻辑保留双保险）
+	_tips_panel.z_index = Z_TEXT
 	var box := VBoxContainer.new()
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_theme_constant_override("separation", 2)
@@ -583,6 +677,14 @@ func _FaceBadgeOnStep(badge: UnitBadge, from_x: int, to_x: int) -> void:
 	## 返回：无
 	badge.set_flip(facing_flip_of(from_x, to_x))
 
+func _UpdateBadgeDepth(badge: UnitBadge, cell: Vector2i) -> void:
+	## 徽章等距深度设定（E1 私有助手——move_badge 逐段链回调与瞬移/直落
+	## 一次设定共用）：z = cell.x + cell.y（与地格同深；同格 tie-break 树序
+	## 格→陷阱标记→徽章天然正确；12×12 上限 22 < Z_OVERLAY）
+	## 参数 badge：移动单位徽章；cell：所在/迈入格
+	## 返回：无
+	badge.z_index = cell.x + cell.y
+
 func move_badge(unit: BattleUnit, from_pos: Vector2i = Vector2i(-9999, -9999),
 		path_cells: Array = []) -> void:
 	## 徽章位置跟随单位（M6 D6=A：from_pos 有效时播移动演出——tween 滑动 +
@@ -604,7 +706,7 @@ func move_badge(unit: BattleUnit, from_pos: Vector2i = Vector2i(-9999, -9999),
 	var badge: UnitBadge = _badges.get(unit.unit_id, null)
 	if badge == null:
 		return
-	var dest: Vector2 = origin + Vector2(unit.grid_pos) * cell_size
+	var dest: Vector2 = _CellAnchor(unit.grid_pos)
 	# 在途演出中断标记（漏洞1 修复边界 c 收口）：本分支若 kill 了该单位在途
 	# 移动 tween（直落/瞬移不重建燃线），逐格熄灭回调随 kill 失效——在途
 	# 燃线必须随之清，否则失去唯一清理者残留至 resize 重建；had_tween 守卫
@@ -613,6 +715,7 @@ func move_badge(unit: BattleUnit, from_pos: Vector2i = Vector2i(-9999, -9999),
 	_KillMoveTween(unit.unit_id)
 	if from_pos == Vector2i(-9999, -9999) or from_pos == unit.grid_pos:
 		badge.position = dest
+		_UpdateBadgeDepth(badge, unit.grid_pos)
 		if had_move_tween:
 			_ClearBurningPathHighlights()
 		return
@@ -642,15 +745,17 @@ func move_badge(unit: BattleUnit, from_pos: Vector2i = Vector2i(-9999, -9999),
 		# 回落 IDLE（低6 对称修复；攻击演出中两请求均被压制属预期优先级语义）；
 		# 瞬移无演出过程不建燃线——若 kill 了在途 tween（had_move_tween）其
 		# 燃线随 kill 失去熄灭回调，一并清（漏洞1 修复边界 c 收口）；
-		# 批次 A：朝向退化起终点一次判定（无逐步演出过程）
+		# 批次 A：朝向退化起终点一次判定（无逐步演出过程）；E1：深度一次设定
 		badge.position = dest
 		badge.play_action(UnitAnimState.Action.MOVE)
 		badge.play_action(UnitAnimState.Action.IDLE)
 		_FaceBadgeOnStep(badge, from_pos.x, unit.grid_pos.x)
+		_UpdateBadgeDepth(badge, unit.grid_pos)
 		if had_move_tween:
 			_ClearBurningPathHighlights()
 		return
-	badge.position = origin + Vector2(from_pos) * cell_size
+	badge.position = _CellAnchor(from_pos)
+	_UpdateBadgeDepth(badge, from_pos)
 	badge.play_action(UnitAnimState.Action.MOVE)
 	# 试玩反馈批：移动过程路径闪烁高光——按真实路径逐格建**燃线**（预览高光
 	## 已被 unit_moved 前置 clear_overlays 清空；预览与移动消费同一 find_path
@@ -667,11 +772,14 @@ func move_badge(unit: BattleUnit, from_pos: Vector2i = Vector2i(-9999, -9999),
 	# 「当前格→下一格」x 相位翻转/回正；prev_cell 段后推进（bind 值捕获同
 	# _ExtinguishPathHighlight.bind 先例）；链首段回调随 tween 启动立即执行
 	#（= 移动开始同时按第一步定初始朝向）；结束后保持最终朝向（无复位回调）
+	# E1：同插入位并插深度回调——迈入瞬间 z 切目标格深度（x+y），跨格移动
+	# 徽章与地格遮挡关系随步正确
 	var prev_cell: Vector2i = from_pos
 	for cell: Vector2i in path_sequence:
 		tween.tween_callback(_FaceBadgeOnStep.bind(badge, prev_cell.x, cell.x))
+		tween.tween_callback(_UpdateBadgeDepth.bind(badge, cell))
 		tween.tween_property(badge, "position",
-				origin + Vector2(cell) * cell_size, leg_seconds)
+				_CellAnchor(cell), leg_seconds)
 		tween.tween_callback(_ExtinguishPathHighlight.bind(cell))
 		prev_cell = cell
 	tween.tween_callback(func() -> void:
@@ -768,7 +876,8 @@ func _SpawnFloatText(cell: Vector2i, text: String, color: Color,
 			_OverlayColor(&"ui_badge_outline_color", UiTheme.BADGE_OUTLINE))
 	label.add_theme_constant_override("outline_size", DAMAGE_OUTLINE_SIZE)
 	label.position = cell_rect(cell).position \
-			+ Vector2(cell_size * DAMAGE_CELL_OFFSET_X, DAMAGE_CELL_OFFSET_Y)
+			+ Vector2(cell_width * DAMAGE_CELL_OFFSET_X, DAMAGE_CELL_OFFSET_Y)
+	label.z_index = Z_TEXT
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(label)
 	_KeepTipsOnTop()
@@ -817,10 +926,10 @@ func RefreshDynamicMarks() -> void:
 		var trap_texture: Texture2D = _TileTextureOf(cell, tile)
 		var mark: Control = null
 		if trap_texture != null:
-			# 贴图态：整格半透明陷阱面（格根 IGNORE + 满格贴图）
+			# 贴图态：整盒半透明陷阱面（格根 IGNORE + 满盒贴图）
 			var holder := Control.new()
 			holder.position = cell_rect(cell).position
-			holder.size = Vector2(cell_size, cell_size)
+			holder.size = Vector2(cell_width, cell_height)
 			holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			holder.modulate.a = TRAP_TILE_ALPHA
 			var rect := TextureRect.new()
@@ -832,14 +941,17 @@ func RefreshDynamicMarks() -> void:
 			holder.add_child(rect)
 			mark = holder
 		else:
-			# 缺件降级：现状橙色角块（S1-4 表驱动标记色）
+			# 缺件降级：橙色角块（S1-4 表驱动标记色；E1：定位改菱形下角内侧
+			#——原方形角偏移口径在菱形下落于钻石外）
 			var corner := ColorRect.new()
 			corner.color = _TrapMarkColorOf(cell)
 			corner.size = Vector2(TRAP_MARK_SIZE, TRAP_MARK_SIZE)
 			corner.position = cell_rect(cell).position \
-					+ Vector2(cell_size - TRAP_MARK_CORNER_OFFSET, cell_size - TRAP_MARK_CORNER_OFFSET)
+					+ Vector2(cell_width * 0.5, cell_height * 0.75)
 			corner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			mark = corner
+		# E1：标记随格深度（树序在徽章后——同格 tie-break 天然压徽章，现状语义）
+		mark.z_index = cell.x + cell.y
 		mark.set_meta(&"trap_mark", true)
 		add_child(mark)
 	_KeepTipsOnTop()
@@ -864,13 +976,31 @@ func _TileFallbackColor() -> Color:
 	return TILE_FALLBACK_COLOR_FALLBACK
 
 func _BuildLayout() -> void:
-	## 版面计算：格子尺寸（界内自适应 + 钳制）与居中原点
+	## 版面计算（E1 等距重设计）：菱形全宽（界内自适应 + cfg 钳制带）与
+	## 全棋盘菱形包围盒居中原点；fit 通式 = 2×size/(span×ratio)（宽向不带
+	## ratio、高向带——ratio=0.5 时数值 == 方案 §二简式 4×size/span）；
+	## 让位护栏：fit < min 时保适配弃保底（cell_width = fit + push_warning
+	## ——720 档已知妥协在案，防「保底压爆版面」）；W_MIN/W_MAX cfg 驱动
+	##（UiTheme 兜底——原 CELL_SIZE_MIN/MAX 40-88 方形钳制带退役）
 	## 参数：无
 	## 返回：无
 	var grid_size: Vector2i = context.grid.size
-	cell_size = minf(size.x / float(grid_size.x), size.y / float(grid_size.y))
-	cell_size = clampf(cell_size, CELL_SIZE_MIN, CELL_SIZE_MAX)
-	origin = (size - Vector2(grid_size) * cell_size) * 0.5
+	var span: float = float(grid_size.x + grid_size.y)
+	var ratio: float = _IsoRatio()
+	var fit_w: float = 2.0 * size.x / span
+	var fit_h: float = 2.0 * size.y / (span * ratio)
+	var fit: float = minf(fit_w, fit_h)
+	var width_min: float = _IsoCellWidthMin()
+	if width_min > fit:
+		# 让位：小版面下钳制下限会撑爆包围盒——取 fit 保适配（触控面积
+		# 妥协在案，warning 提示档位）
+		push_warning("BattleBoard: 版面 fit %s 低于菱形全宽下限 %s——让位取 fit（保适配弃保底）" % [
+				str(fit), str(width_min)])
+		cell_width = maxf(fit, 0.0)
+	else:
+		cell_width = clampf(fit, width_min, _IsoCellWidthMax())
+	var board_box: Vector2 = Vector2(span * cell_width * 0.5, span * cell_height * 0.5)
+	origin = (size - board_box) * 0.5
 
 func _BuildCells() -> void:
 	## 地格色块池（kind/status_id 驱动配色；高地双层凸边；障碍岩块描边）
@@ -888,43 +1018,56 @@ func _MakeCellVisual(cell: Vector2i, tile: TileTypeDef) -> Control:
 	## 构建单个地格视觉（批 A H2 表驱动：fill_color/accent_color/style 三字段
 	## 驱动——UI 只按样式枚举分支，新增状态地格改表零改码）；M6 批 3.5b 组 3：
 	## match 前贴图分支——tile.asset_id/asset_variants → pick_variant 稳定哈希
-	## 混铺（同格恒定/异格打散）→ AssetTex 在档走 Control 根容器 + 满格
-	## TextureRect 子节点（贴图态 gap=0 无缝）；缺件/空 id 落回现状色块分支
+	## 混铺（同格恒定/异格打散）→ AssetTex 在档走 Control 根容器 + 满盒
+	## TextureRect 子节点（贴图态 gap=0 无缝）；缺件/空 id 落回色块分支
+	##（E1：色块 = 菱形色面 _MakeDiamondFill + 深色菱形描边保格界——
+	## 原 ColorRect 方形/CELL_GAP 缝/TILE_INNER_INSET 内缩口径退役）；
+	## E1：返回前设等距深度 z = x+y
 	## 参数 cell：格坐标；tile：地格定义
 	## 返回：视觉根节点
+	var visual: Control = null
 	if tile == null:
-		return _MakeCellRect(cell, _TileFallbackColor(), CELL_GAP)
-	var tile_texture: Texture2D = _TileTextureOf(cell, tile)
-	if tile_texture != null:
-		return _MakeTexturedCell(cell, tile_texture)
+		visual = _MakeCellRect(cell, _TileFallbackColor())
+	else:
+		var tile_texture: Texture2D = _TileTextureOf(cell, tile)
+		if tile_texture != null:
+			visual = _MakeTexturedCell(cell, tile_texture)
+		else:
+			visual = _MakeDegradedCell(cell, tile)
+	visual.z_index = cell.x + cell.y
+	return visual
+
+func _MakeDegradedCell(cell: Vector2i, tile: TileTypeDef) -> Control:
+	## 色块降级地格（E1：TileTypeDef.Style 分支保留——菱形母题内缩形态）
+	## 参数 cell：格坐标；tile：地格定义
+	## 返回：视觉根节点（已挂树）
 	match tile.style:
 		TileTypeDef.Style.BLOCK:
-			# 障碍岩块：底色 + 深色内块（darkened 同原式）+ 强调色描边
-			var rect := _MakeCellRect(cell, tile.fill_color, 0.0)
-			var inner := ColorRect.new()
-			inner.color = tile.fill_color.darkened(0.3)
-			inner.size = Vector2(cell_size - TILE_INNER_INSET * 2.0,
-					cell_size - TILE_INNER_INSET * 2.0)
-			inner.position = Vector2(TILE_INNER_INSET, TILE_INNER_INSET)
-			inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			rect.add_child(inner)
-			for edge: ColorRect in _MakeEdgeStrips(inner.size, tile.accent_color):
-				inner.add_child(edge)
+			# 障碍岩块：底色菱形 + 深色内缩母题（darkened 同原式）+ 强调色描边
+			var rect := _MakeCellRect(cell, tile.fill_color)
+			rect.add_child(_MakeInnerDiamond(tile.fill_color.darkened(0.3),
+					tile.accent_color))
 			return rect
 		TileTypeDef.Style.RAISED:
-			# 平台凸边：外层底色 + 内层强调色双层
-			var raised := _MakeCellRect(cell, tile.fill_color, 0.0)
-			var inner_raised := ColorRect.new()
-			inner_raised.color = tile.accent_color
-			inner_raised.size = Vector2(cell_size - TILE_INNER_INSET * 2.0,
-					cell_size - TILE_INNER_INSET * 2.0)
-			inner_raised.position = Vector2(TILE_INNER_INSET, TILE_INNER_INSET)
-			inner_raised.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			raised.add_child(inner_raised)
+			# 平台凸边：外层底色 + 内层强调色内缩母题双层
+			var raised := _MakeCellRect(cell, tile.fill_color)
+			raised.add_child(_MakeInnerDiamond(tile.accent_color, Color(0, 0, 0, 0)))
 			return raised
 		_:
-			# PLAIN：平色块（格间缝）
-			return _MakeCellRect(cell, tile.fill_color, CELL_GAP)
+			# PLAIN：平色菱形（格界描边）
+			return _MakeCellRect(cell, tile.fill_color)
+
+func _MakeInnerDiamond(fill: Color, border: Color) -> Control:
+	## 降级地格内缩母题菱形（E1：BLOCK 内块/RAISED 内层同几何——外层盒
+	## × (1−内缩比×2) 居中；挂树由调用方）
+	## 参数 fill：内层填充色；border：内层描边色（alpha ≤ 0 无描边）
+	## 返回：内层菱形节点（未挂树）
+	var inner := _MakeDiamondFill(fill, border)
+	var inner_scale: float = 1.0 - DIAMOND_INNER_INSET_RATIO * 2.0
+	inner.size = Vector2(cell_width, cell_height) * inner_scale
+	inner.position = Vector2(cell_width, cell_height) * DIAMOND_INNER_INSET_RATIO
+	inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return inner
 
 func _TileTextureOf(cell: Vector2i, tile: TileTypeDef) -> Texture2D:
 	## 地格贴理解析（组 3 接线口）：tile 空/asset_id 空 → null（降级信号）；
@@ -939,14 +1082,15 @@ func _TileTextureOf(cell: Vector2i, tile: TileTypeDef) -> Texture2D:
 	return AssetTex.texture_of(asset_id, _game_data)
 
 func _MakeTexturedCell(cell: Vector2i, texture: Texture2D) -> Control:
-	## 构建贴图态地格视觉（组 3）：Control 根容器（满格、IGNORE——tooltip/
-	## mouse_filter 契约与 _ApplyCellTooltip 的 ColorRect 根同构）+ 满格
-	## TextureRect 子节点；贴图态 gap=0 无缝（整片战场连贴图）
+	## 构建贴图态地格视觉（组 3；E1：满**盒**菱形贴图 256×128 STRETCH_SCALE
+	## 拉伸至 (cell_width, cell_height)）：Control 根容器（IGNORE——tooltip/
+	## mouse_filter 契约与 _ApplyCellTooltip 的色块根同构）+ 满盒 TextureRect
+	## 子节点；贴图态 gap=0 无缝（整片战场连贴图）
 	## 参数 cell：格坐标；texture：已解析地格贴图
 	## 返回：视觉根节点（已挂树）
 	var holder := Control.new()
-	holder.position = origin + Vector2(cell) * cell_size
-	holder.size = Vector2(cell_size, cell_size)
+	holder.position = _CellAnchor(cell)
+	holder.size = Vector2(cell_width, cell_height)
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var rect := TextureRect.new()
 	rect.texture = texture
@@ -958,17 +1102,64 @@ func _MakeTexturedCell(cell: Vector2i, texture: Texture2D) -> Control:
 	add_child(holder)
 	return holder
 
-func _MakeCellRect(cell: Vector2i, color: Color, gap: float) -> ColorRect:
-	## 构建地格底色块（gap = 格间缝）
-	## 参数 cell/color/gap：坐标、颜色、缝宽
-	## 返回：ColorRect
-	var rect := ColorRect.new()
-	rect.color = color
-	rect.position = origin + Vector2(cell) * cell_size + Vector2(gap, gap) * 0.5
-	rect.size = Vector2(cell_size - gap, cell_size - gap)
+func _MakeCellRect(cell: Vector2i, color: Color) -> Control:
+	## 构建地格底色菱形面（E1：原 ColorRect 方形+CELL_GAP 缝口径退役——
+	## fill 色 + 深色菱形描边保格界辨识；描边色 = fill 深化 0.4 与贴图态
+	## 生成器描边同观感）
+	## 参数 cell/color：坐标、颜色
+	## 返回：菱形色面节点（已挂树）
+	var rect: Control = _MakeDiamondFill(color, color.darkened(0.4), DIAMOND_BORDER_WIDTH)
+	rect.position = _CellAnchor(cell)
+	rect.size = Vector2(cell_width, cell_height)
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(rect)
 	return rect
+
+## 菱形色面节点（E1：Control 子类 _draw draw_polygon 四顶点——顶点单源
+## _DiamondPoints 静态函数；缺件回退统一形态：覆盖层填充/高光/地格色块）
+class DiamondFill:
+	extends Control
+	## 填充色
+	var fill_color: Color = Color.WHITE
+	## 描边色（alpha ≤ 0 无描边）
+	var border_color: Color = Color(0, 0, 0, 0)
+	## 描边宽（像素）
+	var border_width: float = 0.0
+
+	func _draw() -> void:
+		## 引擎回调：绘制菱形填充面 + 可选描边（尺寸变化自动重绘——Control
+		## resize 触发 redraw）
+		## 参数：无
+		## 返回：无
+		var points: PackedVector2Array = BattleBoard._DiamondPoints(size)
+		draw_polygon(points, PackedColorArray([fill_color]))
+		if border_color.a > 0.0 and border_width > 0.0:
+			points.append(points[0])
+			draw_polyline(points, border_color, border_width, true)
+
+static func _DiamondPoints(box: Vector2) -> PackedVector2Array:
+	## 盒尺寸 → 菱形四顶点（E1 单源：上/右/下/左——顺时针序；供 DiamondFill
+	## 绘制与外部几何消费；数学单源锚点 = E1 方案 §二，与 tools/
+	## gen_asset_placeholders.gd _DiamondMask 同构互引）
+	## 参数 box：包围盒尺寸 (w, h)
+	## 返回：四顶点数组
+	var points: PackedVector2Array = PackedVector2Array()
+	points.append(Vector2(box.x * 0.5, 0.0))
+	points.append(Vector2(box.x, box.y * 0.5))
+	points.append(Vector2(box.x * 0.5, box.y))
+	points.append(Vector2(0.0, box.y * 0.5))
+	return points
+
+func _MakeDiamondFill(fill: Color, border: Color = Color(0, 0, 0, 0),
+		border_width: float = 0.0) -> Control:
+	## 构建菱形色面节点（不挂树由调用方挂入——覆盖层/高光/地格共用）
+	## 参数 fill/border/border_width：填充色、描边色（alpha ≤ 0 无描边）、描边宽
+	## 返回：DiamondFill 节点
+	var diamond := DiamondFill.new()
+	diamond.fill_color = fill
+	diamond.border_color = border
+	diamond.border_width = border_width
+	return diamond
 
 func _BuildBadges() -> void:
 	## 单位徽章池（M6：六动作竖条经 SpriteResolver.anim_texture_of 解析装配；
@@ -984,20 +1175,22 @@ func _BuildBadges() -> void:
 					action, _game_data)
 			if strip != null:
 				anim_textures[action] = strip
-		badge.setup(unit, cell_size, context.cfg, anim_textures, _game_data)
-		badge.position = origin + Vector2(unit.grid_pos) * cell_size
+		badge.setup(unit, cell_width, context.cfg, anim_textures, _game_data)
+		badge.position = _CellAnchor(unit.grid_pos)
+		_UpdateBadgeDepth(badge, unit.grid_pos)
 		add_child(badge)
 		_badges[unit.unit_id] = badge
 
 func _ShowOverlay(cells: Array[Vector2i], color: Color, pool: Array[Control],
 		border_color: Color = Color(0, 0, 0, 0), border_width: float = OVERLAY_BORDER_WIDTH) -> void:
-	## 覆盖层画制（清池重画；每格容器 = 极淡填充 + 可选四边框；挂覆盖层专用
-	## 容器——层级见 _overlay_layer 注）；M6 批 3.5b 组 8：fx_battle_range
-	## 在档 → 填充块改 TextureRect + modulate=填充色（贴图染色态——移动范围
-	## 染蓝/技能范围染红，α 语义随 cfg 色不变）；缺件回退现状 ColorRect；
-	## 程序边框带两态通用保留（_ShowBlockedOverlay 不动）
+	## 覆盖层画制（清池重画；每格容器 = 菱形填充面）；挂覆盖层专用容器——
+	## 层级见 _overlay_layer 注；M6 批 3.5b 组 8：fx_battle_range 在档 →
+	## 填充块 TextureRect + modulate=填充色（E1：菱形染色态——贴图自带菱形
+	## 描边，移动范围染蓝/技能范围染红，α 语义随 cfg 色不变）；缺件回退
+	## 菱形色面（E1：原 ColorRect 方形回退与程序四边框带退役——方形元素
+	## 越菱形界；border_color/border_width 签名保留兼容、不再消费）
 	## 参数 cells/color/pool/border_color/border_width：格列表、填充色、目标池、
-	## 边框色（alpha ≤ 0 无边框）、边框条宽
+	## 边框色（退役不消费）、边框条宽（退役不消费）
 	## 返回：无
 	_ClearOverlay(pool)
 	_EnsureOverlayLayer()
@@ -1005,8 +1198,8 @@ func _ShowOverlay(cells: Array[Vector2i], color: Color, pool: Array[Control],
 			_game_data)
 	for cell: Vector2i in cells:
 		var holder := Control.new()
-		holder.position = origin + Vector2(cell) * cell_size
-		holder.size = Vector2(cell_size, cell_size)
+		holder.position = _CellAnchor(cell)
+		holder.size = Vector2(cell_width, cell_height)
 		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		if range_texture != null:
 			# 贴图染色态：贴图 + modulate = 填充色（α 随色——淡填充语义不变）
@@ -1019,14 +1212,10 @@ func _ShowOverlay(cells: Array[Vector2i], color: Color, pool: Array[Control],
 			fill_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			holder.add_child(fill_tex)
 		else:
-			var fill := ColorRect.new()
-			fill.color = color
+			var fill := _MakeDiamondFill(color)
 			fill.size = holder.size
 			fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			holder.add_child(fill)
-		if border_color.a > 0.0:
-			for edge: ColorRect in _MakeEdgeStrips(holder.size, border_color, border_width):
-				holder.add_child(edge)
 		_overlay_layer.add_child(holder)
 		pool.append(holder)
 
@@ -1041,33 +1230,33 @@ func _EnsureOverlayLayer() -> void:
 	_overlay_layer.name = "OverlayLayer"
 	_overlay_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_overlay_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# E1：覆盖层容器恒压一切格/徽章深度（z = x+y ≤ 22 < Z_OVERLAY）
+	_overlay_layer.z_index = Z_OVERLAY
 	add_child(_overlay_layer)
 
 func _ShowBlockedOverlay(cells: Array[Vector2i], pool: Array[Control]) -> void:
-	## 视线阻断格渲染（十四轮反馈）：极淡灰填充 + 灰边框 + 中心 45° 斜杠
-	## （ColorRect 旋转组合）；holder 带 &"los_blocked" 元标记（测试/调试契约）
+	## 视线阻断格渲染（十四轮反馈）：极淡灰菱形填充 + 中心 45° 斜杠
+	##（ColorRect 旋转组合；E1：长度系数按 cell_width 复核 = 0.45 全宽——
+	## 2:1 菱形内 45° 可容全长 ≈ 0.471w，方形边框带退役）；holder 带
+	## &"los_blocked" 元标记（测试/调试契约）
 	## 参数 cells/pool：格列表、目标池
 	## 返回：无
 	_EnsureOverlayLayer()
 	for cell: Vector2i in cells:
 		var holder := Control.new()
-		holder.position = origin + Vector2(cell) * cell_size
-		holder.size = Vector2(cell_size, cell_size)
+		holder.position = _CellAnchor(cell)
+		holder.size = Vector2(cell_width, cell_height)
 		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		holder.set_meta(&"los_blocked", true)
-		var fill := ColorRect.new()
-		fill.color = _OverlayColor(&"ui_overlay_blocked_fill_color", UiTheme.OVERLAY_BLOCKED_FILL)
+		var fill := _MakeDiamondFill(
+				_OverlayColor(&"ui_overlay_blocked_fill_color", UiTheme.OVERLAY_BLOCKED_FILL))
 		fill.size = holder.size
 		fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		holder.add_child(fill)
-		for edge: ColorRect in _MakeEdgeStrips(holder.size,
-				_OverlayColor(&"ui_overlay_blocked_border_color", UiTheme.OVERLAY_BLOCKED_BORDER),
-				OVERLAY_BORDER_WIDTH):
-			holder.add_child(edge)
-		# 中心斜杠（绕自身中心旋转 45°）
+		# 中心斜杠（绕自身中心旋转 45°——长度按菱形全宽比例收窄不越菱形）
 		var slash := ColorRect.new()
 		slash.color = _OverlayColor(&"ui_overlay_blocked_slash_color", UiTheme.OVERLAY_BLOCKED_SLASH)
-		slash.size = Vector2(cell_size * 0.72, BLOCKED_SLASH_WIDTH)
+		slash.size = Vector2(cell_width * BLOCKED_SLASH_LENGTH_RATIO, BLOCKED_SLASH_WIDTH)
 		slash.pivot_offset = slash.size * 0.5
 		slash.position = (holder.size - slash.size) * 0.5
 		slash.rotation = PI * 0.25
@@ -1083,14 +1272,6 @@ func _ClearOverlay(pool: Array[Control]) -> void:
 	for overlay: Control in pool:
 		overlay.queue_free()
 	pool.clear()
-
-func _MakeEdgeStrips(strip_size: Vector2, color: Color,
-		thickness: float = OVERLAY_BORDER_WIDTH) -> Array[ColorRect]:
-	## 构建四边框色带（B-19 单源：UiTheme.make_edge_strip_bars——与
-	## unit_badge 高亮环/蛊惑边同构收口；不挂树由调用方挂入）
-	## 参数 strip_size/color/thickness：宿主尺寸、色、条宽
-	## 返回：四条 ColorRect
-	return UiTheme.make_edge_strip_bars(strip_size, thickness, color)
 
 func _ApplyAllCellTooltips() -> void:
 	## 全场地格 hover 描述重算（初建与动态地格增删后调用）

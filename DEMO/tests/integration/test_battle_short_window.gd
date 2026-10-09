@@ -144,6 +144,48 @@ func test_short_window_button_row_not_overlapping_right_panel() -> void:
 					button_row.get_global_rect().end.x,
 					right_panel.get_global_rect().position.x])
 
+func test_720_iso_board_yield_path_no_overflow() -> void:
+	## E1 等距 720 档适配复核：10×10 图在 720 档 BoardLayer 剩余区
+	##（1280−324−340 = 616 宽 × 720−84 = 636 高）——fit_w = 2×616/20 =
+	## 61.6 < 下限 72 走让位（保适配弃保底）；断言：让位取 fit（非 72）、
+	## 包围盒不溢出板面、可玩性下限（cell_width ≥ 48 触控最低限——
+	## 等效方边 ≈ 43.6 的已知妥协在案，全宽仍达标）、全格中心命中恒等
+	var board: BattleBoard = auto_free(BattleBoard.new())
+	add_child(board)
+	board.size = Vector2(616.0, 636.0)
+	var map_def: BattleMapDef = load("res://data/battle/maps/btm_m1_lair_10x10.tres") as BattleMapDef
+	var tiles: Dictionary = {}
+	for tile_id: StringName in [&"tile_normal", &"tile_obstacle", &"tile_grass",
+			&"tile_highground", &"tile_poison_swamp", &"tile_trap"]:
+		tiles[tile_id] = load("res://data/battle/tiles/" + String(tile_id) + ".tres")
+	var grid := BattleGrid.new()
+	assert_bool(grid.setup(map_def, func(tile_id: StringName) -> TileTypeDef:
+		return tiles.get(tile_id, null) as TileTypeDef)).is_true()
+	var context := BattleSetup.BattleContext.new()
+	context.grid = grid
+	context.units = []
+	var game_data: Node = get_tree().root.get_node("GameData")
+	board.setup(context, game_data)
+	# 让位：fit_w = 61.6 < 72 → cell_width = 61.6（非 72 钳制）
+	assert_float(board.cell_width).is_equal_approx(61.6, 0.01) \
+			.override_failure_message("720 档 10×10 应让位取 fit 61.6（实际 %s）" % str(board.cell_width))
+	# 包围盒不溢出
+	var span: float = 20.0
+	var box: Vector2 = Vector2(span * board.cell_width * 0.5,
+			span * board.cell_height * 0.5)
+	assert_bool(board.origin.x >= -0.5 and board.origin.y >= -0.5).is_true()
+	assert_bool(board.origin.x + box.x <= 616.0 + 0.5
+			and board.origin.y + box.y <= 636.0 + 0.5) \
+			.override_failure_message("720 档让位分支包围盒溢出（origin %s + box %s）" % [
+					str(board.origin), str(box)])
+	# 可玩性下限：全宽 ≥ 48（触控最低限）；全格中心命中恒等
+	assert_float(board.cell_width).is_greater_equal(48.0)
+	for y: int in 10:
+		for x: int in 10:
+			var cell: Vector2i = Vector2i(x, y)
+			assert_vector(board.cell_from_local(board.cell_rect(cell).get_center())) \
+					.is_equal(cell)
+
 func test_short_window_scrollbar_compensation_forced() -> void:
 	## 中4（盲审）契约（批次 B 强制法版）：右栏常态内容 min（提示行隐藏 +
 	## 日志 420 + 间距）恒低于可用高——竖滚动条自然溢出不再可复现，改为

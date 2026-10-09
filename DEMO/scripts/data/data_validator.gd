@@ -29,6 +29,9 @@
 ## registry 键反向断言）+ 子资源特判（NAMING_SUBRESOURCE_CHECKS 更名）；
 ## V-M6 接线机制组三条——tile-asset 地格纹理 / class-icon 职业图标 /
 ## fac-bg 设施背景（非空即查，空 = 占位合法不收紧））。
+## + E1 战棋等距投影批新增（V-M6-iso-cfg 投影参数值域 / V-M6-iso-asset-
+## geometry 菱形键 17 键源图几何+naming 反查；V-M0-cfg-domain 扩 iso 六数值
+## 正值域、V-B2-cfg-fallback 扩 8 键锚定）。
 ## 用法：DataValidator.run_all(game_data)——game_data 为 GameData 自动加载单例或其实例。
 class_name DataValidator
 extends RefCounted
@@ -248,6 +251,10 @@ static func run_all(game_data: Node) -> ValidationReport:
 	_CheckTileAssetRef(report, game_data)
 	_CheckClassIconRef(report, game_data)
 	_CheckFacilityBgRef(report, game_data)
+	# ---- E1 战棋等距投影批新增（V-M6-iso-cfg 投影参数值域 /
+	## V-M6-iso-asset-geometry 菱形键源图几何——错误级）----
+	_CheckIsoCfg(report, game_data)
+	_CheckIsoAssetGeometry(report, game_data)
 	return report
 
 # --------------------------------------------------------------------------
@@ -1237,6 +1244,13 @@ static func _CheckCfgDomains(report: ValidationReport, game_data: Node) -> void:
 		if float(cfg.get(anim_positive)) <= 0.0:
 			report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
 					"%s ≤ 0（演出参数非法）" % anim_positive)
+	# E1 扩展：等距投影六数值字段基本正值域（精确范围/带序在 V-M6-iso-cfg）
+	for iso_positive: String in ["ui_battle_iso_ratio", "ui_battle_iso_cell_width_min",
+			"ui_battle_iso_cell_width_max", "ui_battle_iso_sprite_width_ratio",
+			"ui_battle_iso_feet_y_ratio", "ui_battle_iso_ring_ratio"]:
+		if float(cfg.get(iso_positive)) <= 0.0:
+			report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
+					"%s ≤ 0（E1 投影参数未回填/非法）" % iso_positive)
 	# 试玩反馈批：路径闪烁高光呼吸渐变形态——Tween.TransitionType 合法值集
 	#（0 = 未回填哨兵与 LINEAR 同值故一并禁用；运行时回退兜底 SINE，表侧
 	# 拦非法定值——合法集单源 UiTheme.BATTLE_PATH_HIGHLIGHT_TRANS_VALID）
@@ -1383,6 +1397,13 @@ static func _CheckCfgFallbacks(report: ValidationReport, game_data: Node) -> voi
 		["ui_battle_path_highlight_flash_seconds", UiTheme.BATTLE_PATH_HIGHLIGHT_FLASH_SECONDS],
 		# 探索屏三栏布局批：板面缩放上限入表锚定（调表须同步 UiTheme 兜底）
 		["ui_explore_board_fit_max_scale", UiTheme.EXPLORE_BOARD_FIT_MAX],
+		# E1 战棋等距投影批：投影六参数锚定（调表须同步 UiTheme 兜底）
+		["ui_battle_iso_ratio", UiTheme.ISO_RATIO],
+		["ui_battle_iso_cell_width_min", UiTheme.ISO_CELL_WIDTH_MIN],
+		["ui_battle_iso_cell_width_max", UiTheme.ISO_CELL_WIDTH_MAX],
+		["ui_battle_iso_sprite_width_ratio", UiTheme.ISO_SPRITE_WIDTH_RATIO],
+		["ui_battle_iso_feet_y_ratio", UiTheme.ISO_FEET_Y_RATIO],
+		["ui_battle_iso_ring_ratio", UiTheme.ISO_RING_RATIO],
 	]
 	for pair: Array in float_pairs:
 		var raw_float: Variant = cfg.get(pair[0])
@@ -1455,6 +1476,9 @@ static func _CheckCfgFallbacks(report: ValidationReport, game_data: Node) -> voi
 		["ui_explore_icon_backdrop_color", UiTheme.EXPLORE_ICON_BACKDROP],
 		# 试玩反馈批 B：矿洞段可通行格染色锚定（调表须同步 UiTheme 兜底）
 		["ui_explore_mine_walk_tint_color", UiTheme.EXPLORE_MINE_WALK_TINT],
+		# E1 战棋等距投影批：徽章底圈阵营双色锚定（调表须同步 UiTheme 兜底）
+		["ui_badge_base_ring_ally_color", UiTheme.BADGE_BASE_RING_ALLY],
+		["ui_badge_base_ring_enemy_color", UiTheme.BADGE_BASE_RING_ENEMY],
 	]
 	for pair: Array in color_pairs:
 		var raw_color: Variant = cfg.get(pair[0])
@@ -3554,6 +3578,95 @@ static func _CheckFacilityBgRef(report: ValidationReport, game_data: Node) -> vo
 		if registry == null or not registry.mapping.has(fac.bg_asset_id):
 			report.add_error("V-M6-fac-bg", fac.id,
 					"bg_asset_id '%s' 未在 AssetRegistry 登记" % fac.bg_asset_id)
+
+
+# --------------------------------------------------------------------------
+# E1 战棋等距投影批（V-M6-iso-cfg / V-M6-iso-asset-geometry）
+# --------------------------------------------------------------------------
+
+static func _CheckIsoCfg(report: ValidationReport, game_data: Node) -> void:
+	## V-M6-iso-cfg（E1）：等距投影 8 键值域全检——ratio ∈ (0,1]、
+	## min ∈ [48,128] 且 ≤ max、max ∈ [128,256]、sprite_width_ratio ∈ (0,1.5]、
+	## feet_y_ratio ∈ [0.25,0.75]、ring_ratio ∈ (0,0.5]、底圈双色 a > 0
+	##（错误级——值域破坏投影数学/触控面积/徽章锚定）
+	## 参数：报告 / GameData
+	## 返回：无
+	var cfg: CoreConfig = game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
+	if cfg == null:
+		return
+	if cfg.ui_battle_iso_ratio <= 0.0 or cfg.ui_battle_iso_ratio > 1.0:
+		report.add_error("V-M6-iso-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_iso_ratio %f 越界 (0, 1]" % cfg.ui_battle_iso_ratio)
+	if cfg.ui_battle_iso_cell_width_min < 48.0 or cfg.ui_battle_iso_cell_width_min > 128.0:
+		report.add_error("V-M6-iso-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_iso_cell_width_min %f 越界 [48, 128]" % cfg.ui_battle_iso_cell_width_min)
+	if cfg.ui_battle_iso_cell_width_max < 128.0 or cfg.ui_battle_iso_cell_width_max > 256.0:
+		report.add_error("V-M6-iso-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_iso_cell_width_max %f 越界 [128, 256]" % cfg.ui_battle_iso_cell_width_max)
+	if cfg.ui_battle_iso_cell_width_min > cfg.ui_battle_iso_cell_width_max:
+		report.add_error("V-M6-iso-cfg", CoreConfig.CFG_MAIN_ID,
+				"菱形全宽钳制带 [%f, %f] min > max" % [
+						cfg.ui_battle_iso_cell_width_min, cfg.ui_battle_iso_cell_width_max])
+	if cfg.ui_battle_iso_sprite_width_ratio <= 0.0 or cfg.ui_battle_iso_sprite_width_ratio > 1.5:
+		report.add_error("V-M6-iso-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_iso_sprite_width_ratio %f 越界 (0, 1.5]" % cfg.ui_battle_iso_sprite_width_ratio)
+	if cfg.ui_battle_iso_feet_y_ratio < 0.25 or cfg.ui_battle_iso_feet_y_ratio > 0.75:
+		report.add_error("V-M6-iso-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_iso_feet_y_ratio %f 越界 [0.25, 0.75]" % cfg.ui_battle_iso_feet_y_ratio)
+	if cfg.ui_battle_iso_ring_ratio <= 0.0 or cfg.ui_battle_iso_ring_ratio > 0.5:
+		report.add_error("V-M6-iso-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_iso_ring_ratio %f 越界 (0, 0.5]" % cfg.ui_battle_iso_ring_ratio)
+	for ring_color_name: String in ["ui_badge_base_ring_ally_color",
+			"ui_badge_base_ring_enemy_color"]:
+		var ring_color: Color = cfg.get(ring_color_name)
+		if ring_color.a <= 0.0:
+			report.add_error("V-M6-iso-cfg", CoreConfig.CFG_MAIN_ID,
+					"%s 未回填（alpha ≤ 0）" % ring_color_name)
+
+## E1 菱形键全集（V-M6-iso-asset-geometry 消费——_iso 12 新键 + 同 id 重制
+## 3 tile + fx 重制 2；tile_mine_wall 探索专用不需菱形不列）
+const ISO_DIAMOND_ASSET_IDS: Array[StringName] = [
+	&"tile_mine_floor_01_iso", &"tile_mine_floor_02_iso", &"tile_mine_rock_iso",
+	&"tile_mine_cart_iso", &"tile_battle_poison_swamp_iso",
+	&"tile_village_grass_01_iso", &"tile_village_grass_02_iso",
+	&"tile_village_path_iso", &"tile_village_well_iso", &"tile_village_house_iso",
+	&"tile_village_tree_01_iso", &"tile_village_tree_02_iso",
+	&"tile_battle_bush", &"tile_battle_highground", &"tile_battle_trap",
+	&"fx_battle_select", &"fx_battle_range",
+]
+
+## E1 菱形源图规格（256×128——2:1 等距）
+const ISO_DIAMOND_ASSET_SIZE: Vector2i = Vector2i(256, 128)
+
+static func _CheckIsoAssetGeometry(report: ValidationReport, game_data: Node) -> void:
+	## V-M6-iso-asset-geometry（E1）：菱形键 17 键源图几何——registry 在册 +
+	## 文件存在 + PNG 直读尺寸 == 256×128（2:1 自带）+ naming 登记（反向
+	## 断言——漏登记 = 命名规范破坏）；错误级（几何漂移 = 投影拉伸失真）
+	## 参数：报告 / GameData
+	## 返回：无
+	var naming: NamingRegistry = game_data.get_record(&"naming_registry") as NamingRegistry
+	var naming_ids: Dictionary = {}
+	if naming != null:
+		for entry: NamingEntry in naming.entries:
+			naming_ids[entry.resource_id] = true
+	for asset_id: StringName in ISO_DIAMOND_ASSET_IDS:
+		var path: String = game_data.get_asset_path(asset_id)
+		if path.is_empty():
+			report.add_error("V-M6-iso-asset-geometry", asset_id,
+					"菱形键未在 AssetRegistry 登记（运行时不可达）")
+			continue
+		if not (FileAccess.file_exists(path) or ResourceLoader.exists(path)):
+			report.add_error("V-M6-iso-asset-geometry", asset_id,
+					"菱形源图文件不存在（%s）" % path)
+			continue
+		var size: Vector2i = _PngSizeOf(path)
+		if size != ISO_DIAMOND_ASSET_SIZE:
+			report.add_error("V-M6-iso-asset-geometry", asset_id,
+					"菱形源图尺寸 %dx%d != 256×128（E1 规格——2:1 等距）" % [
+							size.x, size.y])
+		if not naming_ids.has(asset_id):
+			report.add_error("V-M6-iso-asset-geometry", asset_id,
+					"菱形键未在 naming_registry 登记（命名规范破坏）")
 
 
 static func _AllDomains(game_data: Node) -> Array[StringName]:

@@ -55,11 +55,12 @@ func after() -> void:
 
 func _MakeBoard() -> BattleBoard:
 	## 离树 BattleBoard 实例（几何手填——show_path_preview/_ShowPathHighlights
-	## 不消费 context 之外的装配，高光渲染可离树验证）
+	## 不消费 context 之外的装配，高光渲染可离树验证；E1：手填菱形全宽
+	## cell_width，cell_height 经 iso_ratio 兜底派生 0.5×64=32）
 	## 参数：无
 	## 返回：装配好几何与 game_data 的板层实例
 	var board: BattleBoard = auto_free(BattleBoard.new())
-	board.cell_size = 64.0
+	board.cell_width = 64.0
 	board.origin = Vector2.ZERO
 	board._game_data = _game_data
 	return board
@@ -97,20 +98,28 @@ func _PlaceUnit(grid: BattleGrid, pos: Vector2i) -> FakeUnit:
 	return unit
 
 func test_show_path_preview_renders_highlight_cells() -> void:
-	## 高光渲染：直收 3 格路径 → 池 3 holder、映射 3 键，每 holder 一满格
-	## ColorRect（金色高光色、IGNORE 鼠标契约）
+	## 高光渲染：直收 3 格路径 → 池 3 holder、映射 3 键，每 holder 一满盒
+	## 菱形色面（E1：DiamondFill——金色高光色、IGNORE 鼠标契约；holder
+	## position/size 断言经 board.cell_rect 取值——消除用例内联数学）
 	var board: BattleBoard = _MakeBoard()
-	board.show_path_preview([Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0)])
+	var preview_cells: Array[Vector2i] = [Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0)]
+	board.show_path_preview(preview_cells)
 	assert_int(board._path_overlays.size()).is_equal(3)
 	assert_int(board._path_highlight_cells.size()).is_equal(3)
 	for index: int in board._path_overlays.size():
 		var holder: Control = board._path_overlays[index]
 		assert_int(holder.mouse_filter).is_equal(Control.MOUSE_FILTER_IGNORE)
-		var glow: ColorRect = holder.get_child(0) as ColorRect
+		var cell: Vector2i = preview_cells[index]
+		assert_vector(holder.position).is_equal(board.cell_rect(cell).position)
+		assert_bool(holder.size == board.cell_rect(cell).size).override_failure_message(
+				"高光块应满盒（不被其他尺寸钳制）").is_true()
+		var glow: Control = holder.get_child(0)
 		assert_object(glow).is_not_null()
-		assert_bool(glow.size == Vector2(64.0, 64.0)).override_failure_message(
-				"高光块应满格（不被其他尺寸钳制）").is_true()
-		assert_bool(glow.color == UiTheme.BATTLE_PATH_HIGHLIGHT_COLOR) \
+		assert_bool(glow.size == holder.size) \
+				.override_failure_message("高光色面应满盒").is_true()
+		var diamond: BattleBoard.DiamondFill = holder.get_child(0) as BattleBoard.DiamondFill
+		assert_object(diamond).is_not_null()
+		assert_bool(diamond.fill_color == UiTheme.BATTLE_PATH_HIGHLIGHT_COLOR) \
 				.override_failure_message("高光色应为金色表驱动色").is_true()
 
 func test_show_path_preview_matches_find_path_around_obstacles() -> void:
@@ -159,11 +168,12 @@ func test_show_path_preview_empty_path_clears_old_highlights() -> void:
 	assert_int(board._path_highlight_cells.size()).is_equal(0)
 
 func test_highlight_starts_at_peak_alpha() -> void:
-	## 峰值起步：预览瞬间即以峰值 alpha 可见（呼吸循环从峰值出发向谷值回落）
+	## 峰值起步：预览瞬间即以峰值 alpha 可见（呼吸循环从峰值出发向谷值回落；
+	## E1：glow 泛化 Control（DiamondFill）——modulate.a 契约零改）
 	var board: BattleBoard = _MakeBoard()
 	board.show_path_preview([Vector2i(1, 0), Vector2i(2, 0)])
 	for holder: Control in board._path_overlays:
-		var glow: ColorRect = holder.get_child(0) as ColorRect
+		var glow: Control = holder.get_child(0)
 		assert_float(glow.modulate.a).is_equal_approx(
 				UiTheme.BATTLE_PATH_HIGHLIGHT_PEAK_ALPHA, 0.001)
 

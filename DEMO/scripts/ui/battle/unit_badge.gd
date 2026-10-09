@@ -1,23 +1,28 @@
 ## 单位徽章（UnitBadge，Control——战场格子层子节点）
 ## 职责：单个战斗单位的视觉呈现——六动作帧动画载体（M6 批 1：竖条 PNG +
-## AtlasTexture + UnitAnimState 代码帧推进；显示 64×64 = 128 帧的 0.5 缩放、
-## 精英 ×1.3）、头顶 HP 条 + 本系资源条（Pixel 风细条）、当前行动高亮环
-## （5px 金边 + 呼吸脉动——2026-09-24 试玩反馈增强辨识）、血条伤害预览
-## （预扣色带 + 「−N」闪烁数字——二轮试玩反馈）、蛊惑紫边闪烁、受击白闪
-## （M6：ui_hit_flash_seconds）、倒地尸态（D5=A：downed 末帧锁定 + 灰度
-## 维持 + 隐藏血条/资源条/高亮环）。
+## AtlasTexture + UnitAnimState 代码帧推进；E1：显示宽 = cell_width ×
+## cfg.ui_battle_iso_sprite_width_ratio（帧方形高同比、精英 ×1.3 与格宽
+## 钳制余量沿用）、底边踩 cfg.ui_battle_iso_feet_y_ratio 线（默认 0.5 =
+## 脚踩菱形中心））、头顶 HP 条 + 本系资源条（Pixel 风细条；E1：条锚定
+## 改「sprite 顶」——y 相对 sprite 顶偏移、条宽 = cell_width − BAR_X_MARGIN×2）、
+## 椭圆底圈（E1 纯新增：阵营色 draw_polyline 椭圆点集——cfg
+## ui_badge_base_ring_ally/enemy_color；倒地随 _SetBarsVisible 一并隐藏）、
+## 当前行动高亮环（5px 金边 + 呼吸脉动——2026-09-24 试玩反馈增强辨识；
+## E1：贴图态 fx_battle_select 满盒菱形 STRETCH_SCALE 零改）、血条伤害预览
+##（预扣色带 + 「−N」闪烁数字——二轮试玩反馈）、蛊惑紫边闪烁、受击白闪
+##（M6：ui_hit_flash_seconds）、倒地尸态（D5=A：downed 末帧锁定 + 灰度
+## 维持 + 隐藏血条/资源条/高亮环/底圈）。
 ## M6 批 3.5b 组 8：当前行动高亮环贴图接线——fx_battle_select 在档 →
-## 单 TextureRect 满格选中框（格尺寸 STRETCH_SCALE）；缺件回退现状金边
+## 单 TextureRect 满盒选中框（盒尺寸 STRETCH_SCALE）；缺件回退现状金边
 ## 四边带；呼吸 tween 对 _ring 元素 modulate.a 泛化 Control 后两态零改复用。
-## 数据来源：M1 批 3 方案 §7.1；动作资产 = DEMO/assets/units/spr_*_<action>.png
-## （AssetRegistry 登记 54 动作键，tools/gen_unit_anim_frames.gd 占位产出）。
+## 数据来源：M1 批 3 方案 §7.1 + E1 方案 §二（等距锚定数学单源锚点）；
+## 动作资产 = DEMO/assets/units/spr_*_<action>.png
+##（AssetRegistry 登记 54 动作键，tools/gen_unit_anim_frames.gd 占位产出）。
 ## 输入口径：本节点不消费鼠标（mouse_filter = IGNORE）——点击统一由
 ## BoardLayer gui_input 按格命中分发。
 class_name UnitBadge
 extends Control
 
-## 基准显示尺寸（128×128 动作帧的 0.5 缩放显示）
-const BASE_SPRITE_SIZE: float = 64.0
 ## 精英放大系数
 const ELITE_SCALE: float = 1.3
 ## 蛊惑闪烁周期（秒）
@@ -32,7 +37,8 @@ const RING_BREATH_HALF_PERIOD: float = 0.55
 const RING_BREATH_ALPHA_MIN: float = 0.45
 ## 预览闪烁半周期（秒）
 const PREVIEW_FLICK_HALF: float = 0.4
-## 条几何（B-17：HP 条/资源条的位相与尺寸——x 边距/y 偏移/长缩量/高）
+## 条几何（B-17：HP 条/资源条的位相与尺寸——x 边距/高；E1：BAR_*_Y 改
+## 相对 **sprite 顶**偏移（原相对格顶——菱形下格顶在钻石后方不贴单位））
 const BAR_X_MARGIN: float = 5.0
 const BAR_HP_Y: float = 2.0
 const BAR_RES_Y: float = 9.0
@@ -44,6 +50,10 @@ const PREVIEW_LABEL_Y_OFFSET: float = -16.0
 const PREVIEW_OUTLINE_SIZE: int = 3
 ## 精英超大时按格宽加成的余量
 const ELITE_CLAMP_MARGIN: float = 12.0
+## 椭圆底圈折线段数（E1：24 段近似椭圆——视觉平滑与顶点开销折中）
+const BASE_RING_SEGMENTS: int = 24
+## 椭圆底圈线宽（像素——E1）
+const BASE_RING_LINE_WIDTH: float = 2.0
 ## 当前行动选中框贴图资产 id（M6 批 3.5b 组 8：fx_battle_select 在档 →
 ## 单 TextureRect 替代四边金边带；缺件回退现状四边带——蛊惑紫边不接线）
 const SELECT_RING_ASSET_ID: StringName = &"fx_battle_select"
@@ -78,8 +88,14 @@ var _anim_atlas: AtlasTexture = null
 var _last_frame_index: int = -1
 ## 受击白闪 Tween（null = 无闪烁）
 var _flash_tween: Tween = null
-## 格子像素尺寸
-var cell_size: float = 72.0
+## 菱形全宽（像素——E1：原 cell_size 方形边长口径退役）
+var cell_width: float = 72.0
+## 菱形全高（像素——setup 时按注入 cfg 的 iso_ratio 派生：cell_width × ratio）
+var _cell_height: float = 36.0
+## 椭圆底圈可见性（E1：倒地随 _SetBarsVisible 一并隐藏——_draw 条件消费）
+var _base_ring_visible: bool = true
+## 椭圆底圈色（E1：阵营色——setup 时按 unit.side 取 cfg 键/UiTheme 兜底）
+var _base_ring_color: Color = UiTheme.BADGE_BASE_RING_ALLY
 
 ## sprite 节点
 var _sprite: TextureRect = null
@@ -117,22 +133,74 @@ func _init() -> void:
 	## 返回：无
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-func setup(badge_unit: BattleUnit, badge_cell_size: float,
+## E1 等距纵横比读取口（cfg ui_battle_iso_ratio 优先、UiTheme.ISO_RATIO 兜底；
+## 值域外非法回退兜底——battle_board._IsoRatio 同式，徽章侧 cfg 经 setup 注入）
+func _IsoRatio() -> float:
+	## 参数：无
+	## 返回：生效比例（(0, 1]）
+	var raw: float = UiTheme.ISO_RATIO
+	if _cfg != null:
+		raw = _cfg.ui_battle_iso_ratio
+	if raw <= 0.0 or raw > 1.0:
+		return UiTheme.ISO_RATIO
+	return raw
+
+## E1 徽章 sprite 宽比读取口（cfg 优先、UiTheme 兜底；非法回退）
+func _IsoSpriteWidthRatio() -> float:
+	## 参数：无
+	## 返回：生效比例（(0, 1.5]）
+	var raw: float = UiTheme.ISO_SPRITE_WIDTH_RATIO
+	if _cfg != null:
+		raw = _cfg.ui_battle_iso_sprite_width_ratio
+	if raw <= 0.0 or raw > 1.5:
+		return UiTheme.ISO_SPRITE_WIDTH_RATIO
+	return raw
+
+## E1 徽章脚踩线比读取口（cfg 优先、UiTheme 兜底；非法回退）
+func _IsoFeetYRatio() -> float:
+	## 参数：无
+	## 返回：生效比例（[0.25, 0.75]）
+	var raw: float = UiTheme.ISO_FEET_Y_RATIO
+	if _cfg != null:
+		raw = _cfg.ui_battle_iso_feet_y_ratio
+	if raw < 0.25 or raw > 0.75:
+		return UiTheme.ISO_FEET_Y_RATIO
+	return raw
+
+## E1 椭圆底圈半径比读取口（cfg 优先、UiTheme 兜底；非法回退）
+func _IsoRingRatio() -> float:
+	## 参数：无
+	## 返回：生效比例（(0, 0.5]）
+	var raw: float = UiTheme.ISO_RING_RATIO
+	if _cfg != null:
+		raw = _cfg.ui_battle_iso_ring_ratio
+	if raw <= 0.0 or raw > 0.5:
+		return UiTheme.ISO_RING_RATIO
+	return raw
+
+func setup(badge_unit: BattleUnit, badge_cell_width: float,
 		cfg: CoreConfig = null, anim_textures: Dictionary = {},
 		game_data: Node = null) -> void:
-	## 装配徽章：建子节点（sprite/条/环）并按单位数据初刷；B-1：cfg 注入
-	##（配色表驱动，缺省纯兜底）；M6：六动作竖条纹理注入（空 = 占位色块）；
-	## M6 批 3.5b 组 8：game_data 注入（选中框 fx_battle_select 贴图解析；
-	## 空 = 占位四边带降级——纯兜底模式兼容）
-	## 参数 badge_unit：绑定单位；badge_cell_size：所在格像素尺寸；
+	## 装配徽章：建子节点（sprite/条/环/底圈）并按单位数据初刷；B-1：cfg
+	## 注入（配色表驱动，缺省纯兜底）；M6：六动作竖条纹理注入（空 = 占位
+	## 色块）；M6 批 3.5b 组 8：game_data 注入（选中框 fx_battle_select 贴图
+	## 解析；空 = 占位四边带降级——纯兜底模式兼容）；E1：badge_cell_width
+	## = 所在格菱形全宽（cell_height 按 cfg iso_ratio 派生）+ 底圈阵营色定色
+	## 参数 badge_unit：绑定单位；badge_cell_width：所在格菱形全宽（像素）；
 	## cfg：总控配置（可空）；anim_textures：UnitAnimState.Action -> 竖条纹理；
 	## game_data：GameData（可空）
 	## 返回：无
 	unit = badge_unit
-	cell_size = badge_cell_size
+	cell_width = badge_cell_width
+	_cell_height = badge_cell_width * _IsoRatio()
 	_cfg = cfg
 	_anim_textures = anim_textures
 	_game_data = game_data
+	_base_ring_color = _Color(&"ui_badge_base_ring_ally_color",
+			UiTheme.BADGE_BASE_RING_ALLY) \
+			if unit.side == SkillDef.SkillSide.ALLY \
+			else _Color(&"ui_badge_base_ring_enemy_color",
+					UiTheme.BADGE_BASE_RING_ENEMY)
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	_BuildChildren()
 	refresh()
@@ -291,13 +359,16 @@ func refresh() -> void:
 	_SetBarsVisible(unit.alive)
 
 func _SetBarsVisible(visible_bars: bool) -> void:
-	## 血条/资源条可见性 + 倒地态高亮环/蛊惑边清理（D5：倒地隐藏——尸态只留
-	## sprite；存活时环可见性仍由 set_current 独立管理）
+	## 血条/资源条可见性 + 倒地态高亮环/蛊惑边/椭圆底圈清理（D5：倒地隐藏
+	## ——尸态只留 sprite；E1：底圈随本口一并隐藏；存活时环可见性仍由
+	## set_current 独立管理）
 	## 参数 visible_bars：true = 显示条
 	## 返回：无
 	for bar: ColorRect in [_hp_back, _hp_fill, _res_back, _res_fill]:
 		if bar != null:
 			bar.visible = visible_bars
+	_base_ring_visible = visible_bars
+	queue_redraw()
 	if not visible_bars:
 		for edge: Control in _ring:
 			edge.visible = false
@@ -458,14 +529,20 @@ func _AdvanceAnim(delta: float) -> void:
 		_ApplyAnimFrame()
 
 func _BuildChildren() -> void:
-	## 构建子节点树：sprite（动作 AtlasTexture——精英放大）/资源条/HP 条/
-	## 高亮环/蛊惑边
+	## 构建子节点树：sprite（动作 AtlasTexture——E1 等距锚定：宽 =
+	## cell_width × sprite_width_ratio（精英 ×1.3 + 格宽钳制余量沿用）、
+	## 底边踩 feet_y 线）/资源条/HP 条（锚定 sprite 顶）/高亮环/蛊惑边；
+	## 椭圆底圈为徽章根 _draw 纯新增（无子节点）
 	## 参数：无
 	## 返回：无
 	var is_elite: bool = unit.role_tag == UnitTags.ROLE_ELITE
-	var sprite_size: float = BASE_SPRITE_SIZE * (ELITE_SCALE if is_elite else 1.0)
-	# sprite 居中（超大时按格宽钳制）
-	sprite_size = minf(sprite_size, cell_size + ELITE_CLAMP_MARGIN)
+	var sprite_width: float = cell_width * _IsoSpriteWidthRatio() \
+			* (ELITE_SCALE if is_elite else 1.0)
+	# sprite 超大时按格宽钳制（余量沿用）
+	sprite_width = minf(sprite_width, cell_width + ELITE_CLAMP_MARGIN)
+	# 等距锚定：水平居中 + 底边踩 feet 线（默认 0.5 = 菱形中心）
+	var feet_y: float = _cell_height * _IsoFeetYRatio()
+	var sprite_top: float = feet_y - sprite_width
 	var idle_strip: Texture2D = _anim_textures.get(UnitAnimState.Action.IDLE, null) as Texture2D
 	if idle_strip != null:
 		# M6：六动作帧动画载体——AtlasTexture 首帧落位（region 随帧推进重设）
@@ -479,35 +556,37 @@ func _BuildChildren() -> void:
 		_sprite.texture = _anim_atlas
 		_sprite.stretch_mode = TextureRect.STRETCH_SCALE
 		_sprite.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		_sprite.size = Vector2(sprite_size, sprite_size)
-		_sprite.position = Vector2((cell_size - sprite_size) * 0.5, (cell_size - sprite_size) * 0.5)
+		_sprite.size = Vector2(sprite_width, sprite_width)
+		_sprite.position = Vector2((cell_width - sprite_width) * 0.5, sprite_top)
 		add_child(_sprite)
 	else:
 		_fallback = ColorRect.new()
 		_fallback.color = _Color(&"ui_badge_fallback_ally_color", UiTheme.BADGE_FALLBACK_ALLY) \
 				if unit.side == SkillDef.SkillSide.ALLY \
 				else _Color(&"ui_badge_fallback_enemy_color", UiTheme.BADGE_FALLBACK_ENEMY)
-		_fallback.size = Vector2(sprite_size * 0.7, sprite_size * 0.7)
-		_fallback.position = (Vector2(cell_size, cell_size) - _fallback.size) * 0.5
+		_fallback.size = Vector2(sprite_width * 0.7, sprite_width * 0.7)
+		_fallback.position = Vector2((cell_width - _fallback.size.x) * 0.5,
+				feet_y - _fallback.size.y)
 		add_child(_fallback)
-	# HP 条（格顶）与资源条（HP 条下方细条）——几何经 B-17 常量、配色表驱动
-	var bar_width: float = cell_size - BAR_X_MARGIN * 2.0
+	# HP 条（sprite 顶）与资源条（HP 条下方细条）——几何经 B-17 常量（E1：
+	## y 相对 sprite 顶偏移）、配色表驱动
+	var bar_width: float = cell_width - BAR_X_MARGIN * 2.0
 	var bar_back_color: Color = _Color(&"ui_badge_bar_back_color", UiTheme.BADGE_BAR_BACK)
-	_hp_back = _MakeBar(Vector2(BAR_X_MARGIN, BAR_HP_Y),
+	_hp_back = _MakeBar(Vector2(BAR_X_MARGIN, sprite_top + BAR_HP_Y),
 			Vector2(bar_width, BAR_HEIGHT_HP), bar_back_color)
-	_hp_fill = _MakeBar(Vector2(BAR_X_MARGIN, BAR_HP_Y),
+	_hp_fill = _MakeBar(Vector2(BAR_X_MARGIN, sprite_top + BAR_HP_Y),
 			Vector2(bar_width, BAR_HEIGHT_HP),
 			_Color(&"ui_badge_hp_ok_color", UiTheme.BADGE_HP_OK))
 	_hp_back.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_hp_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_res_back = _MakeBar(Vector2(BAR_X_MARGIN, BAR_RES_Y),
+	_res_back = _MakeBar(Vector2(BAR_X_MARGIN, sprite_top + BAR_RES_Y),
 			Vector2(bar_width, BAR_HEIGHT_RES), bar_back_color)
-	_res_fill = _MakeBar(Vector2(BAR_X_MARGIN, BAR_RES_Y),
+	_res_fill = _MakeBar(Vector2(BAR_X_MARGIN, sprite_top + BAR_RES_Y),
 			Vector2(bar_width, BAR_HEIGHT_RES),
 			_Color(&"ui_badge_res_stamina_color", UiTheme.BADGE_RES_STAMINA))
 	# 高亮环（M6 批 3.5b 组 8：fx_battle_select 在档 → 单 TextureRect 选中框
-	## 格尺寸 STRETCH_SCALE；缺件回退现状金色四边 5px——B-3 表驱动）与蛊惑边
-	##（紫色四边 3px——B-1 表驱动，不接线维持程序带）
+	## 满盒菱形尺寸 STRETCH_SCALE；缺件回退现状金色四边 5px——B-3 表驱动）
+	## 与蛊惑边（紫色四边 3px——B-1 表驱动，不接线维持程序带）
 	var select_texture: Texture2D = AssetTex.texture_of(SELECT_RING_ASSET_ID,
 			_game_data)
 	if select_texture != null:
@@ -533,21 +612,20 @@ func _MakeBar(position: Vector2, size: Vector2, color: Color) -> ColorRect:
 	return rect
 
 func _MakeRing(color: Color, thickness: float = BEWITCH_RING_THICKNESS) -> Array[Control]:
-	## 构建四边框环（B-19 单源：UiTheme.make_edge_strip_bars——与 battle_board
-	## 覆盖层边框同构收口；条带挂树复用 _MakeBar；组 8 返回泛化 Control——
-	## _ring 贴图态/四边态同池管理）
+	## 构建四边框环（B-19 单源：UiTheme.make_edge_strip_bars——组 8 返回
+	## 泛化 Control：_ring 贴图态/四边态同池管理；E1：环几何 = 菱形盒）
 	## 参数 color：环色；thickness：条宽（行动环 5px / 蛊惑边 3px）
 	## 返回：四条色带 Control
 	var edges: Array[Control] = []
 	for rect: ColorRect in UiTheme.make_edge_strip_bars(
-			Vector2(cell_size, cell_size), thickness, color):
+			Vector2(cell_width, _cell_height), thickness, color):
 		add_child(rect)
 		edges.append(rect)
 	return edges
 
 func _MakeSelectRing(texture: Texture2D) -> Control:
 	## 构建贴图态选中框（M6 批 3.5b 组 8）：单 TextureRect 替代四边带——
-	## 格尺寸 STRETCH_SCALE 满格；呼吸 tween 对 _ring 元素 modulate.a 泛化
+	## 满盒菱形尺寸 STRETCH_SCALE；呼吸 tween 对 _ring 元素 modulate.a 泛化
 	## Control 后零改复用（set_current/_StartRingBreath/_SetRingAlpha 不动）
 	## 参数 texture：fx_battle_select 已解析贴图
 	## 返回：选中框节点（已挂树）
@@ -555,7 +633,26 @@ func _MakeSelectRing(texture: Texture2D) -> Control:
 	rect.texture = texture
 	rect.stretch_mode = TextureRect.STRETCH_SCALE
 	rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	rect.size = Vector2(cell_size, cell_size)
+	rect.size = Vector2(cell_width, _cell_height)
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(rect)
 	return rect
+
+func _draw() -> void:
+	## 引擎回调：椭圆底圈绘制（E1 纯新增）——draw_polyline 椭圆点集
+	##（BASE_RING_SEGMENTS 段折线近似；中心 = 菱形盒中心、rx/ry =
+	## 半轴 × cfg.ui_battle_iso_ring_ratio）；倒地 _base_ring_visible=false
+	## 跳过（随 _SetBarsVisible 一并隐藏）；数学单源锚点 = E1 方案 §二
+	## 参数：无
+	## 返回：无
+	if not _base_ring_visible:
+		return
+	var center: Vector2 = Vector2(cell_width, _cell_height) * 0.5
+	var radius_x: float = cell_width * 0.5 * _IsoRingRatio()
+	var radius_y: float = _cell_height * 0.5 * _IsoRingRatio()
+	var points: PackedVector2Array = PackedVector2Array()
+	for index: int in BASE_RING_SEGMENTS:
+		var angle: float = TAU * float(index) / float(BASE_RING_SEGMENTS)
+		points.append(center + Vector2(cos(angle) * radius_x, sin(angle) * radius_y))
+	points.append(points[0])
+	draw_polyline(points, _base_ring_color, BASE_RING_LINE_WIDTH, true)

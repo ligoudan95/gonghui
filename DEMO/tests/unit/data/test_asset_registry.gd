@@ -36,12 +36,13 @@ func test_registry_anim_entries_resolvable() -> void:
 	## 54 条 spr_*_<action> 动作映射：get_asset_path 非空、指向 assets/units/
 	## 下、物理文件存在；后缀序与 SpriteResolver.ANIM_ACTIONS 一致锚定
 	##（M6 批 3 首批背景入库 +bg_guild_hall 1 键；M6 批 3.5a 占位资产 +63 键
-	## = 62 件 PNG + ui_main_theme 主题，总数 55→118）
+	## = 62 件 PNG + ui_main_theme 主题，总数 55→118；E1 批 +12 战棋菱形
+	## tile 键（矿洞 _iso 5 + 村子 _iso 7 完整版预备），118→130）
 	assert_int(ACTIONS.size()).is_equal(SpriteResolver.ANIM_ACTIONS.size())
 	for index: int in ACTIONS.size():
 		assert_str(String(ACTIONS[index])).is_equal(String(SpriteResolver.ANIM_ACTIONS[index]))
 	var registry: AssetRegistry = _game_data.get_record(&"registry") as AssetRegistry
-	assert_int(registry.mapping.size()).is_equal(118)
+	assert_int(registry.mapping.size()).is_equal(130)
 	for sprite_id: StringName in SPRITE_IDS:
 		for action: StringName in ACTIONS:
 			var asset_id: StringName = StringName(String(sprite_id) + "_" + String(action))

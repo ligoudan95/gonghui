@@ -92,11 +92,12 @@ func test_equip_values() -> void:
 		assert_str(String(equip.class_ref)).is_equal(String(expects[equip_id][2]))
 
 func test_naming_registry_extended() -> void:
-	## 命名登记表：274 条（48 + 14 + M2 28 + M3 29 + M4 13 + 功能一批 2 染毒毒瘴 2），新资源全部登记且含域前缀规则注
+	## 命名登记表：286 条（48 + 14 + M2 28 + M3 29 + M4 13 + 功能一批 2 染毒毒瘴 2），新资源全部登记且含域前缀规则注
 	##（M6 批 3 首批背景入库 +bg_guild_hall 1 条，205→206）
 	##（M6 批 3.5a：+5 etile 数据条目 + 63 资产条目（62 占位 PNG + ui_main_theme），206→274）
+	##（E1 批：+12 战棋菱形 tile 资产条目（矿洞 _iso 5 + 村子 _iso 7 完整版预备），274→286）
 	var registry: NamingRegistry = _game_data.get_record(&"naming_registry")
-	assert_int(registry.entries.size()).is_equal(274)
+	assert_int(registry.entries.size()).is_equal(286)
 	var registered: Dictionary = {}
 	for entry: NamingEntry in registry.entries:
 		registered[entry.resource_id] = entry

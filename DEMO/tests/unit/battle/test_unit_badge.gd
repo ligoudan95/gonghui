@@ -1,4 +1,5 @@
-## UnitBadge 伤害预览契约单元测试（2026-09-24 二轮试玩反馈）
+## UnitBadge 伤害预览契约单元测试（2026-09-24 二轮试玩反馈）+ E1 等距
+## 锚定组（sprite 比例锚定/条锚定 sprite 顶/椭圆底圈存在性·阵营双色·倒地隐藏）。
 ## 覆盖：血条伤害预览开关状态契约（show 激活 / clear 清除幂等 / 无效输入不激活 /
 ## 倒地 refresh 防御清理）。headless 无法测闪烁视觉——只测状态契约。
 ## 徽章需挂树（show 内 create_tween 要求节点在场景树内）。
@@ -179,3 +180,79 @@ func _MakeAnimBadge() -> UnitBadge:
 	}
 	badge.setup(unit, 72.0, null, textures)
 	return badge
+
+# ---- E1 等距锚定组（sprite 比例/条锚定 sprite 顶/椭圆底圈）----
+
+func _MakeIsoBadge(cell_width: float, side: int, cfg: CoreConfig = null) -> UnitBadge:
+	## 构建等距锚定测试徽章（cfg 可注入——空 = 纯兜底模式）
+	## 参数 cell_width：格菱形全宽；side：阵营（SkillDef.SkillSide）；
+	## cfg：总控配置（可空）
+	## 返回：已 setup 的徽章（auto_free 释放）
+	var unit := BattleUnit.new()
+	unit.unit_id = &"test_iso_unit"
+	unit.current_hp = 50
+	unit.max_hp = 100
+	unit.side = side
+	var badge := UnitBadge.new()
+	add_child(badge)
+	auto_free(badge)
+	badge.setup(unit, cell_width, cfg)
+	return badge
+
+func test_sprite_iso_ratio_anchoring() -> void:
+	## sprite 比例锚定：显示宽 = cell_width × sprite_width_ratio（兜底 0.9）、
+	## 水平居中、底边踩 feet 线（兜底 0.5 = 菱形中心——cell_height = 100×0.5）
+	##（无纹理装配走 _fallback 占位色块——与 sprite 同锚定几何）
+	var badge: UnitBadge = _MakeIsoBadge(100.0, SkillDef.SkillSide.ALLY)
+	var sprite: ColorRect = badge._fallback
+	assert_object(sprite).is_not_null()
+	var expected_width: float = 100.0 * UiTheme.ISO_SPRITE_WIDTH_RATIO * 0.7
+	assert_float(sprite.size.x).is_equal_approx(expected_width, 0.001)
+	assert_float(sprite.size.y).is_equal_approx(expected_width, 0.001)
+	assert_float(sprite.position.x).is_equal_approx((100.0 - expected_width) * 0.5, 0.001)
+	# 底边 = cell_height(50) × feet_y_ratio(0.5) = 25
+	assert_float(sprite.position.y + sprite.size.y).is_equal_approx(
+			50.0 * UiTheme.ISO_FEET_Y_RATIO, 0.001)
+	assert_float(badge.cell_width).is_equal(100.0)
+	assert_float(badge._cell_height).is_equal_approx(50.0, 0.001)
+
+func test_bars_anchor_at_sprite_top() -> void:
+	## 条锚定 sprite 顶：HP/资源条 y = sprite 顶 + BAR_*_Y 偏移、条宽 =
+	## cell_width − BAR_X_MARGIN×2（E1：原格顶锚定改 sprite 顶——sprite 顶 =
+	## feet 线 − sprite 显示宽，无纹理态条仍锚 sprite 几何位（占位色块是
+	## sprite 的缩小呈现，非条锚基准））
+	var badge: UnitBadge = _MakeIsoBadge(100.0, SkillDef.SkillSide.ALLY)
+	var feet_y: float = 50.0 * UiTheme.ISO_FEET_Y_RATIO
+	var sprite_width: float = 100.0 * UiTheme.ISO_SPRITE_WIDTH_RATIO
+	var sprite_top: float = feet_y - sprite_width
+	assert_float(badge._hp_back.position.y).is_equal_approx(
+			sprite_top + UnitBadge.BAR_HP_Y, 0.001)
+	assert_float(badge._res_back.position.y).is_equal_approx(
+			sprite_top + UnitBadge.BAR_RES_Y, 0.001)
+	assert_float(badge._hp_back.size.x).is_equal_approx(
+			100.0 - UnitBadge.BAR_X_MARGIN * 2.0, 0.001)
+	assert_float(badge._hp_back.position.x).is_equal(UnitBadge.BAR_X_MARGIN)
+
+func test_base_ring_visible_with_side_colors() -> void:
+	## 椭圆底圈：存活可见 + 阵营双色（ALLY 蓝 / ENEMY 红——cfg 空走 UiTheme
+	## 兜底；cfg 注入走表值）
+	var ally: UnitBadge = _MakeIsoBadge(100.0, SkillDef.SkillSide.ALLY)
+	assert_bool(ally._base_ring_visible).is_true()
+	assert_bool(ally._base_ring_color.is_equal_approx(UiTheme.BADGE_BASE_RING_ALLY)).is_true()
+	var enemy: UnitBadge = _MakeIsoBadge(100.0, SkillDef.SkillSide.ENEMY)
+	assert_bool(enemy._base_ring_color.is_equal_approx(UiTheme.BADGE_BASE_RING_ENEMY)).is_true()
+	var cfg: CoreConfig = auto_free(CoreConfig.new())
+	cfg.ui_battle_iso_ratio = 0.5
+	cfg.ui_badge_base_ring_ally_color = Color(0.1, 0.2, 0.3, 1.0)
+	var tuned: UnitBadge = _MakeIsoBadge(100.0, SkillDef.SkillSide.ALLY, cfg)
+	assert_bool(tuned._base_ring_color.is_equal_approx(Color(0.1, 0.2, 0.3, 1.0))).is_true()
+
+func test_base_ring_hidden_on_downed() -> void:
+	## 倒地底圈隐藏：refresh 倒地 → _base_ring_visible=false（尸态只留 sprite）
+	var badge: UnitBadge = _MakeIsoBadge(100.0, SkillDef.SkillSide.ALLY)
+	assert_bool(badge._base_ring_visible).is_true()
+	badge.unit.current_hp = 0
+	badge.unit.alive = false
+	badge.refresh()
+	assert_bool(badge._base_ring_visible) \
+			.override_failure_message("倒地态底圈应随条一并隐藏").is_false()

@@ -6,8 +6,8 @@
 script = ExtResource("1_xbg66")
 id = &"tile_normal"
 display_name = "普通地面"
-asset_id = &"tile_mine_floor_01"
-asset_variants = Array[StringName]([&"tile_mine_floor_02"])
+asset_id = &"tile_mine_floor_01_iso"
+asset_variants = Array[StringName]([&"tile_mine_floor_02_iso"])
 fill_color = Color(0.32, 0.36, 0.29, 1)
 style = 0
 description = "无特殊效果。"

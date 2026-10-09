@@ -3,6 +3,8 @@
 ## 更大 → 面右（默认，flip=false）/ 相等（竖直步）→ 回正默认朝向（flip=false，
 ## 与攻击同列回正同口径）。链路时序（链首即刻/逐段回调/瞬移一次判定/
 ## 无位移不触发）归 test_battle_anim_flow 集成用例，本套只锚纯函数契约。
+## E1 注：等距投影下逻辑竖直步（x 相等）在屏幕呈斜向移动观感——纯函数
+## 判据零改（朝向仍按逻辑 x 相位），视觉校准归 E3 打磨批。
 extends GdUnitTestSuite
 
 func test_facing_left_step_flips() -> void:

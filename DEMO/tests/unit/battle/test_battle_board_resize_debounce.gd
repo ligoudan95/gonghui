@@ -108,9 +108,11 @@ func test_same_frame_multi_resized_rebuilds_once() -> void:
 		assert_bool(is_instance_valid(old_child)) \
 				.override_failure_message("旧视觉应在帧末重建后释放出树").is_false()
 	assert_int(board._cells.size()).is_equal(CELL_COUNT)
-	# 几何以最终尺寸（480×360）执行：cell = min(60,45) = 45、origin = (60,0)
-	assert_float(board.cell_size).is_equal(45.0)
-	assert_vector(board.origin).is_equal(Vector2(60.0, 0.0))
+	# 几何以最终尺寸（480×360）执行（E1 等距：span=16、fit_w = 2×480/16 = 60、
+	# fit_h = 2×360/(16×0.5) = 90 → min=60 < 下限 72 让位取 60；包围盒
+	# 480×240 居中 → origin = (0, 60)）
+	assert_float(board.cell_width).is_equal(60.0)
+	assert_vector(board.origin).is_equal(Vector2(0.0, 60.0))
 	# 待执行标记置回（后续 resized 不被吞）
 	assert_bool(board._resize_rebuild_queued).is_false()
 
@@ -118,14 +120,16 @@ func test_resized_across_frames_rebuilds_each_time() -> void:
 	## 待执行标记置回契约：跨帧两次 resized 各自重建（防抖只合并同帧——
 	## 第二帧几何变化必须生效，锚定 cell_size/origin 逐帧推进）
 	var board: BattleBoard = _MakeBoard()
-	# 第一帧：(300,300)——cell = 37.5 钳下限 40、origin = (300-320)/2 = (-10,-10)
+	# 第一帧：(300,300)——E1 等距：fit_w = 37.5 < 下限 72 让位取 37.5、
+	# 包围盒 300×150 居中 origin = (0, 75)（旧方形 40 钳制口径已废）
 	board.size = Vector2(300.0, 300.0)
 	await get_tree().process_frame
-	assert_float(board.cell_size).is_equal(40.0)
-	assert_vector(board.origin).is_equal(Vector2(-10.0, -10.0))
-	# 第二帧：(500,500)——cell = 62.5、origin = (0,0)（标记已置回才可能）
+	assert_float(board.cell_width).is_equal(37.5)
+	assert_vector(board.origin).is_equal(Vector2(0.0, 75.0))
+	# 第二帧：(500,500)——fit_w = 62.5 让位取 62.5、包围盒 500×250 origin = (0, 125)
+	#（标记已置回才可能）
 	board.size = Vector2(500.0, 500.0)
 	await get_tree().process_frame
-	assert_float(board.cell_size).is_equal(62.5)
-	assert_vector(board.origin).is_equal(Vector2(0.0, 0.0))
+	assert_float(board.cell_width).is_equal(62.5)
+	assert_vector(board.origin).is_equal(Vector2(0.0, 125.0))
 	assert_int(board._cells.size()).is_equal(CELL_COUNT)

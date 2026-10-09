@@ -1,6 +1,7 @@
 ## 战斗场景布局契约测试（M1 硬验收门点击无反应 BUG 修复防回归，2026-09-24；
 ## 批次 B 布局重构改版 2026-10-07：回合大字+竖排序条+信息卡归左带、五钮
-## ButtonRow 左下贴底、棋盘上下撑满、右栏提示行首位+日志加宽）
+## ButtonRow 左下贴底、棋盘上下撑满、右栏提示行首位+日志加宽；
+## E1 批 2026-10-09：棋盘改剩余区适配居中——底边扣按钮行区 -84、顶边贴屏顶）
 ## 覆盖：battle_screen.tscn 静态布局契约——ResultLayer（全屏 CenterContainer）
 ## 必须 IGNORE（树序顶层若为默认 PASS 会截获全屏点击，导致棋盘/底栏全部
 ## 无反应，即 2026-09-24 实锤的"战斗场景点击无响应"根因）；ResultPanel
@@ -98,20 +99,22 @@ func test_battle_log_layout_contract() -> void:
 	assert_float(board.size.y).is_greater(200.0)
 
 func test_left_belt_layout_contract() -> void:
-	## 左带布局契约（批次 B 布局重构新增）：BoardLayer 上下撑满全屏高
-	##（offset_top==0/bottom==0）且水平扣两侧 UI（left=324/right=-340）；
+	## 左带布局契约（批次 B 布局重构 + E1 剩余区适配居中改版）：BoardLayer
+	## 顶边贴屏顶（顶部无回合条区——回合大字在左带，方案 §〇.6 实测修正）、
+	## 底边扣按钮行区（offset_bottom == -84——ButtonRow 占屏底 84px 起，棋盘
+	## 不再被按钮行遮挡）且水平扣两侧 UI（left=324/right=-340 不变）；
 	## LeftPanel 宽 304（回合大字首子 + LeftScroll 竖排序条 + UnitInfoCard
 	## 末子）；TurnOrderBar 父 == LeftScroll 且横滚禁用；ButtonRow 五钮在位、
 	## 贴屏底（offset_bottom=-12 ± 0.5）且左缘与信息卡左缘对齐
 	var runner: GdUnitSceneRunner = scene_runner(BATTLE_SCENE)
 	var battle: Control = runner.scene() as Control
 	assert_object(battle).is_not_null()
-	# 棋盘带：上下撑满、左右扣两侧
+	# 棋盘带：剩余区适配（顶贴屏顶、底扣按钮行、左右扣两侧）
 	var board: Control = battle.get_node("%BoardLayer") as Control
 	assert_float(board.offset_top).is_equal(0.0) \
-			.override_failure_message("BoardLayer 顶边应贴屏顶（上下撑满）")
-	assert_float(board.offset_bottom).is_equal(0.0) \
-			.override_failure_message("BoardLayer 底边应贴屏底（上下撑满）")
+			.override_failure_message("BoardLayer 顶边应贴屏顶（顶部无回合条区——左带结构）")
+	assert_float(board.offset_bottom).is_equal(-84.0) \
+			.override_failure_message("BoardLayer 底边应扣按钮行区 -84（剩余区适配居中）")
 	assert_float(board.offset_left).is_equal(324.0)
 	assert_float(board.offset_right).is_equal(-340.0)
 	# 左带容器：定宽 304（12→316 锚定，分辨率无关）

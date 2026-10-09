@@ -250,7 +250,7 @@ func test_unit_moved_teleport_falls_back_idle() -> void:
 	var badge: UnitBadge = _BadgeOf(battle, unit)
 	assert_int(badge.current_action()).is_equal(UnitAnimState.Action.IDLE)
 	var board: BattleBoard = battle.get_node("%BoardLayer") as BattleBoard
-	assert_vector(badge.position).is_equal(board.origin + Vector2(to_pos) * board.cell_size)
+	assert_vector(badge.position).is_equal(board.cell_rect(to_pos).position)
 	assert_int(board._burning_overlays.size()) \
 			.override_failure_message("瞬移分支不应建移动燃线").is_equal(0)
 	assert_int(board._burning_highlight_cells.size()).is_equal(0)
@@ -277,8 +277,7 @@ func test_unit_moved_tween_lifecycle_and_idle_fallback() -> void:
 	# 登记在池 + MOVE 播放 + 未落终点（在途）
 	assert_bool(board._move_tweens.has(unit.unit_id)).is_true()
 	assert_int(badge.current_action()).is_equal(UnitAnimState.Action.MOVE)
-	assert_vector(badge.position).is_not_equal(
-			board.origin + Vector2(to_a) * board.cell_size)
+	assert_vector(badge.position).is_not_equal(board.cell_rect(to_a).position)
 	var old_tween: Tween = board._move_tweens[unit.unit_id] as Tween
 	assert_bool(old_tween.is_valid()).is_true()
 	# 移动中再移动（同帧无推进）：杀旧起新——旧 tween 失效、池内仍有新 tween
@@ -300,8 +299,7 @@ func test_unit_moved_tween_lifecycle_and_idle_fallback() -> void:
 	assert_bool(board._move_tweens.has(unit.unit_id)).is_false() \
 			.override_failure_message("tween 完成后未出池")
 	assert_int(badge.current_action()).is_equal(UnitAnimState.Action.IDLE)
-	assert_vector(badge.position).is_equal(
-			board.origin + Vector2(to_b) * board.cell_size)
+	assert_vector(badge.position).is_equal(board.cell_rect(to_b).position)
 
 func test_unit_moved_path_highlights_extinguish_on_arrival() -> void:
 	## 试玩反馈批（D4 契约修订）：移动过程路径闪烁高光——真实路径建**燃线**
