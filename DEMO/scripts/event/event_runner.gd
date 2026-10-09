@@ -61,25 +61,11 @@ var _rng: RandomNumberGenerator = null
 ## 按 run 隔离语义不变，同 runner 驱动多 run 互不串扰）。
 ## 生命周期（S2-13）：EventRunner 每次探索屏 _ready 新建（explore_screen
 ## 装配期 new），无跨 run 复用——终局集随屏实例销毁释放，不存在永不清理
-## 的增长泄漏；键为 int（instance_id）不持 run 强引用
+## 的增长泄漏；键为 int（instance_id）不持 run 强引用。
+## 盲审 R2-1 注：游标/选项消费/出口消费三防线已迁 ExpeditionRun 实例字段
+##（run 实例即隔离域，读档重建天然清零）；本终局集为清单外第四防线，
+## 保持 runner 实例态（随屏生命周期），统一迁移归后续批裁定
 var _finalized_events: Dictionary = {}
-## 链事件会话游标（2026-10-03 审计·漏洞1a）：键 = run instance_id →
-## {event_id: 当前节点 id}——choose_option 选项归属校验单源（option_id 须 ∈
-## 游标节点 option_ids，防任意 option 经全局 lookup 被结算）。**运行态不进
-## 存档、不改 ExpeditionRun 序列化**（run 本身不入档——出征中不自动存档
-## #26，会话随屏重建）；游标缺失时按降级放行（见 _OptionBelongsToCursor），
-## 读档重建 run 后不误拒合法续跑。生命周期同 _finalized_events（随屏销毁）
-var _node_cursors: Dictionary = {}
-## 已消费选项集（2026-10-03 审计·漏洞1a）：键 = run instance_id →
-## {event_id: {option_id: true}}——同 (run, event, option) 重复调用拒收：
-## 链内选项去向非终端节点时 _MarkFinalized 不落标（引擎允许中间节点，DEMO
-## 三链数据现全为终端去向），重复调用会二次掷骰/累加 extra_days/沿链重走
-## 重复入账；终局后由 E7 先拦。生命周期同 _finalized_events
-var _consumed_options: Dictionary = {}
-## 战后出口一次性消费标记（2026-10-03 审计·漏洞1b）：键 = run instance_id →
-## {出口 instance_id: true}——resolve_outcome 同 run 同源重复调用拒收，
-## 防宿主侧重放 post_battle 重复 add_reward 入账；生命周期同 _finalized_events
-var _consumed_outcomes: Dictionary = {}
 
 func setup(cfg: CoreConfig, lookup: Callable, rng: RandomNumberGenerator) -> void:
 	## 装配引擎（依赖注入——headless 可测）
@@ -338,13 +324,13 @@ func _OptionBelongsToCursor(run: ExpeditionRun, event_id: StringName,
 		option_id: StringName) -> bool:
 	## 选项归属校验（漏洞1a 内部口）：option_id ∈ 游标节点 option_ids 才放行；
 	## 游标缺失（读档重建 run / 直入 choose_option 未走 start_event）或游标
-	## 节点解析失败时降级放行——防误拒合法调用，legacy 行为兜底
+	## 节点解析失败时降级放行——防误拒合法调用，legacy 行为兜底；
+	## 盲审 R2-1：游标已迁 run.node_cursors 实例字段（run 实例即隔离域）
 	## 参数 run：出征运行态；event_id：链事件 id；option_id：待校验选项 id
 	## 返回：true = 归属当前节点或降级放行
-	var run_key: int = run.get_instance_id()
-	if not _node_cursors.has(run_key) or not _node_cursors[run_key].has(event_id):
+	if not run.node_cursors.has(event_id):
 		return true
-	var node: EventNodeDef = _Lookup(_node_cursors[run_key][event_id]) as EventNodeDef
+	var node: EventNodeDef = _Lookup(run.node_cursors[event_id]) as EventNodeDef
 	if node == null:
 		return true
 	return node.option_ids.has(option_id)
@@ -352,53 +338,42 @@ func _OptionBelongsToCursor(run: ExpeditionRun, event_id: StringName,
 func _SetNodeCursor(run: ExpeditionRun, event_id: StringName,
 		node_id: StringName) -> void:
 	## 游标写入（漏洞1a 内部口——start_event 入口 / choose_option 去向节点
-	## 解析成功后调用，键 = run instance_id）
+	## 解析成功后调用；盲审 R2-1：run.node_cursors 实例字段）
 	## 参数 run：出征运行态；event_id：链事件 id；node_id：当前节点 id
 	## 返回：无
-	var run_key: int = run.get_instance_id()
-	if not _node_cursors.has(run_key):
-		_node_cursors[run_key] = {}
-	_node_cursors[run_key][event_id] = node_id
+	run.node_cursors[event_id] = node_id
 
 func _IsOptionConsumed(run: ExpeditionRun, event_id: StringName,
 		option_id: StringName) -> bool:
-	## 选项消费查询（漏洞1a 内部口——run 隔离，键 = instance_id）
+	## 选项消费查询（漏洞1a 内部口；盲审 R2-1：run.consumed_options 实例字段）
 	## 参数 run：出征运行态；event_id：链事件 id；option_id：选项 id
 	## 返回：true = 该 run 内该事件的该选项已消费
-	var run_key: int = run.get_instance_id()
-	return _consumed_options.has(run_key) \
-			and _consumed_options[run_key].has(event_id) \
-			and _consumed_options[run_key][event_id].has(option_id)
+	return run.consumed_options.has(event_id) \
+			and run.consumed_options[event_id].has(option_id)
 
 func _MarkOptionConsumed(run: ExpeditionRun, event_id: StringName,
 		option_id: StringName) -> void:
 	## 选项消费写入（漏洞1a 内部口——校验通过即落标，掷骰/耗时/结算
-	## 只跑一次；键 = run instance_id）
+	## 只跑一次；盲审 R2-1：run.consumed_options 实例字段）
 	## 参数 run：出征运行态；event_id：链事件 id；option_id：选项 id
 	## 返回：无
-	var run_key: int = run.get_instance_id()
-	if not _consumed_options.has(run_key):
-		_consumed_options[run_key] = {}
-	if not _consumed_options[run_key].has(event_id):
-		_consumed_options[run_key][event_id] = {}
-	_consumed_options[run_key][event_id][option_id] = true
+	if not run.consumed_options.has(event_id):
+		run.consumed_options[event_id] = {}
+	run.consumed_options[event_id][option_id] = true
 
 func _IsOutcomeConsumed(run: ExpeditionRun, outcome: EventOutcomeDef) -> bool:
-	## 战后出口消费查询（漏洞1b 内部口——run 隔离，键 = instance_id 双层）
+	## 战后出口消费查询（漏洞1b 内部口；盲审 R2-1：run.consumed_outcomes
+	## 实例字段）
 	## 参数 run：出征运行态；outcome：待结算出口
 	## 返回：true = 该 run 内该出口实例已消费
-	var run_key: int = run.get_instance_id()
-	return _consumed_outcomes.has(run_key) \
-			and _consumed_outcomes[run_key].has(outcome.get_instance_id())
+	return run.consumed_outcomes.has(outcome.get_instance_id())
 
 func _MarkOutcomeConsumed(run: ExpeditionRun, outcome: EventOutcomeDef) -> void:
-	## 战后出口消费写入（漏洞1b 内部口——结算前置落标，键 = instance_id）
+	## 战后出口消费写入（漏洞1b 内部口——结算前置落标；盲审 R2-1：
+	## run.consumed_outcomes 实例字段）
 	## 参数 run：出征运行态；outcome：出口
 	## 返回：无
-	var run_key: int = run.get_instance_id()
-	if not _consumed_outcomes.has(run_key):
-		_consumed_outcomes[run_key] = {}
-	_consumed_outcomes[run_key][outcome.get_instance_id()] = true
+	run.consumed_outcomes[outcome.get_instance_id()] = true
 
 func _ResolveOutcome(view: EventView, outcome: EventOutcomeDef, is_crit_success: bool,
 		is_crit_failure: bool, is_success: bool, modifier: EventModifierDef,

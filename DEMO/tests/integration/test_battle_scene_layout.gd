@@ -14,7 +14,9 @@
 ## RightPanel/EnemyTurnHint 退役不再存在）；左带契约（BoardLayer 满高扣两侧
 ## 240/-12/LeftPanel 220/RoundLabel 首子/TurnOrderBar 在 LeftScroll/
 ## UnitInfoCard 末子/ButtonRow 五钮贴底对齐+树序浮层）；按钮行 natural 宽
-## 契约（复核缺陷修复：长技能名替换后盒容纳/屏内/互不重叠/贴底维持）。
+## 契约（复核缺陷修复：长技能名替换后盒容纳/屏内/互不重叠/贴底维持）；
+## 视口批契约（常驻 UI z=250 三节点压棋盘 tips/飘字让卷轴结算；WorldLayer
+## 懒建结构——装配后挂 BoardLayer 直下/IGNORE/z=0/FULL_RECT 尺寸==板尺寸）。
 ## headless 无法模拟真实鼠标 GUI 派发（push_input 不触发派发），只做静态契约断言。
 extends GdUnitTestSuite
 
@@ -166,6 +168,70 @@ func test_left_belt_layout_contract() -> void:
 	assert_bool(absf(button_row.position.x - info_card.global_position.x) <= 0.5).is_true() \
 			.override_failure_message("ButtonRow 左缘 %s 应与信息卡左缘 %s 对齐" % [
 					button_row.position.x, info_card.global_position.x])
+
+func test_viewport_ui_z_layers_contract() -> void:
+	## 视口批 UI 层级契约：LeftPanel/ButtonRow/IdleLabel 常驻 UI 基座
+	## z=250（UI_BASE_Z）——棋盘缩放平移放大后仍恒置顶不遮操作区；
+	## 三向比较：250 > 棋盘 tips/飘字（Z_TEXT=200）、250 < LogScroller
+	##（300）/ResultLayer（400）——卷轴结算恒压常驻 UI
+	var runner: GdUnitSceneRunner = scene_runner(BATTLE_SCENE)
+	var battle: Control = runner.scene() as Control
+	assert_object(battle).is_not_null()
+	var left_panel: Control = battle.get_node("%LeftPanel")
+	var button_row: Control = battle.get_node("%ButtonRow")
+	var idle_label: Control = battle.get_node("%IdleLabel")
+	for base_node: Control in [left_panel, button_row, idle_label]:
+		assert_int(base_node.z_index).is_equal(250) \
+				.override_failure_message("%s z_index 应为常驻 UI 基座 250" % base_node.name)
+	# 三向比较：压棋盘文本层 / 让卷轴与结算
+	var scroller: Control = battle.get_node("%LogScroller")
+	var result_layer: Control = battle.get_node("ResultLayer")
+	assert_bool(left_panel.z_index > BattleBoard.Z_TEXT).is_true() \
+			.override_failure_message("常驻 UI 基座应压棋盘 tips/飘字（Z_TEXT=%d）" % BattleBoard.Z_TEXT)
+	assert_bool(left_panel.z_index < scroller.z_index).is_true() \
+			.override_failure_message("日志卷轴应恒压常驻 UI 基座")
+	assert_bool(result_layer.z_index > left_panel.z_index).is_true() \
+			.override_failure_message("结算层应恒压常驻 UI 基座")
+	assert_int(scroller.z_index).is_equal(BattleLogScroller.Z_LOG_OVERLAY)
+
+func test_viewport_world_layer_structure_contract() -> void:
+	## 视口批 WorldLayer 结构契约：装配后（setup 走 _EnterRandomBattle 同源
+	## 调试链不可用——降级直开场景 BoardLayer 未装配无 WorldLayer，此处
+	## 用手动 setup 契约断言：代码懒建 Control）——parent == BoardLayer、
+	## IGNORE、z == 0、FULL_RECT 尺寸 == 板尺寸（缩放/平移载体唯一性；
+	## 降级路径不懒建视口层——空板直开不产生中间层）
+	var runner: GdUnitSceneRunner = scene_runner(BATTLE_SCENE)
+	var battle: Control = runner.scene() as Control
+	assert_object(battle).is_not_null()
+	var board: BattleBoard = battle.get_node("%BoardLayer") as BattleBoard
+	assert_object(board).is_not_null()
+	# 降级契约：未装配不懒建（board 直挂子零——无 WorldLayer 残留）
+	assert_object(board._world_layer).is_null()
+	assert_int(board.get_child_count()).is_equal(0)
+	# 手动装配（空上下文夹具——WorldLayer 随首格懒建）
+	var grid := BattleGrid.new()
+	var map_def: BattleMapDef = load("res://data/battle/maps/btm_m1_random_8x8.tres") as BattleMapDef
+	var tiles: Dictionary = {}
+	for tile_id: StringName in [&"tile_normal", &"tile_obstacle", &"tile_grass",
+			&"tile_highground", &"tile_poison_swamp", &"tile_trap"]:
+		tiles[tile_id] = load("res://data/battle/tiles/" + String(tile_id) + ".tres")
+	assert_bool(grid.setup(map_def, func(tile_id: StringName) -> TileTypeDef:
+		return tiles.get(tile_id, null) as TileTypeDef)).is_true()
+	var context := BattleSetup.BattleContext.new()
+	context.grid = grid
+	context.units = []
+	board.setup(context, get_tree().root.get_node("GameData"))
+	var world: Control = board._world_layer
+	assert_object(world).is_not_null() \
+			.override_failure_message("装配后 WorldLayer 应懒建")
+	assert_object(world.get_parent()).is_same(board)
+	assert_int(world.mouse_filter).is_equal(Control.MOUSE_FILTER_IGNORE) \
+			.override_failure_message("WorldLayer 必须 IGNORE（不截获板面命中）")
+	assert_int(world.z_index).is_equal(0)
+	await get_tree().process_frame
+	assert_vector(world.size).is_equal(board.size) \
+			.override_failure_message("WorldLayer FULL_RECT 尺寸应 == 板尺寸（%s vs %s）" % [
+					world.size, board.size])
 
 func test_button_row_natural_width_contract() -> void:
 	## 按钮行 natural 宽契约（复核缺陷修复防回归）：运行时技能名替换为长名

@@ -193,6 +193,28 @@ func test_build_detail_lines_empty_returns_empty() -> void:
 			agg, DaySummaryPanel.UI_TEXTS)
 	assert_int(lines.size()).is_equal(0)
 
+func test_build_detail_lines_level_suffix() -> void:
+	## 盲审 R2-2：levels_gained 非空 → 轻度行追加升级后缀（多人顿号并接、
+	## 顺序=字典键序）；空明细不出后缀（_MakeLightResult 默认零升级时
+	## 既有用例已锁——本用例只断非空态）
+	var agg := GuildCore.DaySummary.new()
+	var result := _MakeLightResult(&"q_chore_supply_run")
+	result.levels_gained = {"warrior": 1, "adv_erin": 2}
+	agg.light_completed = [result]
+	var lines: PackedStringArray = DaySummaryPanel.BuildDetailLines(
+			agg, DaySummaryPanel.UI_TEXTS)
+	assert_int(lines.size()).is_equal(1)
+	assert_bool(lines[0].contains("（warrior 升 1 级、adv_erin 升 2 级）")).is_true() \
+			.override_failure_message("levels_gained 非空应追加升级后缀（实际 %s）" % lines[0])
+	# 空明细：无后缀（既有多组用例已锁无后缀形态——此处轻量复核）
+	var quiet := GuildCore.DaySummary.new()
+	var quiet_result := _MakeLightResult(&"q_chore_supply_run")
+	quiet.light_completed = [quiet_result]
+	var quiet_lines: PackedStringArray = DaySummaryPanel.BuildDetailLines(
+			quiet, DaySummaryPanel.UI_TEXTS)
+	assert_bool(quiet_lines[0].contains("升")).is_false() \
+			.override_failure_message("levels_gained 空不得出升级后缀")
+
 func test_text_tables_same_semantics_no_drift() -> void:
 	## 文案表防双源：弹窗 UI_TEXTS 与 explore_screen UI_TEXTS 的 summary_*
 	## 分组键集同键同值；与 guild_shell 轻提示行共有的分组键同值
@@ -203,6 +225,7 @@ func test_text_tables_same_semantics_no_drift() -> void:
 			"summary_board_replaced_format", "summary_accepted_failed_format",
 			"summary_candidates_format", "summary_light_done_format",
 			"summary_light_done_bench_suffix",
+			"summary_light_done_level_suffix", "summary_light_done_level_entry",
 	]
 	var explore_texts: Dictionary = ExploreScript.UI_TEXTS
 	for key: String in panel_keys:
@@ -214,7 +237,8 @@ func test_text_tables_same_semantics_no_drift() -> void:
 	for key: String in ["summary_recovered_format", "summary_week_refresh",
 			"summary_board_removed_format", "summary_accepted_failed_format",
 			"summary_candidates_format", "summary_light_done_format",
-			"summary_light_done_bench_suffix"]:
+			"summary_light_done_bench_suffix",
+			"summary_light_done_level_suffix", "summary_light_done_level_entry"]:
 		assert_str(String(DaySummaryPanel.UI_TEXTS[key])).is_equal(
 				String(shell_texts[key])) \
 				.override_failure_message("guild_shell 轻提示行文案键漂移：%s" % key)

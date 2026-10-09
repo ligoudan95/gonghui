@@ -87,10 +87,11 @@ func test_battle_entry_opens_battle_screen() -> void:
 	assert_object(battle.context).is_not_null()
 	assert_int(battle.context.allies.size()).is_equal(4)
 	assert_int(battle.context.enemies.size()).is_equal(3)
-	# 徽章池已建（我方 4 + 敌方 3）
+	# 徽章池已建（我方 4 + 敌方 3；视口批：徽章挂 WorldLayer 下——遍历随挂载点）
 	battle.controller.delay_seconds = 0.0
 	var board: BattleBoard = battle.get_node("%BoardLayer") as BattleBoard
-	assert_int(board.get_children().filter(func(child): return child is UnitBadge).size()).is_equal(7)
+	assert_int(board._world_layer.get_children().filter(
+			func(child: Node) -> bool: return child is UnitBadge).size()).is_equal(7)
 	battle.controller.abort_battle()
 
 func test_signal_flow_and_request_move() -> void:
@@ -380,7 +381,9 @@ func test_target_tips_contract() -> void:
 	# ——tips 仍恒高于覆盖层容器（容器内全部 holder 的 z 序随容器整体低于
 	# tips；headless 下 z 序 = 子节点序可测）
 	battle._HandleSkillTap(enemy.grid_pos)
-	var overlay_layer: Control = board.get_node_or_null("OverlayLayer") as Control
+	# 视口批：覆盖层容器挂 WorldLayer 下——查找路径随挂载点（断言语义不变：
+	## tips 与 overlay 同挂 world 层内 index 比较）
+	var overlay_layer: Control = board.get_node_or_null("WorldLayer/OverlayLayer") as Control
 	assert_object(overlay_layer).is_not_null()
 	assert_int(overlay_layer.get_child_count()).is_greater(0)
 	assert_int(board.target_tips_panel().get_index()).is_greater(overlay_layer.get_index()) \
@@ -417,7 +420,8 @@ func test_los_blocked_range_rendering_and_tap() -> void:
 			Vector2i(4, 2), Vector2i(5, 2)]
 	board.clear_overlays()
 	board.show_skill_range(cells, Vector2i(0, 2), true)
-	var layer: Control = board.get_node("OverlayLayer") as Control
+	# 视口批：覆盖层容器挂 WorldLayer 下——查找路径随挂载点
+	var layer: Control = board.get_node("WorldLayer/OverlayLayer") as Control
 	var blocked_cells: Array[Vector2i] = []
 	var visible_cells: Array[Vector2i] = []
 	for holder: Node in layer.get_children():
@@ -1050,8 +1054,10 @@ func test_board_resize_rebuild_hides_old_visuals_instantly() -> void:
 	# 先画一层移动范围（懒建覆盖层容器一并进重建路径）
 	var unit: BattleUnit = await _AwaitFirstCommandWindow(battle)
 	assert_object(unit).is_not_null()
+	# 视口批：格/徽章挂 WorldLayer 下——旧视觉收集随挂载点（WorldLayer 本体
+	## 经重建存活不释放，不在收集列）
 	var old_children: Array[Node] = []
-	for child: Node in board.get_children():
+	for child: Node in board._world_layer.get_children():
 		old_children.append(child)
 	# 尺寸减半触发重建（resized 信号自动排队帧末重建——拍板 A 防抖归并口；
 	## 本用例锚定重建体的同步隐藏契约，直调重建体 _ApplyResizeRebuild 即时

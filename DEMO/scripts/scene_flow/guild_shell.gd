@@ -56,6 +56,8 @@ const UI_TEXTS: Dictionary = {
 	&"go_fail_hint_format": "页面跳转失败（错误码 %d）——请重试。",
 	&"summary_light_done_format": "轻度委托完成：%s +%d 金 +%d 经验 +%d 声望",
 	&"summary_light_done_bench_suffix": "（板凳 %d 人各得 %d 经验）",
+	&"summary_light_done_level_suffix": "（%s）",
+	&"summary_light_done_level_entry": "%s 升 %d 级",
 }
 
 ## GameData 单例引用（_ready 缓存）

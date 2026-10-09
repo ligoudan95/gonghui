@@ -58,6 +58,7 @@ class FakeUnit:
 	var resource_mana: int = 100
 	var resource_stamina: int = 100
 	var hp: int = 100
+	var max_hp: int = 1000
 	var downed_count: int = 0
 	var healed_amount: int = 0
 	var damage_taken: Array[int] = []
@@ -84,10 +85,17 @@ class FakeUnit:
 		if hp <= 0:
 			alive = false
 
-	func heal(amount: int) -> void:
-		## 治疗
-		healed_amount += amount
-		hp += amount
+	func heal(amount: int) -> int:
+		## 治疗（盲审 R4-6 同步：返实际增量——max_hp 钳制差值，与
+		## BattleUnit.heal 同契约）
+		if not alive:
+			return 0
+		if amount <= 0:
+			return 0
+		var applied: int = mini(amount, max_hp - hp)
+		healed_amount += applied
+		hp += applied
+		return applied
 
 	func on_downed() -> void:
 		## 倒地回调

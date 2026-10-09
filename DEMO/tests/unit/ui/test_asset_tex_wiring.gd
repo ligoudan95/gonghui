@@ -485,11 +485,12 @@ func test_trap_mark_texture_and_fallback() -> void:
 
 func _FindTrapMark(board: BattleBoard) -> Control:
 	## 查找最新陷阱标记节点（meta trap_mark 扫描——取末位：清理为 queue_free
-	## 延迟帧末，重画后新旧并存，新节点恒在尾部）
+	## 延迟帧末，重画后新旧并存，新节点恒在尾部；视口批：标记挂 WorldLayer
+	## 下——遍历随挂载点）
 	## 参数 board：战斗板层
 	## 返回：最新标记节点；无返回 null
 	var mark: Control = null
-	for child: Node in board.get_children():
+	for child: Node in board._world_layer.get_children():
 		if child is Control and child.get_meta(&"trap_mark", false):
 			mark = child as Control
 	return mark

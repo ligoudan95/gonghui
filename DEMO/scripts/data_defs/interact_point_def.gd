@@ -2,8 +2,9 @@
 ## 职责：探索图上的可交互点位——事件链入口/单点事件/宝箱/暗门/必然遭遇/
 ## 出口；承载触发方式（踏入自动/点按/接近）与引用目标（chain_/sp_/enc_）。
 ## 数据来源：案 7《地图与探索》（点位与触发口径）；案 18 §2（DEMO 内容）；
-## M3 方案批 1（10 行：链三 ENTER + 村子单点二 ENTER + 暗门 NEAR +
-## 必然遭遇 ENTER + 宝箱三 TAP + 出口 TAP）。
+## M3 方案批 1（11 行：链三 ENTER + 村子单点二 ENTER + 暗门 NEAR +
+## 必然遭遇 ENTER + 宝箱三 TAP + 出口 TAP——W4-12 计数漂移勘正，与
+## cfg_main 计数带 11 同口径）。
 ## id 命名规范：map/interact_points 域，evp_ 前缀 + 小写下划线语义，
 ## 文件名与 id 同名。
 ## ref_id 取义（按 kind）：CHAIN -> chain_；SINGLE/SECRET_DOOR -> sp_；

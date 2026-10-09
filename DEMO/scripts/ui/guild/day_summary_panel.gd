@@ -30,6 +30,8 @@ const UI_TEXTS: Dictionary = {
 	&"summary_candidates_format": "新候选：%s",
 	&"summary_light_done_format": "轻度委托完成：%s +%d 金 +%d 经验 +%d 声望",
 	&"summary_light_done_bench_suffix": "（板凳 %d 人各得 %d 经验）",
+	&"summary_light_done_level_suffix": "（%s）",
+	&"summary_light_done_level_entry": "%s 升 %d 级",
 }
 
 ## 正文限宽（px——autowrap 生效前提；EVENT_PANEL_WIDTH 占位先例同口径）
@@ -129,5 +131,14 @@ static func BuildDetailLines(agg: GuildCore.DaySummary,
 		if result.bench_member_count > 0:
 			entry_text += String(texts[&"summary_light_done_bench_suffix"]) % [
 					result.bench_member_count, result.bench_exp_per_member]
+		# 盲审 R2-2：升级后缀（levels_gained 非空才出——成员名升 N 级，
+		## 多人顿号并接；文案两键单源）
+		if not result.levels_gained.is_empty():
+			var level_parts: PackedStringArray = []
+			for unit_key: String in result.levels_gained:
+				level_parts.append(String(texts[&"summary_light_done_level_entry"]) % [
+						unit_key, int(result.levels_gained[unit_key])])
+			entry_text += String(texts[&"summary_light_done_level_suffix"]) % [
+					"、".join(level_parts)]
 		lines.append(entry_text)
 	return lines

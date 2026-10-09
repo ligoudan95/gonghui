@@ -201,3 +201,10 @@ func test_720_iso_board_full_band_no_overflow() -> void:
 			var cell: Vector2i = Vector2i(x, y)
 			assert_vector(board.cell_from_local(board.cell_rect(cell).get_center())) \
 					.is_equal(cell)
+	# 视口批顺加：720 档 zoom 档表非单档（fit 102.8 → zoom_max = 176/102.8
+	## ≈ 1.71，1.1 步进多档——缩放在该档位仍有操作空间）+ WorldLayer 已随
+	## 装配懒建（地格挂其下）
+	assert_int(board._zoom_steps.size()).is_greater(2) \
+			.override_failure_message("720 档 10×10 档表应非单档（zoom_max ≈ 1.71）")
+	assert_float(board._zoom_steps[0]).is_equal(1.0)
+	assert_object(board._world_layer).is_not_null()

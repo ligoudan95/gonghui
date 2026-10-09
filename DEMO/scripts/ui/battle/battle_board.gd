@@ -22,6 +22,10 @@
 ## 菱形全宽自适应版面（cfg 钳制带 [min,max] + fit 不足让位护栏）。
 ## 输入口径：本层 gui_input 统一接点按（battle_screen 分发两段式确认）；
 ## 徽章与覆盖块均不消费鼠标；地格块 PASS 参与命中后冒泡回本层（点击链路不变）。
+## 视口批：滚轮缩放 + 中键拖动平移——全部动态视觉收挂中间层 WorldLayer
+##（懒建 FULL_RECT IGNORE），视口态只动其 scale/position 两属性，棋盘内部
+## 一切坐标零感知；点击命中经 cell_from_board_local 逆变换（battle_screen
+## 唯一消费）；缩放档表/锚点推算/贴边钳制三纯函数单源。
 class_name BattleBoard
 extends Control
 
@@ -29,6 +33,9 @@ extends Control
 const Z_OVERLAY: int = 100
 ## tips 面板/飘字 z_index（恒压覆盖层——树序置顶逻辑保留作双保险）
 const Z_TEXT: int = 200
+## 平移拖动激活阈值（像素——按下位移达阈值才进入拖动，防误触吞格点按；
+## 结构契约常量不入 cfg——策划拍板豁免，案 16 §2.7 登记口径）
+const PAN_DRAG_THRESHOLD: float = 4.0
 ## 菱形命中判据浮点容差（边界点 round 归属的数值抖动护栏）
 const HIT_EPS: float = 0.0001
 ## 覆盖层边框条宽（像素——E1 程序四边框带退役后仅 _MakeEdgeStrips 签名默认值保留）
@@ -169,6 +176,29 @@ func _UiFont(field: StringName, fallback: int) -> int:
 ## tips 同为 board 子节点时，tips 显示后重建的覆盖层会 add 到尾部压住 tips；
 ## 分层后覆盖层全部收进容器，tips 恒在容器之上，无论覆盖层何时重建）
 var _overlay_layer: Control = null
+## 视口中间层（视口批：地格/徽章/覆盖层容器/tips/飘字的统一挂载点——
+## 懒建 FULL_RECT IGNORE，尺寸恒 == 板区；缩放/平移只动本层 scale/position
+## 两属性，棋盘内部一切坐标零感知；resize 全量重建跳过本层不释放）
+var _world_layer: Control = null
+## 缩放档表（0 档 = fit 态 1.0——_BuildLayout 末尾按 fit 全宽与钳制上限生成）
+var _zoom_steps: Array[float] = []
+## 当前缩放档下标
+var _zoom_index: int = 0
+## 平移目标位（连续滚动/拖动推算一律取目标态——非 tween 中间值）
+var _view_pan_target: Vector2 = Vector2.ZERO
+## 在途缩放 tween（重缩放/拖动激活/resize 重置三入口统一 kill）
+var _zoom_tween: Tween = null
+## 平移按下位（板层本地坐标——中键 press 时记）
+var _pan_press_pos: Vector2 = Vector2.ZERO
+## 平移起点快照（激活时 _view_pan_target 的备份——拖动增量基准）
+var _pan_start_pos: Vector2 = Vector2.ZERO
+## 平移按下待激活标记（未过阈值前——轻点吞格防护）
+var _pan_pending: bool = false
+## 平移拖动激活标记
+var _pan_active: bool = false
+## 在飞飘字 Label 池（视口批：label 挂 _world_layer 后 resize 重建不再随
+## 板级清子释放——kill tween 时须显式释放；正常播完自行出池）
+var _float_labels: Array[Label] = []
 ## 单位徽章池（unit_id -> UnitBadge）
 var _badges: Dictionary = {}
 ## 徽章移动 tween 池（unit_id -> Tween——重移动前 kill 旧 tween；W3 重建清池）
@@ -222,12 +252,71 @@ func _IsoCellWidthMax() -> float:
 		return UiTheme.ISO_CELL_WIDTH_MAX
 	return raw
 
+func _ZoomStepRatio() -> float:
+	## 缩放档距比读取（视口批：cfg ui_battle_zoom_step_ratio 表驱动——
+	## UiTheme.BATTLE_ZOOM_STEP_RATIO 兜底；值域 [UiTheme.ZOOM_MIN_STEP_GAP,
+	## UiTheme.ZOOM_MAX_STEP_RATIO] 外非法回退（R1-02/03：上下限常量 UiTheme
+	## 单源——下限与档表防退步档差同值，过小档距互踩产无感档），_IsoRatio
+	## 同模式）
+	## 参数：无
+	## 返回：生效档距比
+	var raw: float = UiTheme.BATTLE_ZOOM_STEP_RATIO
+	if context != null and context.cfg != null:
+		raw = context.cfg.ui_battle_zoom_step_ratio
+	if raw < UiTheme.ZOOM_MIN_STEP_GAP or raw > UiTheme.ZOOM_MAX_STEP_RATIO:
+		return UiTheme.BATTLE_ZOOM_STEP_RATIO
+	return raw
+
+func _ZoomSeconds() -> float:
+	## 缩放档切换动画时长读取（cfg ui_battle_zoom_seconds 表驱动——
+	## UiTheme.BATTLE_ZOOM_SECONDS 兜底；值域 [0, 0.5] 外非法回退；
+	## 0 = 瞬跳直落——表侧显式 0 合法、未回填哨兵同走即时，
+	## log_toggle_seconds 先例口径）
+	## 参数：无
+	## 返回：生效时长（秒）
+	var raw: float = UiTheme.BATTLE_ZOOM_SECONDS
+	if context != null and context.cfg != null:
+		raw = context.cfg.ui_battle_zoom_seconds
+	if raw < 0.0 or raw > 0.5:
+		return UiTheme.BATTLE_ZOOM_SECONDS
+	return raw
+
 func _ready() -> void:
 	## 引擎回调：尺寸变化监听挂接（W3-04——窗口/容器尺寸变化后格子几何、
 	## 徽章与动态标记须重算落位，此前仅 setup 时布局一次）
 	## 参数：无
 	## 返回：无
 	resized.connect(_OnResized)
+
+func _process(_delta: float) -> void:
+	## 引擎回调：平移拖动轮询（视口批——中键 release 的 gui_input 可能因
+	## 拖出板面/被其他层截获而丢失，全局轮询兜底收口）：①中键已松开 →
+	## viewport_end_pan（幂等）②全局鼠标位 → 板层本地坐标
+	##（get_global_transform().affine_inverse()——含视口 stretch 变换）
+	## ③待激活态位移过阈值 → 激活 ④激活态按「起点 + 位移增量」推
+	## world.position → 贴边钳制 → 同步目标位；非拖动态首行早退零开销
+	## 参数 _delta：帧间隔（未用——位移按帧即时量）
+	## 返回：无
+	if not _pan_pending and not _pan_active:
+		return
+	if not Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE):
+		viewport_end_pan()
+		return
+	# 盲审修复 8（S3-03）：视口层失效的拖动态异常收口（与公开口同式守卫
+	#——正常路径 begin_pan 已挡，防御层）
+	if _world_layer == null or not is_instance_valid(_world_layer):
+		viewport_end_pan()
+		return
+	var cur: Vector2 = get_global_transform().affine_inverse() * get_global_mouse_position()
+	if _pan_pending and cur.distance_to(_pan_press_pos) >= PAN_DRAG_THRESHOLD:
+		_ActivatePan()
+	if _pan_active:
+		var zoom_now: float = _zoom_steps[_zoom_index] \
+				if _zoom_index < _zoom_steps.size() else 1.0
+		var new_pan: Vector2 = _pan_start_pos + (cur - _pan_press_pos)
+		new_pan = clamp_viewport_position(origin, _BoardBoxOf(), size, zoom_now, new_pan)
+		_world_layer.position = new_pan
+		_view_pan_target = new_pan
 
 func setup(board_context: BattleSetup.BattleContext, game_data: Node) -> void:
 	## 装配板层：计算格子几何 → 画地格 → 建徽章（battle_screen 在 _ready 调）
@@ -267,6 +356,9 @@ func _ApplyResizeRebuild() -> void:
 	_resize_rebuild_queued = false
 	if context == null or context.grid == null:
 		return
+	# 视口批：视口态全复位（几何比较早退之前——resized 即便几何未变也归位
+	# 缩放/平移，与档表随 _BuildLayout 重建归 0 档一致）
+	_ResetViewportState()
 	var old_width: float = cell_width
 	var old_origin: Vector2 = origin
 	_BuildLayout()
@@ -276,12 +368,25 @@ func _ApplyResizeRebuild() -> void:
 	for unit_id: StringName in _move_tweens.keys():
 		_KillMoveTween(unit_id)
 	for child: Node in get_children():
+		# 视口批：WorldLayer 跳过——格/徽章/覆盖层/tips/飘字已收挂其下，
+		# 全量重建只清动态视觉；层自身变换已由 _ResetViewportState 归位、
+		# FULL_RECT 锚点随新板尺寸自动跟随，重建后免重挂
+		if child == _world_layer:
+			continue
 		# S4-R3-01 同式（event_panel._Reset 先例）：先隐藏断输入/渲染再释放
 		#（queue_free 延迟帧末——旧格子层与新层一帧叠渲）
 		var visual: CanvasItem = child as CanvasItem
 		if visual != null:
 			visual.visible = false
 		child.queue_free()
+	# 视口层子视觉全清（等价原板级全量清子面：格/徽章/陷阱标记/覆盖层
+	# 容器/tips/飘字——统一挂载点后的重建释放路径）
+	if _world_layer != null and is_instance_valid(_world_layer):
+		for child: Node in _world_layer.get_children():
+			var world_visual: CanvasItem = child as CanvasItem
+			if world_visual != null:
+				world_visual.visible = false
+			child.queue_free()
 	_cells.clear()
 	_badges.clear()
 	_ClearOverlay(_move_overlays)
@@ -565,18 +670,26 @@ func show_target_tips(cell: Vector2i, line1: String, line2: String = "") -> void
 	var tips_size: Vector2 = _tips_panel.get_minimum_size()
 	_tips_panel.size = tips_size
 	# 定位：格上方居中；上界出界改格下方；左右钳制板内（定位方式参照飘字）
+	# 盲审修复 4（S4-03）：pos 为 world 本地坐标——上界判据与左右钳制的
+	# 板面边界在板层坐标系，先正变换到板本地（pos×zoom + pan）判/钳，再
+	# 逆变换回 world 本地落位（fit 态 zoom=1、pan=0 两系重合——行为零变化）
 	var rect: Rect2 = cell_rect(cell)
 	var pos: Vector2 = Vector2(rect.position.x + (rect.size.x - tips_size.x) * 0.5,
 			rect.position.y - tips_size.y - TIPS_MARGIN)
-	if pos.y < 0.0:
+	var has_world: bool = _world_layer != null and is_instance_valid(_world_layer)
+	var zoom: float = _world_layer.scale.x if has_world else 1.0
+	var pan: Vector2 = _world_layer.position if has_world else Vector2.ZERO
+	if (pos * zoom + pan).y < 0.0:
 		pos.y = rect.position.y + rect.size.y + TIPS_MARGIN
-	pos.x = clampf(pos.x, TIPS_CLAMP_MARGIN,
+	var board_pos: Vector2 = pos * zoom + pan
+	board_pos.x = clampf(board_pos.x, TIPS_CLAMP_MARGIN,
 			maxf(TIPS_CLAMP_MARGIN, size.x - tips_size.x - TIPS_CLAMP_MARGIN))
-	_tips_panel.position = pos
+	_tips_panel.position = (board_pos - pan) / zoom
 	_tips_panel.visible = true
 	# 置顶（2026-09-24 九轮后修复：覆盖层在 tips 之后重建会压住 tips——
-	# 每次显示挪到子节点最尾，z 序恒高于任何后建覆盖层）
-	move_child(_tips_panel, get_child_count() - 1)
+	# 每次显示挪到子节点最尾，z 序恒高于任何后建覆盖层；视口批：tips 挂
+	# _world_layer 下，置顶上下文随之）
+	_world_layer.move_child(_tips_panel, _world_layer.get_child_count() - 1)
 
 func hide_target_tips() -> void:
 	## 隐藏目标确认 tips（幂等）
@@ -636,7 +749,9 @@ func _EnsureTipsPanel() -> void:
 	_tips_line2.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(_tips_line2)
 	_tips_panel.add_child(box)
-	add_child(_tips_panel)
+	# 视口批：挂 _world_layer（tips 随视口缩放平移同步——棋盘世界坐标系）
+	_EnsureWorldLayer()
+	_world_layer.add_child(_tips_panel)
 
 func refresh_badge(unit: BattleUnit) -> void:
 	## 刷新单单位徽章（HP/资源/倒地态）
@@ -707,6 +822,13 @@ func move_badge(unit: BattleUnit, from_pos: Vector2i = Vector2i(-9999, -9999),
 	if badge == null:
 		return
 	var dest: Vector2 = _CellAnchor(unit.grid_pos)
+	# 盲审 R4-1：尸体直落位不播演出（MOVE tween/燃线/朝向链）——grid_pos
+	## 位置权威语义保持（战续回带/尸体归位消费），只挡演出层；尸体无在途
+	## 移动 tween（controller 只 move 存活单位），无需燃线清理路径
+	if not unit.alive:
+		badge.position = dest
+		_UpdateBadgeDepth(badge, unit.grid_pos)
+		return
 	# 在途演出中断标记（漏洞1 修复边界 c 收口）：本分支若 kill 了该单位在途
 	# 移动 tween（直落/瞬移不重建燃线），逐格熄灭回调随 kill 失效——在途
 	# 燃线必须随之清，否则失去唯一清理者残留至 resize 重建；had_tween 守卫
@@ -879,34 +1001,50 @@ func _SpawnFloatText(cell: Vector2i, text: String, color: Color,
 			+ Vector2(cell_width * DAMAGE_CELL_OFFSET_X, DAMAGE_CELL_OFFSET_Y)
 	label.z_index = Z_TEXT
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(label)
+	# 视口批：挂 _world_layer（飘字随视口缩放平移同步）+ label 入池
+	#（挂视口层后不再随板级清子释放——kill tween 时显式释放）
+	_EnsureWorldLayer()
+	_world_layer.add_child(label)
+	_float_labels.append(label)
 	_KeepTipsOnTop()
 	var tween: Tween = create_tween()
 	tween.tween_property(label, "position:y", label.position.y - DAMAGE_FLOAT_DISTANCE,
 			DAMAGE_FLOAT_DURATION)
 	tween.parallel().tween_property(label, "modulate:a", 0.0, DAMAGE_FLOAT_DURATION)
-	tween.tween_callback(label.queue_free)
+	# 盲审修复 7（S3-02）：出池移出有效性分支——label 已失效（外部释放）也
+	# 出池，防僵尸条目驻留 _float_labels
+	tween.tween_callback(func() -> void:
+		if is_instance_valid(label):
+			label.queue_free()
+		_float_labels.erase(label))
 	# S4-R2-03：入池登记（resize 重建前 kill）；正常播完自行出池
 	_float_tweens.append(tween)
 	tween.finished.connect(_float_tweens.erase.bind(tween))
 
 func _KillFloatingTweens() -> void:
 	## 在飞飘字 tween 终止（S4-R2-03：_OnResized 全量重建前调用——kill 后
-	## tween_callback 不再触发，label 由重建的子节点清空统一释放）
+	## tween_callback 不再触发；视口批：label 挂 _world_layer 下不随板级
+	## 清子释放，须在此显式释放——否则失去唯一释放者残留）
 	## 参数：无
 	## 返回：无
 	for tween: Tween in _float_tweens.duplicate():
 		if tween.is_valid():
 			tween.kill()
 	_float_tweens.clear()
+	for label: Label in _float_labels.duplicate():
+		if is_instance_valid(label):
+			label.queue_free()
+	_float_labels.clear()
 
 func _KeepTipsOnTop() -> void:
 	## 目标确认 tips 置顶（S4-11：飘字/陷阱标记等后建子节点会把 tips 挤下——
-	## 创建后挪回末位，z 序恒高于一切运行时节点）
+	## 创建后挪回末位，z 序恒高于一切运行时节点；视口批：置顶上下文随挂载
+	## 点走 _world_layer）
 	## 参数：无
 	## 返回：无
-	if _tips_panel != null and is_instance_valid(_tips_panel) and _tips_panel.visible:
-		move_child(_tips_panel, get_child_count() - 1)
+	if _tips_panel != null and is_instance_valid(_tips_panel) and _tips_panel.visible \
+			and _world_layer != null and is_instance_valid(_world_layer):
+		_world_layer.move_child(_tips_panel, _world_layer.get_child_count() - 1)
 
 func RefreshDynamicMarks() -> void:
 	## 动态地格标记刷新（陷阱——调试可见口径；S1-4：标记色经 tile 表
@@ -917,9 +1055,11 @@ func RefreshDynamicMarks() -> void:
 	## 消耗后回落基础层）；S4-11：创建后保 tips 恒顶层
 	## 参数：无
 	## 返回：无
-	for child: Node in get_children():
-		if child.get_meta(&"trap_mark", false):
-			child.queue_free()
+	# 视口批：标记挂 _world_layer 下——清理遍历随挂载点走（板级子仅视口层）
+	if _world_layer != null and is_instance_valid(_world_layer):
+		for child: Node in _world_layer.get_children():
+			if child.get_meta(&"trap_mark", false):
+				child.queue_free()
 	_ApplyAllCellTooltips()
 	for cell: Vector2i in context.grid.dynamic_tiles:
 		var tile: TileTypeDef = context.grid.tile_at(cell)
@@ -953,7 +1093,8 @@ func RefreshDynamicMarks() -> void:
 		# E1：标记随格深度（树序在徽章后——同格 tie-break 天然压徽章，现状语义）
 		mark.z_index = cell.x + cell.y
 		mark.set_meta(&"trap_mark", true)
-		add_child(mark)
+		_EnsureWorldLayer()
+		_world_layer.add_child(mark)
 	_KeepTipsOnTop()
 
 func _TrapMarkColorOf(cell: Vector2i) -> Color:
@@ -999,8 +1140,14 @@ func _BuildLayout() -> void:
 		cell_width = maxf(fit, 0.0)
 	else:
 		cell_width = clampf(fit, width_min, _IsoCellWidthMax())
-	var board_box: Vector2 = Vector2(span * cell_width * 0.5, span * cell_height * 0.5)
+	# 盲审修复 5（S2-3）：包围盒尺寸单源 _BoardBoxOf（与视口钳制/锚点
+	## 推算消费同一实现——内联公式退役）
+	var board_box: Vector2 = _BoardBoxOf()
 	origin = (size - board_box) * 0.5
+	# 视口批：缩放档表按 fit 全宽与钳制上限生成（fit 重建后档表随之重建、
+	# 档归 0——fit 态即缩放基准态）
+	_zoom_steps = zoom_steps_of(cell_width, _IsoCellWidthMax(), _ZoomStepRatio())
+	_zoom_index = 0
 
 func _BuildCells() -> void:
 	## 地格色块池（kind/status_id 驱动配色；高地双层凸边；障碍岩块描边）
@@ -1099,7 +1246,8 @@ func _MakeTexturedCell(cell: Vector2i, texture: Texture2D) -> Control:
 	rect.size = holder.size
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	holder.add_child(rect)
-	add_child(holder)
+	_EnsureWorldLayer()
+	_world_layer.add_child(holder)
 	return holder
 
 func _MakeCellRect(cell: Vector2i, color: Color) -> Control:
@@ -1112,7 +1260,8 @@ func _MakeCellRect(cell: Vector2i, color: Color) -> Control:
 	rect.position = _CellAnchor(cell)
 	rect.size = Vector2(cell_width, cell_height)
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(rect)
+	_EnsureWorldLayer()
+	_world_layer.add_child(rect)
 	return rect
 
 ## 菱形色面节点（E1：Control 子类 _draw draw_polygon 四顶点——顶点单源
@@ -1178,7 +1327,8 @@ func _BuildBadges() -> void:
 		badge.setup(unit, cell_width, context.cfg, anim_textures, _game_data)
 		badge.position = _CellAnchor(unit.grid_pos)
 		_UpdateBadgeDepth(badge, unit.grid_pos)
-		add_child(badge)
+		_EnsureWorldLayer()
+		_world_layer.add_child(badge)
 		_badges[unit.unit_id] = badge
 
 func _ShowOverlay(cells: Array[Vector2i], color: Color, pool: Array[Control],
@@ -1232,7 +1382,9 @@ func _EnsureOverlayLayer() -> void:
 	_overlay_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	# E1：覆盖层容器恒压一切格/徽章深度（z = x+y ≤ 22 < Z_OVERLAY）
 	_overlay_layer.z_index = Z_OVERLAY
-	add_child(_overlay_layer)
+	# 视口批：挂 _world_layer（缩放/平移随视口同步——覆盖层贴棋盘世界）
+	_EnsureWorldLayer()
+	_world_layer.add_child(_overlay_layer)
 
 func _ShowBlockedOverlay(cells: Array[Vector2i], pool: Array[Control]) -> void:
 	## 视线阻断格渲染（十四轮反馈）：极淡灰菱形填充 + 中心 45° 斜杠
@@ -1288,6 +1440,10 @@ func _ApplyCellTooltip(cell: Vector2i) -> void:
 	var visual: Control = _cells.get(cell, null)
 	if visual == null:
 		return
+	# R1-05 防御：未装配上下文早退（与 cell_from_local 哨兵守卫同式——
+	# 降级路径直调不崩）
+	if context == null or context.grid == null:
+		return
 	var tile: TileTypeDef = context.grid.tile_at(cell)
 	if tile == null or tile.kind == TileTypeDef.Kind.NORMAL:
 		visual.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1295,3 +1451,254 @@ func _ApplyCellTooltip(cell: Vector2i) -> void:
 		return
 	visual.mouse_filter = Control.MOUSE_FILTER_PASS
 	visual.tooltip_text = "%s\n%s" % [tile.display_name, tile.description]
+
+# --------------------------------------------------------------------------
+# 视口交互（视口批：滚轮缩放 + 中键拖动平移——WorldLayer 两属性变换，
+# 棋盘内部坐标零感知）
+# --------------------------------------------------------------------------
+
+static func zoom_steps_of(base_width: float, max_width: float,
+		step_ratio: float) -> Array[float]:
+	## 缩放档表生成（视口批纯函数）：zoom_max = max_width/base_width
+	##（base ≤ 钳制上限保证 zoom_max ≥ 1）；从 1.0 逐档 ×(1+step_ratio)
+	## 直至 ≥ zoom_max，末档取 zoom_max 截断；末档与前档差 <
+	## UiTheme.ZOOM_MIN_STEP_GAP（R1-02：常量 UiTheme 单源）丢弃前档
+	##（无感档不占位——首档 1.0/末档 zoom_max 为结构位恒保留，两档表不丢
+	## 防「fit 档被吞」）；非法入参（base/ratio ≤ 0）与 zoom_max ≤ 1 均返回
+	## [1.0] 单档（zoom_max == 1 为合法已知行为——钳制上限 == fit）
+	## 参数 base_width：fit 态菱形全宽；max_width：钳制带上限；
+	## step_ratio：档距比
+	## 返回：缩放档表（首档恒 1.0）
+	if base_width <= 0.0 or step_ratio <= 0.0:
+		return [1.0]
+	var zoom_max: float = max_width / base_width
+	if zoom_max <= 1.0:
+		return [1.0]
+	var steps: Array[float] = []
+	var current: float = 1.0
+	while current < zoom_max:
+		steps.append(current)
+		current *= 1.0 + step_ratio
+	steps.append(zoom_max)
+	if steps.size() > 2 \
+			and zoom_max - steps[steps.size() - 2] < UiTheme.ZOOM_MIN_STEP_GAP:
+		steps.remove_at(steps.size() - 2)
+	return steps
+
+static func zoom_position_for_anchor(p0: Vector2, z0: float, z1: float,
+		anchor: Vector2) -> Vector2:
+	## 锚点缩放平移推算（视口批纯函数）：p1 = anchor − (anchor − p0) × z1/z0
+	##——锚点（板层本地坐标）处的棋盘内容缩放前后视觉位置不动；贴边
+	## 钳制由调用方组合 clamp_viewport_position（本函数只承载数学单源）；
+	## 非法 z（≤ 0）防御返回 p0 原样（档表值恒 ≥ 1，护栏）
+	## 参数 p0：缩放前平移位；z0/z1：缩放前后档值；anchor：锚点（板层本地）
+	## 返回：缩放后平移位
+	if z0 <= 0.0 or z1 <= 0.0:
+		return p0
+	return anchor - (anchor - p0) * (z1 / z0)
+
+static func clamp_viewport_position(origin: Vector2, board_box: Vector2,
+		layer_size: Vector2, zoom: float, pos: Vector2) -> Vector2:
+	## 平移位贴边钳制（视口批纯函数）：逐轴判溢出（board_box.axis × zoom >
+	## layer_size.axis——缩放后内容大于视口，平移语义 = 内容覆盖视口不露
+	## 板外空白）——溢出轴 clampf 到贴边带 [layer_size − (origin+board_box)
+	## ×zoom, −origin×zoom]（下界 = 内容右缘贴板右缘 / 上界 = 内容左缘贴
+	## 板左缘；带序自洽：溢出 ⇔ 下界 ≤ 上界——方案原文两界序颠倒系笔误，
+	## 按「包围盒边对齐」几何语义自洽序实现）；无溢出轴强制 0（fit 回正
+	## 口径——缩回 0 档 pan 自然归零，无专门复位路径）；zoom ≤ 0 防御
+	## 返回 pos 原样
+	## 参数 origin：棋盘包围盒居中原点（_BuildLayout 口径）；board_box：
+	## 包围盒尺寸；layer_size：视口层尺寸（== 板面尺寸）；zoom：当前档值；
+	## pos：待钳制平移位
+	## 返回：钳制后平移位
+	if zoom <= 0.0:
+		return pos
+	var clamped: Vector2 = pos
+	if board_box.x * zoom > layer_size.x:
+		clamped.x = clampf(pos.x, layer_size.x - (origin.x + board_box.x) * zoom,
+				-origin.x * zoom)
+	else:
+		clamped.x = 0.0
+	if board_box.y * zoom > layer_size.y:
+		clamped.y = clampf(pos.y, layer_size.y - (origin.y + board_box.y) * zoom,
+				-origin.y * zoom)
+	else:
+		clamped.y = 0.0
+	return clamped
+
+func _BoardBoxOf() -> Vector2:
+	## 全棋盘菱形包围盒尺寸（span × cell 尺寸 × 0.5——钳制/锚点推算与
+	## _BuildLayout 居中原点共四消费点单源，盲审修复 5）
+	## 参数：无
+	## 返回：包围盒尺寸（无装配返回 ZERO）
+	if context == null or context.grid == null:
+		return Vector2.ZERO
+	var span: float = float(context.grid.size.x + context.grid.size.y)
+	return Vector2(span * cell_width * 0.5, span * cell_height * 0.5)
+
+func _EnsureWorldLayer() -> void:
+	## 懒建视口中间层（FULL_RECT IGNORE——尺寸恒 == 板区随锚点自动跟随；
+	## z=0 显式设定；_overlay_layer 懒建先例同式，幂等）
+	## 参数：无
+	## 返回：无
+	if _world_layer != null and is_instance_valid(_world_layer):
+		return
+	_world_layer = Control.new()
+	_world_layer.name = "WorldLayer"
+	_world_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_world_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_world_layer.z_index = 0
+	add_child(_world_layer)
+
+func _KillZoomTween() -> void:
+	## 终止在途缩放 tween（重缩放/拖动激活/resize 重置三入口统一）
+	## 参数：无
+	## 返回：无
+	if _zoom_tween != null and _zoom_tween.is_valid():
+		_zoom_tween.kill()
+	_zoom_tween = null
+
+func _ResetViewportState() -> void:
+	## 视口态全复位（resize 重建最前调用）：kill 在途缩放 tween、档归 0、
+	## world 变换归位、平移目标清零、拖动四态复位 + 激活中的拖动态表现
+	## 恢复（tooltip/光标——未激活过的轻点无表现无需恢复）
+	## 参数：无
+	## 返回：无
+	_KillZoomTween()
+	_zoom_index = 0
+	if _world_layer != null and is_instance_valid(_world_layer):
+		_world_layer.scale = Vector2.ONE
+		_world_layer.position = Vector2.ZERO
+	_view_pan_target = Vector2.ZERO
+	var was_active: bool = _pan_active
+	_pan_pending = false
+	_pan_active = false
+	if was_active:
+		_ExitPanVisuals()
+
+func viewport_zoom_step(delta: int, anchor_board_pos: Vector2) -> void:
+	## 缩放步进（滚轮公开口——battle_screen 滚轮分支唯一消费）：拖动态
+	## 早退（盲审修复 1【用户拍板 a】：拖动中禁缩放——拖动位移与锚点推算
+	## 互踩的竞态最简收口，松手后可再缩放）；未装配/未建视口层/档表空
+	## 早退（降级路径零风险）；新档 clampi 越界早退（触顶/触底无效滚动）；
+	## 锚点推算一律取目标态（档表值与 _view_pan_target——非 tween 中间值，
+	## 连续滚动可叠加）；新平移位贴边钳制；kill 在途 _zoom_tween 后按
+	## _ZoomSeconds() 瞬跳直落或 SINE/OUT 并行插值 scale/position；更新档下标
+	## 参数 delta：步进方向（+1 放大 / -1 缩小）；anchor_board_pos：锚点
+	##（板层本地坐标——该点处棋盘内容缩放前后视觉不动）
+	## 返回：无
+	if _pan_active:
+		return
+	if context == null or context.grid == null:
+		return
+	if _world_layer == null or not is_instance_valid(_world_layer):
+		return
+	if _zoom_steps.is_empty():
+		return
+	var new_index: int = clampi(_zoom_index + delta, 0, _zoom_steps.size() - 1)
+	if new_index == _zoom_index:
+		return
+	var z0: float = _zoom_steps[_zoom_index]
+	var z1: float = _zoom_steps[new_index]
+	_view_pan_target = zoom_position_for_anchor(_view_pan_target, z0, z1,
+			anchor_board_pos)
+	# 贴边钳制（缩回 0 档两轴无溢出时 pan 自然归 0——fit 回正）
+	_view_pan_target = clamp_viewport_position(origin, _BoardBoxOf(), size,
+			z1, _view_pan_target)
+	_KillZoomTween()
+	_zoom_index = new_index
+	var seconds: float = _ZoomSeconds()
+	if seconds <= 0.0:
+		_world_layer.scale = Vector2(z1, z1)
+		_world_layer.position = _view_pan_target
+		return
+	_zoom_tween = create_tween()
+	_zoom_tween.set_parallel(true)
+	_zoom_tween.tween_property(_world_layer, "scale", Vector2(z1, z1), seconds) \
+			.set_trans(Tween.TransitionType.TRANS_SINE) \
+			.set_ease(Tween.EaseType.EASE_OUT)
+	_zoom_tween.tween_property(_world_layer, "position", _view_pan_target, seconds) \
+			.set_trans(Tween.TransitionType.TRANS_SINE) \
+			.set_ease(Tween.EaseType.EASE_OUT)
+
+func viewport_begin_pan(board_pos: Vector2) -> void:
+	## 平移开始（中键按下公开口）：记按下位与当前目标平移位快照、置待激活
+	## 标记；未建视口层早退（降级路径零风险）；激活判定在 _process 轮询
+	##（位移过 PAN_DRAG_THRESHOLD 才激活——轻点吞格防护）
+	## 参数 board_pos：板层本地坐标（gui_input event.position）
+	## 返回：无
+	if _world_layer == null or not is_instance_valid(_world_layer):
+		return
+	_pan_press_pos = board_pos
+	_pan_start_pos = _view_pan_target
+	_pan_pending = true
+	_pan_active = false
+
+func viewport_end_pan() -> void:
+	## 平移结束（中键 release 公开口——gui_input 直收或 _process 轮询兜底，
+	## 幂等）：清四态；激活过的拖动态表现经单源恢复（tooltip/光标）
+	## 参数：无
+	## 返回：无
+	var was_active: bool = _pan_active
+	_pan_pending = false
+	_pan_active = false
+	if was_active:
+		_ExitPanVisuals()
+
+func viewport_is_panning() -> bool:
+	## 平移进行中查询（battle_screen LEFT 选格链守卫消费——拖动态吞左键
+	## 点按防误选）
+	## 参数：无
+	## 返回：true = 待激活或拖动激活中
+	return _pan_pending or _pan_active
+
+func _ActivatePan() -> void:
+	## 平移拖动激活（位移过阈值——私有口，_process 消费）：kill 在途缩放
+	## tween 并把 scale/position 直落当前目标档值（终态即视觉——中断缩放
+	## 无残留中间态）；进入拖动态表现（格 tooltip/命中抑制 + 移动光标）；
+	## 盲审修复 2（S2-2）：激活时以当前目标位重锚增量基准——pending 期间
+	## 滚轮仍可改 _view_pan_target（修复 1 只挡 active 态），拖动位移须从
+	## 激活瞬间的终态起算，否则首帧出现基准跳变
+	## 参数：无
+	## 返回：无
+	if _world_layer == null or not is_instance_valid(_world_layer):
+		return
+	_KillZoomTween()
+	var zoom_now: float = _zoom_steps[_zoom_index] \
+			if _zoom_index < _zoom_steps.size() else 1.0
+	_world_layer.scale = Vector2(zoom_now, zoom_now)
+	_world_layer.position = _view_pan_target
+	_pan_pending = false
+	_pan_active = true
+	_pan_start_pos = _view_pan_target
+	for cell: Vector2i in _cells:
+		var visual: Control = _cells.get(cell, null)
+		if visual != null:
+			# 拖动态格不参与命中/hover（拖动中误弹 tooltip 打断手感；
+			# 松手经 _ApplyAllCellTooltips 单源全量重算恢复）
+			visual.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			visual.tooltip_text = ""
+	mouse_default_cursor_shape = Control.CURSOR_MOVE
+
+func _ExitPanVisuals() -> void:
+	## 拖动态表现恢复（松手/视口重置——仅激活过时调）：tooltip 经单源
+	## _ApplyAllCellTooltips 全量重算、光标回默认
+	## 参数：无
+	## 返回：无
+	_ApplyAllCellTooltips()
+	mouse_default_cursor_shape = Control.CURSOR_ARROW
+
+func cell_from_board_local(board_pos: Vector2) -> Vector2i:
+	## 板层本地坐标 → 格坐标（视口态逆变换公开口——battle_screen 点击
+	## 命中唯一生产消费点）：world_local = (board_local − world.position)/zoom
+	##（无旋转），再走现行 cell_from_local（严格零改）；未建视口层
+	##（降级/装配前）直透 cell_from_local；zoom ≤ 0 防御早退返回界外哨兵
+	##（口径同 cell_from_local 越界返回）
+	## 参数 board_pos：BoardLayer 本地坐标（gui_input event.position）
+	## 返回：格坐标
+	if _world_layer == null or not is_instance_valid(_world_layer):
+		return cell_from_local(board_pos)
+	var zoom: float = _world_layer.scale.x
+	if zoom <= 0.0:
+		return Vector2i(-1, -1)
+	return cell_from_local((board_pos - _world_layer.position) / zoom)

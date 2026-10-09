@@ -21,6 +21,7 @@ attr_weights = Dictionary[StringName, float]({
 &"strength": 0.7
 })
 damage_type = 0
+power_coefficient = 1.0
 attack_pose = 1
 effects = Array[ExtResource("1_y5wqv")]([SubResource("Resource_0ltqr")])
 comment = "【占位·试玩校准】参数来源：17 案 §3.4（DEMO 技能参数表）/§3.8（敌方技能表 17-C12~C16）"

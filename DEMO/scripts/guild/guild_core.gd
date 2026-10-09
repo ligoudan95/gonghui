@@ -37,6 +37,10 @@ class LightQuestResult:
 	var bench_member_count: int = 0
 	## 板凳人均经验（首值——全队同额）
 	var bench_exp_per_member: int = 0
+	## 升级明细（盲审 R2-2：String(unit_id) -> 升级数——出战与板凳成员
+	## apply_exp 返回值收集，ExpeditionSummary.levels_gained 先例同构；
+	## UI 汇总行升级后缀消费）
+	var levels_gained: Dictionary = {}
 
 ## 日结算汇总（案 2 §2.4 第 10 步「汇总通知」的数据载荷——恢复完成/委托
 ## 到期明细/新候选；UI 批 2 消费）
@@ -406,7 +410,9 @@ func start_light_quest(serial_id: int, party_ids: Array[StringName]) -> bool:
 		return false
 	if not board.start_light(inst):
 		last_error = "轻度开工状态迁移失败（模板工期非法）"
-		board.remove(inst)
+		# 盲审 R2-4：失败回退对称 accept 逆迁移（复位 ON_BOARD 回插板）——
+		## 不再 remove 静默吞单（委托仍可改派或他人重接）
+		board.unaccept(inst)
 		return false
 	last_party_by_tpl[String(inst.template_id)] = party_ids.duplicate()
 	return true
@@ -738,7 +744,12 @@ func _CompleteLightQuest(inst: QuestInstance, summary: DaySummary) -> void:
 		var member: AdventurerData = find_member(member_id)
 		if member == null:
 			continue
-		GrowthCore.apply_exp(member, exp_won, cfg, game_data, pending_tendency_levels)
+		# 盲审 R2-2：出战成员升级数收集（apply_exp 返回值——
+		## ExpeditionSummary.levels_gained 先例同构）
+		var gained: int = GrowthCore.apply_exp(member, exp_won, cfg, game_data,
+				pending_tendency_levels)
+		if gained > 0:
+			result.levels_gained[String(member.unit_id)] = gained
 	# 板凳分享（拍板①：基数不含超额；busy=轻度编队——编队成员不得板凳份）
 	var bench_exp: Dictionary = {}
 	var bench_levels: Dictionary = {}
@@ -746,6 +757,10 @@ func _CompleteLightQuest(inst: QuestInstance, summary: DaySummary) -> void:
 	result.bench_member_count = bench_exp.size()
 	if not bench_exp.is_empty():
 		result.bench_exp_per_member = int(bench_exp.values()[0])
+	# 盲审 R2-2：板凳成员升级明细并入（同键合并——出战/板凳不重叠）
+	for unit_key: String in bench_levels:
+		result.levels_gained[unit_key] = \
+				int(result.levels_gained.get(unit_key, 0)) + int(bench_levels[unit_key])
 	board.remove(inst)
 	summary.light_completed.append(result)
 
@@ -762,10 +777,12 @@ func _ShareBenchExp(base_exp: int, run: ExpeditionRun, summary: ExpeditionSummar
 func _ShareBenchExpCore(base_exp: int, busy_ids: Array[StringName],
 		out_exp: Dictionary, out_levels: Dictionary) -> void:
 	## 板凳分享共用核（M4 增补批拍板①：回城结算与轻度委托共用）——板凳健康
-	## 成员（不在 busy_ids 占用集）得基础经验×训练场分享率（拍板④：基数不含
-	## 超额；休养成员不参与——板凳深度维持机制，案 5 §2.6）
-	## 参数 base_exp：分享基数（模板基础经验）；busy_ids：占用成员 id（出战/
-	## 轻度编队）；out_exp/out_levels：经验与升级明细字典（原地写入）
+	## 成员（不在本次结算编队集 busy_ids——盲审 R2-3 澄清：编队集而非全局
+	## 「占用」概念，其他挂单编队健康成员按案 5 §2.6「未出战」口径照常
+	## 分享）得基础经验×训练场分享率（拍板④：基数不含超额；休养成员不
+	## 参与——板凳深度维持机制，案 5 §2.6）
+	## 参数 base_exp：分享基数（模板基础经验）；busy_ids：本次结算编队成员
+	## id（出战/轻度编队）；out_exp/out_levels：经验与升级明细字典（原地写入）
 	## 返回：无
 	var share_rate: float = bench_share_rate()
 	for adv: AdventurerData in roster:

@@ -55,6 +55,7 @@ offset_bottom = -92.0
 grow_horizontal = 1
 grow_vertical = 2
 theme_override_constants/separation = 8
+z_index = 250
 
 [node name="RoundLabel" type="Label" parent="LeftPanel"]
 unique_name_in_owner = true
@@ -107,6 +108,7 @@ offset_bottom = -12.0
 grow_horizontal = 1
 grow_vertical = 0
 theme_override_constants/separation = 8
+z_index = 250
 
 [node name="AttackButton" type="Button" parent="ButtonRow"]
 unique_name_in_owner = true
@@ -244,6 +246,7 @@ grow_horizontal = 2
 theme_override_font_sizes/font_size = 18
 text = "（无战斗参数——显示待机提示）"
 horizontal_alignment = 1
+z_index = 250
 
 [node name="RetreatConfirm" type="ConfirmationDialog" parent="."]
 unique_name_in_owner = true

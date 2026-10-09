@@ -57,12 +57,13 @@ func _EnterRandomBattle() -> Control:
 	return get_tree().root.find_child("BattleScreen", true, false) as Control
 
 func _BadgesOf(battle: Control) -> Array[UnitBadge]:
-	## 板面徽章池查询（按子节点类型收集）
+	## 板面徽章池查询（按子节点类型收集；视口批：徽章挂 WorldLayer 下——
+	## 遍历随挂载点）
 	## 参数 battle：战斗屏根
 	## 返回：UnitBadge 数组
 	var board: BattleBoard = battle.get_node("%BoardLayer") as BattleBoard
 	var badges: Array[UnitBadge] = []
-	for child: Node in board.get_children():
+	for child: Node in board._world_layer.get_children():
 		if child is UnitBadge:
 			badges.append(child as UnitBadge)
 	return badges
@@ -197,7 +198,8 @@ func test_miss_no_hit_and_float_text() -> void:
 			target.unit_id, false, 0))
 	assert_int(_BadgeOf(battle, target).current_action()).is_equal(UnitAnimState.Action.IDLE)
 	var board: BattleBoard = battle.get_node("%BoardLayer") as BattleBoard
-	var miss_labels: Array = board.get_children().filter(func(child: Node) -> bool:
+	# 视口批：飘字挂 WorldLayer 下——遍历随挂载点
+	var miss_labels: Array = board._world_layer.get_children().filter(func(child: Node) -> bool:
 		return child is Label and (child as Label).text == "闪避")
 	assert_int(miss_labels.size()).is_equal(1)
 

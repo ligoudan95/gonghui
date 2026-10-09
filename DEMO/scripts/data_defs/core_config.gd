@@ -289,6 +289,16 @@ enum Mode {
 ## 未读计数 > 0 时锚点文案染色（badge 提醒色）
 @export var ui_battle_log_badge_color: Color = Color(0, 0, 0, 0)
 
+# ---- 战斗屏视口交互参数（视口批：ui_battle_zoom_* 2 键——滚轮缩放棋盘 +
+# # 中键拖动平移；铁律①：视口演出数值入表；默认 0 = 未回填哨兵，UiTheme
+# # BATTLE_ZOOM_* 兜底——V-M6-viewport-cfg 值域 / V-B2-cfg-fallback
+# # 锚定双校验）----
+## 缩放逐档步进比（每档 = 前档 × (1 + 本值)——档表生成参数）
+@export var ui_battle_zoom_step_ratio: float = 0.0
+## 缩放档切换动画时长（秒——0 = 瞬跳直落；表侧显式 0 合法、未回填哨兵
+## 同走即时口径，log_toggle_seconds 先例）
+@export var ui_battle_zoom_seconds: float = 0.0
+
 # ---- UI 徽章配色（B-1/B-2/B-3：unit_badge 全部内联色入表；默认透明 = 未回填）----
 @export var ui_badge_hp_low_color: Color = Color(0, 0, 0, 0)
 @export var ui_badge_hp_ok_color: Color = Color(0, 0, 0, 0)

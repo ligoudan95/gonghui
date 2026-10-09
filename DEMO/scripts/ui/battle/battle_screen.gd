@@ -21,6 +21,10 @@ const NO_CELL: Vector2i = Vector2i(-9, -9)
 ## 场景背景资源 id（M6 批 3.5b 组 1：bg_battle_mine——矿洞战场底图，
 ## AssetRegistry 单源路径映射；正式多图后随 battle_map 表字段化归口 M6 后续）
 const BACKGROUND_ASSET_ID: StringName = &"bg_battle_mine"
+## 常驻 UI 基座 z（视口批：LeftPanel/ButtonRow/IdleLabel 恒置顶——棋盘
+## 缩放平移不遮操作区；tscn 三节点 z_index 字面值同引（ResultLayer z=400
+## 先例同式）；250 压 tips/飘字（200）、让日志卷轴（300）与结算（400））
+const UI_BASE_Z: int = 250
 
 ## 战斗上下文（装配后供测试/UI 查询）
 var context: BattleSetup.BattleContext = null
@@ -399,11 +403,30 @@ func _on_board_gui_input(event: InputEvent) -> void:
 	##（循环盲审第二轮·低，S4-R2-02 按钮组同口径）：is_battle_over 后板面
 	## 点按整体忽略——终局若发生在玩家指令窗内 awaiting_command 残留 true，
 	## 同帧批内第二输入可画路径预览/范围层残留（request_* 侧 _can_command
-	## 已挡执行，此处挡的是两段式首点的展示态）
+	## 已挡执行，此处挡的是两段式首点的展示态）；
+	## 视口批（置于终局守卫**之前**——终局后允许缩放平移观赏）：滚轮缩放
+	##（WHEEL_UP/DOWN——引擎每 notch 一发 pressed 事件无 release，无需
+	## 防抖勿加）+ 中键拖动平移（press 进 pending、release 收口——release
+	## 丢失时 board 侧 _process 全局轮询兜底）；公开口自带未装配/未建视口
+	## 层守卫（降级路径零风险）
 	## 参数 event：输入事件
 	## 返回：无
 	if %RetreatConfirm.visible:
 		return
+	if event is InputEventMouseButton:
+		var button_event: InputEventMouseButton = event as InputEventMouseButton
+		if button_event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			%BoardLayer.viewport_zoom_step(1, button_event.position)
+			return
+		if button_event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			%BoardLayer.viewport_zoom_step(-1, button_event.position)
+			return
+		if button_event.button_index == MOUSE_BUTTON_MIDDLE:
+			if button_event.pressed:
+				%BoardLayer.viewport_begin_pan(button_event.position)
+			else:
+				%BoardLayer.viewport_end_pan()
+			return
 	if controller != null and controller.is_battle_over():
 		return
 	if not (event is InputEventMouseButton):
@@ -411,7 +434,10 @@ func _on_board_gui_input(event: InputEvent) -> void:
 	var mouse_event: InputEventMouseButton = event as InputEventMouseButton
 	if not mouse_event.pressed or mouse_event.button_index != MOUSE_BUTTON_LEFT:
 		return
-	var cell: Vector2i = %BoardLayer.cell_from_local(mouse_event.position)
+	# 视口批：平移拖动态吞左键选格（拖动激活瞬间的松击不误选格）
+	if %BoardLayer.viewport_is_panning():
+		return
+	var cell: Vector2i = %BoardLayer.cell_from_board_local(mouse_event.position)
 	if cell == Vector2i(-1, -1):
 		# 出格点按取消（2026-09-26 试玩反馈②③：取消后回显移动范围——R3-05
 		# 口径扩展到板面点按；出格点击多来自「跳过演出」连点漏入指令窗，
@@ -880,6 +906,9 @@ func _on_retreat_button_pressed() -> void:
 	else:
 		# S4-09：无倒地时显式还原 tscn 静态文案（防上局增强文案残留）
 		%RetreatConfirm.dialog_text = RETREAT_CONFIRM_STATIC_TEXT
+	# 盲审修复 3（S4-02）：模态弹窗弹出前收口平移（幂等——未拖动态零操作；
+	# 弹窗期板面 gui_input 静默、release 丢失，不收口会拖死在 active 态）
+	%BoardLayer.viewport_end_pan()
 	%RetreatConfirm.popup_centered()
 
 func _InjuryRestDaysForHint() -> int:

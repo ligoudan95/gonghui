@@ -200,6 +200,19 @@ func accept(inst: QuestInstance, party_ids: Array[StringName]) -> bool:
 	accepted.append(inst)
 	return true
 
+func unaccept(inst: QuestInstance) -> bool:
+	## 接取回退（盲审 R2-4：对称 accept 的逆迁移——ACCEPTED → ON_BOARD
+	## 回插板尾 + 清编队；start_light 开工失败回退消费，实例不静默吞单）
+	## 参数 inst：挂单实例
+	## 返回：true = 回退成功（已在板返回 false）
+	if inst.state != QuestInstance.State.ACCEPTED or not accepted.has(inst):
+		return false
+	accepted.erase(inst)
+	inst.state = QuestInstance.State.ON_BOARD
+	inst.party_ids = []
+	board.append(inst)
+	return true
+
 func reassign(inst: QuestInstance, party_ids: Array[StringName]) -> bool:
 	## 重编队（挂单期可重编队、占用随编队转移；进行中锁定不可换——案 6 D6）
 	## 参数 inst：挂单实例；party_ids：新编队成员 id

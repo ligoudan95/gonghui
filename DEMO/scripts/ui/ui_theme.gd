@@ -159,6 +159,21 @@ const BATTLE_LOG_TOGGLE_SECONDS: float = 0.18
 ## 未读计数 badge 提醒色兜底
 const BATTLE_LOG_BADGE: Color = Color(1.0, 0.55, 0.3, 1.0)
 
+# ---- 战斗屏视口交互兜底（视口批：cfg ui_battle_zoom_* 2 键——V-B2
+# # cfg-fallback 锚定，值 == cfg_main 表值；R1-02/03：档距值域常量同域单源，
+# # validator 与 BattleBoard 同引）----
+## 缩放逐档步进比兜底（每档 = 前档 × (1 + 本值)）
+const BATTLE_ZOOM_STEP_RATIO: float = 0.1
+## 缩放档切换动画时长兜底（秒——0 = 瞬跳直落）
+const BATTLE_ZOOM_SECONDS: float = 0.1
+## 缩放档表防退步最小档差（末档与前档差 < 本值丢前档——无感档不占位；
+## 兼表侧 ui_battle_zoom_step_ratio 值域下限单源——过小档距与防退步档差
+## 互踩产无感档；V-M6-viewport-cfg / BattleBoard._ZoomStepRatio 同引）
+const ZOOM_MIN_STEP_GAP: float = 0.02
+## 缩放档距比上限（过大档距缩放跳变过激；V-M6-viewport-cfg /
+## BattleBoard._ZoomStepRatio 同引——上限两处字面重复收口）
+const ZOOM_MAX_STEP_RATIO: float = 0.5
+
 # ---- 探索层（M3——cfg ui_fog_*/ui_explore_* 兜底）----
 ## 探索逐格步进演出时长兜底（秒/格）
 const EXPLORE_MOVE_STEP_SECONDS: float = 0.18

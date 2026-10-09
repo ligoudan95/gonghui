@@ -94,20 +94,22 @@ func test_badge_depth_equals_grid_pos_sum() -> void:
 
 func test_overlay_layer_and_texts_depth() -> void:
 	## 覆盖层容器 z == Z_OVERLAY(100)、tips/飘字 z == Z_TEXT(200)——
-	## 恒压一切格/徽章深度（≤ 22）与覆盖层
+	## 恒压一切格/徽章深度（≤ 22）与覆盖层；视口批：容器/tips/飘字挂
+	## WorldLayer 下——查找路径与遍历随挂载点（断言语义不变）
 	var board: BattleBoard = _MakeBoard()
 	board.show_move_range([Vector2i(0, 0)])
-	var overlay_layer: Control = board.get_node("OverlayLayer") as Control
+	var overlay_layer: Control = board.get_node("WorldLayer/OverlayLayer") as Control
 	assert_object(overlay_layer).is_not_null()
 	assert_int(overlay_layer.z_index).is_equal(BattleBoard.Z_OVERLAY)
 	assert_int(BattleBoard.Z_OVERLAY).is_equal(100)
 	board.show_target_tips(Vector2i(3, 3), "预计伤害 5", "命中率 85%")
 	assert_int(board.target_tips_panel().z_index).is_equal(BattleBoard.Z_TEXT)
 	assert_int(BattleBoard.Z_TEXT).is_equal(200)
-	# 飘字：伤害数字 Label z == Z_TEXT
+	# 飘字：伤害数字 Label z == Z_TEXT（挂 WorldLayer 下）
 	board.show_damage_number(Vector2i(3, 3), 5, false)
-	var damage_labels: Array = board.get_children().filter(func(child: Node) -> bool:
-		return child is Label and (child as Label).text == "5")
+	var damage_labels: Array = board._world_layer.get_children().filter(
+			func(child: Node) -> bool:
+				return child is Label and (child as Label).text == "5")
 	assert_int(damage_labels.size()).is_equal(1)
 	assert_int((damage_labels[0] as Label).z_index).is_equal(BattleBoard.Z_TEXT)
 
@@ -165,13 +167,14 @@ func test_downed_badge_keeps_depth() -> void:
 	assert_int(badge.z_index).is_equal(depth_before)
 
 func test_trap_mark_depth_follows_cell() -> void:
-	## 陷阱标记深度：随所在格 z = x+y（树序在徽章后——同格 tie-break 现状）
+	## 陷阱标记深度：随所在格 z = x+y（树序在徽章后——同格 tie-break 现状；
+	## 视口批：标记挂 WorldLayer 下——查找遍历随挂载点）
 	var board: BattleBoard = _MakeBoard()
 	var trap_cell: Vector2i = (board.context.units[0] as BattleUnit).grid_pos
 	board.context.grid.spawn_dynamic_tile(trap_cell, &"tile_trap", 5, &"")
 	board.RefreshDynamicMarks()
 	var mark: Control = null
-	for child: Node in board.get_children():
+	for child: Node in board._world_layer.get_children():
 		if child is Control and child.get_meta(&"trap_mark", false):
 			mark = child as Control
 	assert_object(mark).is_not_null()

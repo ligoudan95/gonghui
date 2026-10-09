@@ -286,7 +286,10 @@ static func validate_skill_resources(context: BattleContext) -> Array[String]:
 	return issues
 
 static func _ReportSkillComboIssue(skill: SkillDef) -> Array[String]:
-	## TILE_SPAWN 组合形态检查（S2-03 可测口——测试侧手造坏技能直调）：
+	## 组合形态检查（S2-03 可测口——测试侧手造坏技能直调）：
+	## ⓪前置拦截（盲审 R4-3）：敌方技能 damage_type=NONE 且非 AURA——AI
+	## 技能选择永不触达（EnemyAI._ChooseSkill 伤害筛选不入列、怒吼识别只认
+	## AURA_3X3，双通道均不选——配置即死件，装载期报 issue 提前暴露）；
 	## ①AURA_3X3 技禁 TILE_SPAWN——AURA 特化分支效果遍历只实现 STATUS_APPLY
 	## （TILE_SPAWN 照扣资源但地格不生成）；②携带 TILE_SPAWN 的技 target_shape
 	## 须 CELL——敌/友侧单体技目标解析要求目标格有存活单位，而 TILE_SPAWN
@@ -294,6 +297,14 @@ static func _ReportSkillComboIssue(skill: SkillDef) -> Array[String]:
 	## 参数 skill：技能定义
 	## 返回：问题清单（空 = 零问题）
 	var issues: Array[String] = []
+	# ⓪ R4-3 前置拦截：敌方无伤害非光环技 = AI 永不可达（治疗/纯状态系
+	## 敌方无持有场景，出现即配置错位）
+	if skill.side == SkillDef.SkillSide.ENEMY \
+			and skill.damage_type == SkillDef.DamageType.NONE \
+			and skill.target_shape != SkillDef.TargetShape.AURA_3X3:
+		issues.append(
+				"敌方技能 '%s' damage_type=NONE 且非 AURA——AI 技能选择永不触达（伤害筛选/怒吼识别双不入列，配置即死件）"
+				% skill.id)
 	for effect: SkillEffect in skill.effects:
 		if effect.effect_kind != SkillEffect.EffectKind.TILE_SPAWN:
 			continue

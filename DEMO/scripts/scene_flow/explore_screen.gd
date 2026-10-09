@@ -111,6 +111,8 @@ const UI_TEXTS: Dictionary = {
 	&"summary_candidates_format": "新候选：%s",
 	&"summary_light_done_format": "轻度委托完成：%s +%d 金 +%d 经验 +%d 声望",
 	&"summary_light_done_bench_suffix": "（板凳 %d 人各得 %d 经验）",
+	&"summary_light_done_level_suffix": "（%s）",
+	&"summary_light_done_level_entry": "%s 升 %d 级",
 	&"route_failed": "进入战斗失败——请重试。",
 	## S3-06：结算回城 go 失败提示（%d = SceneManager 错误码）
 	&"settle_return_failed": "回城失败（错误码 %d）——请重试。",
@@ -805,6 +807,16 @@ func _ShowSettledFromView(view: EventRunner.EventView) -> void:
 	## 拦截文本模板承载
 	## 参数 view：结算视图
 	## 返回：无
+	# 盲审 R3-3：空视图早退清场（_ResumeAfterBattle 拒收路径传入——战后
+	# 出口重复消费/查无时的空结算视图；对齐 _DispatchView 空视图清场先例
+	# V-3——不弹空面板不软锁，板面恢复可继续）
+	if view.narrative.is_empty() and not view.intercepted:
+		_panel.clear()
+		_HideEventPanel()
+		_event_open = false
+		_RefreshBoard()
+		_RefreshStatus()
+		return
 	var text: String = view.narrative
 	if view.intercepted:
 		text = UI_TEXTS[&"path_blocked"]

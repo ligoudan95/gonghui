@@ -8,7 +8,8 @@
 # 系统与临时文件
 Thumbs.db
 Desktop.ini
-~$*
+# ~* 通配（盲审修复 12/S5-5：涵盖 Office 锁文件 ~$* 并覆盖 limboai ~*.dll 运行时副本）
+~*
 *.tmp
 
 # gdUnit / 校验器运行时产物

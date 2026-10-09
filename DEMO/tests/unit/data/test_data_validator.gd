@@ -430,10 +430,24 @@ func test_r2_quest_time_limit_days_floor() -> void:
 
 func test_r2_option_level_exit_banned() -> void:
 	## S2-R2-03：选项级出口禁 B——opt_camp_2 的 success_outcome 改 exit_kind=B
-	## 必报（战斗出口只能节点级/单点级——锚点不回写战后续跑链断）
+	## 必报（战斗出口只能节点级/单点级——锚点不回写战后续跑链断）；
+	## 第二轮盲审 R3-1 复核注：拍板项「选项挂载出口禁 B」与本规则重复
+	##（2026-09-29 已落地）——此处补正例断言：生产合法 B 出口（终端节点/
+	## 单点级）照旧通过，规则不误伤存量
 	var option: EventOptionDef = _game_data.get_record(&"opt_camp_2") as EventOptionDef
 	assert_object(option).is_not_null()
 	assert_object(option.success_outcome).is_not_null()
+	# 正例前置：生产库存在节点级 B 出口且稳态零报（规则只拦选项级形态）
+	var clean_report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(clean_report.errors.size()).is_equal(0)
+	var has_node_level_b: bool = false
+	for node_id: StringName in _game_data.get_domain_ids(&"event/nodes"):
+		var node: EventNodeDef = _game_data.get_record(node_id) as EventNodeDef
+		if node != null and node.outcome != null \
+				and node.outcome.exit_kind == EventOutcomeDef.ExitKind.B:
+			has_node_level_b = true
+	assert_bool(has_node_level_b).is_true() \
+			.override_failure_message("前置失败：生产库应存在终端节点级 B 出口")
 	var original_kind: int = option.success_outcome.exit_kind
 	option.success_outcome.exit_kind = EventOutcomeDef.ExitKind.B
 	var report: ValidationReport = DataValidator.run_all(_game_data)
@@ -1088,6 +1102,78 @@ func test_rows_count_gap_explore_point_guard() -> void:
 	map_def.start_cell = original_start
 	assert_bool(_HasError(report, "V-M3-map-layout", "rows 行数")) \
 			.override_failure_message("行数缺口应产出 layout 报告条目而非校验器崩溃").is_true()
+	var report_after: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(report_after.errors.size()).is_equal(0)
+
+# --------------------------------------------------------------------------
+# 视口批（V-M6-viewport-cfg 值域双向 + V-B2-cfg-fallback 两键锚定）
+# --------------------------------------------------------------------------
+
+func test_v_m6_viewport_cfg_domain_both_directions() -> void:
+	## V-M6-viewport-cfg 双向：步进比 0（未回填哨兵）/ 超上界 0.6 → 报错；
+	## 动画时长负值 / 超上界 0.6 → 报错；合法域内（0.05 / 0.0）不报本规则；
+	## 恢复后归零
+	var cfg: CoreConfig = _game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
+	assert_object(cfg).is_not_null()
+	var ratio_backup: float = cfg.ui_battle_zoom_step_ratio
+	var seconds_backup: float = cfg.ui_battle_zoom_seconds
+	# 步进比双向：0 哨兵（连带 V-M0 正值循环）与超上界均非法
+	cfg.ui_battle_zoom_step_ratio = 0.0
+	var zero_report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(zero_report, "V-M6-viewport-cfg", "ui_battle_zoom_step_ratio")) \
+			.override_failure_message("步进比 0 哨兵应报 V-M6-viewport-cfg").is_true()
+	assert_bool(_HasError(zero_report, "V-M0-cfg-domain", "ui_battle_zoom_step_ratio")) \
+			.override_failure_message("步进比 0 哨兵应连带 V-M0 正值循环").is_true()
+	cfg.ui_battle_zoom_step_ratio = 0.6
+	var over_report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(over_report, "V-M6-viewport-cfg", "ui_battle_zoom_step_ratio")) \
+			.override_failure_message("步进比超上界 0.5 应报错").is_true()
+	# 盲审修复 6（S1-03/S4-05）双向：下限 = ZOOM_MIN_STEP_GAP(0.02)——
+	# 低于下限与防退步档差互踩产无感档
+	cfg.ui_battle_zoom_step_ratio = 0.01
+	var under_report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(under_report, "V-M6-viewport-cfg", "ui_battle_zoom_step_ratio")) \
+			.override_failure_message("步进比 0.01 低于下限 0.02 应报错").is_true()
+	cfg.ui_battle_zoom_step_ratio = 0.02
+	var floor_report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(floor_report, "V-M6-viewport-cfg", "ui_battle_zoom_step_ratio")) \
+			.override_failure_message("步进比 0.02 恰下限合法不应报值域").is_false()
+	cfg.ui_battle_zoom_step_ratio = 0.05
+	var ratio_valid_report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(ratio_valid_report, "V-M6-viewport-cfg", "ui_battle_zoom_step_ratio")) \
+			.override_failure_message("步进比 0.05 合法域内不应报值域").is_false()
+	cfg.ui_battle_zoom_step_ratio = ratio_backup
+	# 动画时长双向：负值非法（连带 V-M0 非负循环）；0 瞬跳合法；超上界非法
+	cfg.ui_battle_zoom_seconds = -0.1
+	var neg_report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(neg_report, "V-M6-viewport-cfg", "ui_battle_zoom_seconds")) \
+			.override_failure_message("动画时长负值应报错").is_true()
+	assert_bool(_HasError(neg_report, "V-M0-cfg-domain", "ui_battle_zoom_seconds")) \
+			.override_failure_message("动画时长负值应连带 V-M0 非负循环").is_true()
+	cfg.ui_battle_zoom_seconds = 0.6
+	var seconds_over_report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(seconds_over_report, "V-M6-viewport-cfg", "ui_battle_zoom_seconds")) \
+			.override_failure_message("动画时长超上界 0.5 应报错").is_true()
+	cfg.ui_battle_zoom_seconds = seconds_backup
+	var report_after: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(report_after.errors.size()).is_equal(0)
+
+func test_v_b2_viewport_cfg_fallback_anchor() -> void:
+	## V-B2-cfg-fallback 两键锚定：合法域内但与 UiTheme 兜底漂移（0.2 ≠ 0.1）
+	## → 报错；恢复后归零（调表须同步兜底——C-3 护栏）
+	var cfg: CoreConfig = _game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
+	assert_object(cfg).is_not_null()
+	var ratio_backup: float = cfg.ui_battle_zoom_step_ratio
+	var seconds_backup: float = cfg.ui_battle_zoom_seconds
+	cfg.ui_battle_zoom_step_ratio = 0.2
+	cfg.ui_battle_zoom_seconds = 0.2
+	var report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(report, "V-B2-cfg-fallback", "ui_battle_zoom_step_ratio")) \
+			.override_failure_message("步进比表值漂移应报 V-B2 锚定").is_true()
+	assert_bool(_HasError(report, "V-B2-cfg-fallback", "ui_battle_zoom_seconds")) \
+			.override_failure_message("动画时长表值漂移应报 V-B2 锚定").is_true()
+	cfg.ui_battle_zoom_step_ratio = ratio_backup
+	cfg.ui_battle_zoom_seconds = seconds_backup
 	var report_after: ValidationReport = DataValidator.run_all(_game_data)
 	assert_int(report_after.errors.size()).is_equal(0)
 

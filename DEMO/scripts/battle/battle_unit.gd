@@ -204,16 +204,20 @@ func take_damage(amount: int) -> bool:
 		return true
 	return false
 
-func heal(amount: int) -> void:
+func heal(amount: int) -> int:
 	## 治疗（倒地者不可治疗——调用方前置校验，此处双保险直接拒绝；
 	## 非正值拒收——与 take_damage 的拒收对称，防负值凭空回血活尸链路 S2-04）
+	## 盲审 R4-6：返回实际恢复量（max_hp 钳制差值——满血/倒地/非正值 0；
+	## executor 侧 result.heal/trace 回写实际增量，UI 反馈与账面对齐）
 	## 参数 amount：治疗量（正数；上限钳 max_hp）
-	## 返回：无
+	## 返回：实际恢复量
 	if not alive:
-		return
+		return 0
 	if amount <= 0:
-		return
-	current_hp = mini(max_hp, current_hp + amount)
+		return 0
+	var applied: int = mini(amount, max_hp - current_hp)
+	current_hp += applied
+	return applied
 
 func on_downed() -> void:
 	## 倒地回调（批 1 鸭子契约占位实现——战斗侧全灭判定走 alive 轮询，

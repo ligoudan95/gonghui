@@ -32,6 +32,19 @@ var rewards: Dictionary = {&"exp": 0, &"gold": 0, &"reputation": 0}
 var granted_quests: Array[StringName] = []
 ## 已消耗事件 id 集合（单次出征单次消耗）
 var consumed_events: Dictionary = {}
+# ---- 事件防重防线（盲审 R2-1：自 EventRunner 实例态迁入——与
+# ---- consumed_events 同层；run 不入档无 schema 影响，run 实例即隔离域，
+# ---- 读档重建 run 天然清零（旧实现以 instance_id 为键存 runner，键随 run
+# ---- 释放残留占位）；EventRunner 退化为执行器——事件会话防重状态随 run）----
+## 链事件会话游标（{event_id: 当前节点 id}——choose_option 选项归属校验
+## 单源；缺失降级放行见 EventRunner._OptionBelongsToCursor）
+var node_cursors: Dictionary = {}
+## 已消费选项集（{event_id: {option_id: true}}——同 (run, event, option)
+## 重复调用拒收，防二次掷骰/耗时/入账）
+var consumed_options: Dictionary = {}
+## 战后出口一次性消费标记（{出口 instance_id: true}——resolve_outcome
+## 同源重复调用拒收，防宿主重放 post_battle 重复入账）
+var consumed_outcomes: Dictionary = {}
 ## 解锁标记（id -> true；C/D 出口拦截与暗门 unlock_flag 消费）
 var unlock_flags: Dictionary = {}
 

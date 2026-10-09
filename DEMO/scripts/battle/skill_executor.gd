@@ -135,6 +135,10 @@ static func collect_race_mult(skill: SkillDef, target_race_tag: StringName) -> f
 static func panel_mult_of(caster: Object, status_manager: StatusManager) -> float:
 	## 面板乘算层（单源）：施放者 damage_panel_mult 修正求和（无修正 1.0；
 	## DEMO 高地单源 ×1.2 求和口径）。
+	## 零和边界（盲审 R4-2 注释登记）：Σ 乘算层恰为 0 时回退 1.0——多修正
+	## 精确对消（如 ×1.2 与 ×0.8 并存）被解释为「无修正」，而非伤害归零；
+	## 该解释在单乘算源下不可达（正负修正对零需多源并存），属 W1-4 多乘算
+	## 源债务的边界情形——乘算链改造时一并收口（对消语义须显式定义）
 	## W1-4 债务登记（2026-09-26 审计）：加法近似仅在**单乘算源**时正确——
 	## 多乘算源（高地 + 背刺等同时引入）时 Σ(x−1) ≠ Πx，届时须改乘算链；
 	## M4+ 新增乘算类站位/状态前必须回收本注（消费面：执行链/AI 期望/UI 预览三处同源）
@@ -406,9 +410,11 @@ func _ExecuteEffects(caster: Object, skill: SkillDef, target: Object, target_cel
 					push_error("SkillExecutor: HEAL 效果无目标单位（%s）" % skill.id)
 					continue
 				var amount: int = BattleRules.heal_amount(caster.attrs, effect)
-				target.heal(amount)
-				result.heal = amount
-				result.trace[&"heal"] = amount
+				# 盲审 R4-6：回写实际增量（heal 返钳制差值——满血目标 0，
+				## UI 反馈与账面对齐，不再虚报满血治疗量）
+				var applied: int = int(target.heal(amount))
+				result.heal = applied
+				result.trace[&"heal"] = applied
 			SkillEffect.EffectKind.TILE_SPAWN:
 				var trap_damage: int = _ResolveTrapDamage(effect, caster)
 				grid.spawn_dynamic_tile(target_cell, effect.tile_type_id, trap_damage, caster.id)

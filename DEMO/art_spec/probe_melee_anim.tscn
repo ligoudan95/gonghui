@@ -1,6 +1,0 @@
-[gd_scene load_steps=2 format=3]
-
-[ext_resource type="Script" path="res://art_spec/probe_melee_anim.gd" id="1"]
-
-[node name="ProbeMelee" type="Node"]
-script = ExtResource("1")

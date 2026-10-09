@@ -45,6 +45,7 @@ class FakeUnit:
 	var resource_mana: int = 100
 	var resource_stamina: int = 100
 	var hp: int = 100
+	var max_hp: int = 1000
 	var downed_count: int = 0
 	var healed_amount: int = 0
 	var damage_taken: Array[int] = []
@@ -71,10 +72,17 @@ class FakeUnit:
 		if hp <= 0:
 			alive = false
 
-	func heal(amount: int) -> void:
-		## 治疗
-		healed_amount += amount
-		hp += amount
+	func heal(amount: int) -> int:
+		## 治疗（盲审 R4-6 同步：返实际增量——max_hp 钳制差值，与
+		## BattleUnit.heal 同契约）
+		if not alive:
+			return 0
+		if amount <= 0:
+			return 0
+		var applied: int = mini(amount, max_hp - hp)
+		healed_amount += applied
+		hp += applied
+		return applied
 
 	func on_downed() -> void:
 		## 倒地回调
@@ -457,6 +465,23 @@ func test_heal_alive_ally_only() -> void:
 			Vector2i(3, 4), _Ctx(1, 1))
 	assert_bool(result_empty.success).is_false()
 	assert_str(String(result_empty.error)).is_equal("invalid_target")
+
+func test_heal_full_hp_target_reports_zero() -> void:
+	## 盲审 R4-6：满血目标治疗——实际增量 0（max_hp 钳制差值回写
+	## result.heal/trace，不虚报面板治疗量；HP 不变）
+	var priest := _MakePriest(Vector2i(3, 6))
+	var ally := _MakeUnit(&"ally", 0, Vector2i(3, 5))
+	ally.max_hp = 40
+	ally.hp = 40
+	var heal_skill: SkillDef = _LoadSkill(&"skl_priest_heal")
+	var result: SkillExecutor.ExecutionResult = _executor.execute(priest, heal_skill,
+			ally.grid_pos, _Ctx(1, 1))
+	assert_bool(result.success).is_true()
+	assert_int(result.heal).is_equal(0) \
+			.override_failure_message("满血目标实际治疗增量应为 0（R4-6 钳制差值回写）")
+	assert_int(int(result.trace.get(&"heal", -1))).is_equal(0)
+	assert_int(ally.hp).is_equal(40)
+	assert_int(ally.healed_amount).is_equal(0)
 
 func test_trap_spawn_presolved_damage() -> void:
 	## 布置陷阱：预结算 = 敏捷×1.0（16）入格、免判定免减免（D7）；触发即消费由批 2 接线

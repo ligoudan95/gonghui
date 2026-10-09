@@ -5,6 +5,9 @@
 ## 标记置回——防抖只合并同帧，不吞后续帧的真实几何变化）。
 ## 板面真实 8×8 地图 + 空队伍上下文（子节点计数纯格池，无徽章/覆盖层噪声）；
 ## 重建发起帧旧视觉立即隐藏口径见集成测 test_battle_ui_flow（S4-R3-01）。
+## 视口批适配：地格/徽章收挂 WorldLayer（board 唯一直挂视觉层）——树结构
+## 断言改挂 world 层（child 计数/child_entered_tree 连接），并新增 WorldLayer
+## 重建存活断言（清子循环显式跳过视口层）。
 extends GdUnitTestSuite
 
 ## GameData 脚本路径（AssetTex 纹理解析注入）
@@ -70,17 +73,22 @@ func _LookupTile(tile_id: StringName) -> TileTypeDef:
 func test_same_frame_multi_resized_rebuilds_once() -> void:
 	## 拍板 A 防抖：同帧连变两次尺寸（resized 同步连发）+ 挂起期直调
 	## _OnResized——帧末恰重建一次（新增恰一组格池、旧组恰一批排队、
-	## 几何以最终尺寸执行、标记置回）
+	## 几何以最终尺寸执行、标记置回）；视口批：格池挂 WorldLayer——计数/
+	## 增删监听随挂载点走 world 层，WorldLayer 本体经重建不释放
 	var board: BattleBoard = _MakeBoard()
-	assert_int(board.get_child_count()).is_equal(CELL_COUNT)
+	# 视口批契约：board 直挂子仅 WorldLayer（地格收挂其下）
+	assert_int(board.get_child_count()).is_equal(1)
+	var world: Control = board._world_layer
+	assert_object(world).is_not_null()
+	assert_int(world.get_child_count()).is_equal(CELL_COUNT)
 	assert_bool(board._resize_rebuild_queued) \
 			.override_failure_message("稳态下不得残留待执行标记").is_false()
 	var old_children: Array[Node] = []
-	for child: Node in board.get_children():
+	for child: Node in world.get_children():
 		old_children.append(child)
 	var added: Array[Node] = []
-	board.child_entered_tree.connect(
-		func(node: Node) -> void: added.append(node))
+	world.child_entered_tree.connect(
+			func(node: Node) -> void: added.append(node))
 	# 同帧连变两次尺寸（窗口拖动期 resized 每帧多发的模拟）
 	board.size = Vector2(300.0, 300.0)
 	board.size = Vector2(480.0, 360.0)
@@ -99,7 +107,7 @@ func test_same_frame_multi_resized_rebuilds_once() -> void:
 			.is_equal(CELL_COUNT)
 	# 存活子节点恰新一组（旧组已随帧末 queue_free 释放出树——两次重建则
 	## 中间组同样入 added 被计数，零重建则 added 为空）
-	assert_int(board.get_child_count()).override_failure_message(
+	assert_int(world.get_child_count()).override_failure_message(
 			"重建后板面应恰余新一组格池").is_equal(CELL_COUNT)
 	for node: Node in added:
 		assert_bool(node.is_queued_for_deletion()).is_false()
@@ -108,6 +116,13 @@ func test_same_frame_multi_resized_rebuilds_once() -> void:
 		assert_bool(is_instance_valid(old_child)) \
 				.override_failure_message("旧视觉应在帧末重建后释放出树").is_false()
 	assert_int(board._cells.size()).is_equal(CELL_COUNT)
+	# 视口批契约：WorldLayer 经全量重建存活不释放（清子循环显式跳过——
+	## 重建后仍挂 board 直下且未排队删除，视口结构延续）
+	assert_bool(is_instance_valid(world)) \
+			.override_failure_message("WorldLayer 不得随重建释放").is_true()
+	assert_bool(not world.is_queued_for_deletion()) \
+			.override_failure_message("WorldLayer 不得随重建排队删除").is_true()
+	assert_object(world.get_parent()).is_same(board)
 	# 几何以最终尺寸（480×360）执行（E1 等距：span=16、fit_w = 2×480/16 = 60、
 	# fit_h = 2×360/(16×0.5) = 90 → min=60 < 下限 72 让位取 60；包围盒
 	# 480×240 居中 → origin = (0, 60)）

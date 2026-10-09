@@ -34,6 +34,8 @@
 ## 正值域、V-B2-cfg-fallback 扩 8 键锚定）
 ## + 布局三改批新增（V-M6-log-cfg 战斗日志卷轴 ui_battle_log_* 十键值域；
 ## V-M0-cfg-domain 扩日志卷参数基本值域、V-B2-cfg-fallback 扩 10 键锚定）。
+## + 视口批新增（V-M6-viewport-cfg 战斗屏视口交互 ui_battle_zoom_* 两键值域；
+## V-M0-cfg-domain 扩视口参数基本值域、V-B2-cfg-fallback 扩 2 键锚定）。
 ## 用法：DataValidator.run_all(game_data)——game_data 为 GameData 自动加载单例或其实例。
 class_name DataValidator
 extends RefCounted
@@ -259,6 +261,8 @@ static func run_all(game_data: Node) -> ValidationReport:
 	_CheckIsoAssetGeometry(report, game_data)
 	# ---- 布局三改批新增（V-M6-log-cfg 战斗日志卷轴参数值域——错误级）----
 	_CheckLogCfg(report, game_data)
+	# ---- 视口批新增（V-M6-viewport-cfg 战斗屏视口交互参数值域——错误级）----
+	_CheckViewportCfg(report, game_data)
 	return report
 
 # --------------------------------------------------------------------------
@@ -1270,6 +1274,15 @@ static func _CheckCfgDomains(report: ValidationReport, game_data: Node) -> void:
 		if float(cfg.get(log_nonneg)) < 0.0:
 			report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
 					"%s < 0（日志卷轴参数非法）" % log_nonneg)
+	# 视口批扩展：战斗屏视口交互参数基本值域（精确范围在 V-M6-viewport-cfg；
+	# 步进比正值——0 = 未回填哨兵非法；动画时长合法域含 0（瞬跳口径）——
+	# 非负检查）
+	if float(cfg.get("ui_battle_zoom_step_ratio")) <= 0.0:
+		report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_zoom_step_ratio ≤ 0（视口交互参数未回填/非法）")
+	if float(cfg.get("ui_battle_zoom_seconds")) < 0.0:
+		report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_zoom_seconds < 0（视口交互参数非法）")
 	# 试玩反馈批：路径闪烁高光呼吸渐变形态——Tween.TransitionType 合法值集
 	#（0 = 未回填哨兵与 LINEAR 同值故一并禁用；运行时回退兜底 SINE，表侧
 	# 拦非法定值——合法集单源 UiTheme.BATTLE_PATH_HIGHLIGHT_TRANS_VALID）
@@ -1433,6 +1446,9 @@ static func _CheckCfgFallbacks(report: ValidationReport, game_data: Node) -> voi
 		["ui_battle_log_expand_min_height", UiTheme.BATTLE_LOG_EXPAND_MIN_HEIGHT],
 		["ui_battle_log_expand_margin", UiTheme.BATTLE_LOG_EXPAND_MARGIN],
 		["ui_battle_log_toggle_seconds", UiTheme.BATTLE_LOG_TOGGLE_SECONDS],
+		# 视口批：战斗屏视口交互两参数锚定（调表须同步 UiTheme 兜底）
+		["ui_battle_zoom_step_ratio", UiTheme.BATTLE_ZOOM_STEP_RATIO],
+		["ui_battle_zoom_seconds", UiTheme.BATTLE_ZOOM_SECONDS],
 	]
 	for pair: Array in float_pairs:
 		var raw_float: Variant = cfg.get(pair[0])
@@ -3745,6 +3761,34 @@ static func _CheckLogCfg(report: ValidationReport, game_data: Node) -> void:
 	if cfg.ui_battle_log_badge_color.a <= 0.0:
 		report.add_error("V-M6-log-cfg", CoreConfig.CFG_MAIN_ID,
 				"ui_battle_log_badge_color 未回填（alpha ≤ 0）")
+
+
+# --------------------------------------------------------------------------
+# 视口批（V-M6-viewport-cfg 战斗屏视口交互参数值域）
+# --------------------------------------------------------------------------
+
+static func _CheckViewportCfg(report: ValidationReport, game_data: Node) -> void:
+	## V-M6-viewport-cfg（视口批）：战斗屏视口交互 ui_battle_zoom_* 两键值域
+	## 全检——步进比 ∈ [UiTheme.ZOOM_MIN_STEP_GAP(0.02), UiTheme.
+	## ZOOM_MAX_STEP_RATIO(0.5)]（盲审修复 6 + R1-02/03：上下限常量 UiTheme
+	## 单源——下限与档表防退步档差同值（过小档距互踩产无感档）、上限防
+	## 缩放跳变过激；亦消除校验器对 BattleBoard 控件类的加载依赖）；动画
+	## 时长 ∈ [0, 0.5]（0 = 瞬跳直落；过长缩放迟滞）（错误级——值域破坏
+	## 档表生成数学/交互手感）
+	## 参数：报告 / GameData
+	## 返回：无
+	var cfg: CoreConfig = game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
+	if cfg == null:
+		return
+	if cfg.ui_battle_zoom_step_ratio < UiTheme.ZOOM_MIN_STEP_GAP \
+			or cfg.ui_battle_zoom_step_ratio > UiTheme.ZOOM_MAX_STEP_RATIO:
+		report.add_error("V-M6-viewport-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_zoom_step_ratio %f 越界 [%f, %f]（下限 = 档表防退步档差）" % [
+						cfg.ui_battle_zoom_step_ratio, UiTheme.ZOOM_MIN_STEP_GAP,
+						UiTheme.ZOOM_MAX_STEP_RATIO])
+	if cfg.ui_battle_zoom_seconds < 0.0 or cfg.ui_battle_zoom_seconds > 0.5:
+		report.add_error("V-M6-viewport-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_zoom_seconds %f 越界 [0, 0.5]（0=瞬跳）" % cfg.ui_battle_zoom_seconds)
 
 
 static func _AllDomains(game_data: Node) -> Array[StringName]:

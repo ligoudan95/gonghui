@@ -378,3 +378,37 @@ func test_validate_skill_resources_tile_spawn_combo_intercept() -> void:
 	var issues: Array[String] = BattleSetup.validate_skill_resources(context)
 	assert_int(issues.size()).is_equal(1)
 	assert_bool(issues[0].contains(aura_bad.id)).is_true()
+
+func test_report_skill_combo_enemy_none_damage_non_aura_intercepted() -> void:
+	## 盲审 R4-3 前置拦截：敌方 damage_type=NONE 且非 AURA 技——AI 技能选择
+	## 永不触达（伤害筛选/怒吼识别双不入列）报 issue；AURA_3X3 敌技豁免
+	##（怒吼识别通道）、我方 NONE 技豁免（治疗/增益无 AI 选择问题——玩家
+	## 手动施放）；生产敌方五技零触发（四 PHYSICAL + 一 AURA）复核
+	var enemy_dead: SkillDef = SkillDef.new()
+	enemy_dead.id = &"skl_fake_enemy_none"
+	enemy_dead.side = SkillDef.SkillSide.ENEMY
+	enemy_dead.damage_type = SkillDef.DamageType.NONE
+	enemy_dead.target_shape = SkillDef.TargetShape.SINGLE
+	var dead_issues: Array[String] = BattleSetup._ReportSkillComboIssue(enemy_dead)
+	assert_int(dead_issues.size()).is_equal(1)
+	assert_bool(dead_issues[0].contains("永不触达")).is_true() \
+			.override_failure_message("敌方 NONE 非光环技应报 AI 不可达 issue")
+	# AURA_3X3 敌技豁免（怒吼通道——intimidating_roar 形态）
+	var enemy_aura: SkillDef = SkillDef.new()
+	enemy_aura.id = &"skl_fake_enemy_aura"
+	enemy_aura.side = SkillDef.SkillSide.ENEMY
+	enemy_aura.damage_type = SkillDef.DamageType.NONE
+	enemy_aura.target_shape = SkillDef.TargetShape.AURA_3X3
+	assert_int(BattleSetup._ReportSkillComboIssue(enemy_aura).size()).is_equal(0)
+	# 我方 NONE 技豁免（治疗技生产形态复核——手动施放无不可达问题）
+	var priest_heal: SkillDef = _game_data.get_record(&"skl_priest_heal") as SkillDef
+	assert_object(priest_heal).is_not_null()
+	assert_int(BattleSetup._ReportSkillComboIssue(priest_heal).size()).is_equal(0)
+	# 生产敌方五技零触发（拦截不误伤存量数据）
+	for skill_id: StringName in [&"skl_atk_enemy_common", &"skl_enemy_relentless",
+			&"skl_enemy_plague_bite", &"skl_enemy_intimidating_roar",
+			&"skl_enemy_dirty_trick"]:
+		var skill: SkillDef = _game_data.get_record(skill_id) as SkillDef
+		assert_object(skill).is_not_null()
+		assert_int(BattleSetup._ReportSkillComboIssue(skill).size()).is_equal(0) \
+				.override_failure_message("生产敌方技 %s 不应触发拦截" % skill_id)
