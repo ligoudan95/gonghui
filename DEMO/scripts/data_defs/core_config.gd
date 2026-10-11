@@ -299,6 +299,25 @@ enum Mode {
 ## 同走即时口径，log_toggle_seconds 先例）
 @export var ui_battle_zoom_seconds: float = 0.0
 
+# ---- 战斗屏顶部横条参数（顶部横条批：ui_battle_topbar_* 7 键——LeftPanel
+# # 整树退役、回合 UI+行动序上移顶部横条；铁律①：横条几何数值入表；默认
+# # 0 = 未回填哨兵，UiTheme TOPBAR_* 兜底——V-M6-topbar-cfg 值域 /
+# # V-B2-cfg-fallback 锚定双校验；条目高 44 为结构常量豁免 #26 同类不入表）----
+## 横条内容与横条顶的内边距（像素——RoundLabel/条目区垂直居中余量）
+@export var ui_battle_topbar_margin_top: float = 0.0
+## 横条内容与横条底的内边距（像素——总高 = margin_top + 条目高 44 + 本值）
+@export var ui_battle_topbar_margin_bottom: float = 0.0
+## 横条左端内容边距（像素——回合标签距屏左缘）
+@export var ui_battle_topbar_left_margin: float = 0.0
+## 横条右端预留宽（像素——日志锚点条区让位；174 > 锚点热区 162 不撞头像）
+@export var ui_battle_topbar_right_reserve: float = 0.0
+## 横条衬底透明度（(0,1]——make_dark_panel_style 第三参）
+@export var ui_battle_topbar_bg_alpha: float = 0.0
+## 行动序降级条目数阈值（> 本值切紧凑条目——DEMO 8 单位封顶、护栏 11+）
+@export var ui_battle_topbar_degrade_count: int = 0
+## 紧凑条目宽（像素——降级态小卡：icon 居中无速度值）
+@export var ui_battle_topbar_compact_entry_width: float = 0.0
+
 # ---- UI 徽章配色（B-1/B-2/B-3：unit_badge 全部内联色入表；默认透明 = 未回填）----
 @export var ui_badge_hp_low_color: Color = Color(0, 0, 0, 0)
 @export var ui_badge_hp_ok_color: Color = Color(0, 0, 0, 0)

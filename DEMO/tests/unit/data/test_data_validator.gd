@@ -1177,3 +1177,105 @@ func test_v_b2_viewport_cfg_fallback_anchor() -> void:
 	var report_after: ValidationReport = DataValidator.run_all(_game_data)
 	assert_int(report_after.errors.size()).is_equal(0)
 
+func test_v_m6_topbar_cfg_domain_seven_keys() -> void:
+	## V-M6-topbar-cfg 七键双向：margin −1/40（越 [0,32]）、右预留 100（越
+	## [120,280]）、alpha 0（未回填）/ 1.2（超上界）、降级阈值 5（越 [6,20]）、
+	## 紧凑宽 30（越 [36,72]）→ 各报错；0 哨兵连带 V-M0 正值/率值循环；
+	## 合法域内不报；恢复后归零
+	var cfg: CoreConfig = _game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
+	assert_object(cfg).is_not_null()
+	var backups: Dictionary = {
+		&"margin_top": cfg.ui_battle_topbar_margin_top,
+		&"margin_bottom": cfg.ui_battle_topbar_margin_bottom,
+		&"left_margin": cfg.ui_battle_topbar_left_margin,
+		&"right_reserve": cfg.ui_battle_topbar_right_reserve,
+		&"bg_alpha": cfg.ui_battle_topbar_bg_alpha,
+		&"degrade_count": cfg.ui_battle_topbar_degrade_count,
+		&"compact_width": cfg.ui_battle_topbar_compact_entry_width,
+	}
+	# margin 双向：-1 越 [0,32] 下界报 V-M6；0 哨兵在 V-M6 值域内合法但连带
+	## V-M0 正值循环；40 越上界报 V-M6
+	cfg.ui_battle_topbar_margin_top = -1.0
+	cfg.ui_battle_topbar_margin_bottom = 40.0
+	var margin_report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(margin_report, "V-M6-topbar-cfg", "ui_battle_topbar_margin_top")) \
+			.override_failure_message("margin_top -1 越下界应报 V-M6-topbar-cfg").is_true()
+	assert_bool(_HasError(margin_report, "V-M6-topbar-cfg", "ui_battle_topbar_margin_bottom")) \
+			.override_failure_message("margin_bottom 40 越上界应报错").is_true()
+	cfg.ui_battle_topbar_margin_top = 0.0
+	var sentinel_report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(sentinel_report, "V-M0-cfg-domain", "ui_battle_topbar_margin_top")) \
+			.override_failure_message("margin_top 0 哨兵应连带 V-M0 正值循环").is_true()
+	assert_bool(_HasError(sentinel_report, "V-M6-topbar-cfg", "ui_battle_topbar_margin_top")) \
+			.override_failure_message("margin_top 0 在 V-M6 值域 [0,32] 内合法不应报值域").is_false()
+	cfg.ui_battle_topbar_margin_top = float(backups[&"margin_top"])
+	cfg.ui_battle_topbar_margin_bottom = float(backups[&"margin_bottom"])
+	# 右预留双向（100 越下界）+ alpha 双向（0 哨兵连带率值循环 / 1.2 越上界）
+	cfg.ui_battle_topbar_right_reserve = 100.0
+	cfg.ui_battle_topbar_bg_alpha = 0.0
+	var alpha_report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(alpha_report, "V-M6-topbar-cfg", "ui_battle_topbar_right_reserve")) \
+			.override_failure_message("右预留 100 越下界应报错").is_true()
+	assert_bool(_HasError(alpha_report, "V-M6-topbar-cfg", "ui_battle_topbar_bg_alpha")) \
+			.override_failure_message("alpha 0 哨兵应报 V-M6-topbar-cfg").is_true()
+	assert_bool(_HasError(alpha_report, "V-M0-cfg-domain", "ui_battle_topbar_bg_alpha")) \
+			.override_failure_message("alpha 0 哨兵应连带 V-M0 率值循环").is_true()
+	cfg.ui_battle_topbar_bg_alpha = 1.2
+	var alpha_over_report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(alpha_over_report, "V-M6-topbar-cfg", "ui_battle_topbar_bg_alpha")) \
+			.override_failure_message("alpha 1.2 越上界应报错").is_true()
+	cfg.ui_battle_topbar_right_reserve = float(backups[&"right_reserve"])
+	cfg.ui_battle_topbar_bg_alpha = float(backups[&"bg_alpha"])
+	# 降级阈值 / 紧凑宽双向
+	cfg.ui_battle_topbar_degrade_count = 5
+	cfg.ui_battle_topbar_compact_entry_width = 30.0
+	var degrade_report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(degrade_report, "V-M6-topbar-cfg", "ui_battle_topbar_degrade_count")) \
+			.override_failure_message("降级阈值 5 越下界应报错").is_true()
+	assert_bool(_HasError(degrade_report, "V-M6-topbar-cfg", "ui_battle_topbar_compact_entry_width")) \
+			.override_failure_message("紧凑宽 30 越下界应报错").is_true()
+	cfg.ui_battle_topbar_degrade_count = int(backups[&"degrade_count"])
+	cfg.ui_battle_topbar_compact_entry_width = float(backups[&"compact_width"])
+	# 合法域内（边值 6/36 不报值域）+ 恢复后归零
+	cfg.ui_battle_topbar_degrade_count = 6
+	cfg.ui_battle_topbar_compact_entry_width = 36.0
+	var edge_report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(edge_report, "V-M6-topbar-cfg", "ui_battle_topbar_degrade_count")) \
+			.override_failure_message("降级阈值 6 恰下限合法不应报值域").is_false()
+	assert_bool(_HasError(edge_report, "V-M6-topbar-cfg", "ui_battle_topbar_compact_entry_width")) \
+			.override_failure_message("紧凑宽 36 恰下限合法不应报值域").is_false()
+	cfg.ui_battle_topbar_degrade_count = int(backups[&"degrade_count"])
+	cfg.ui_battle_topbar_compact_entry_width = float(backups[&"compact_width"])
+	var report_after: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(report_after.errors.size()).is_equal(0)
+
+func test_v_b2_topbar_cfg_fallback_anchor() -> void:
+	## V-B2-cfg-fallback 七键锚定：合法域内但与 UiTheme 兜底漂移 → 报错；
+	## 恢复后归零（调表须同步兜底——C-3 护栏；条目高 TOPBAR_ENTRY_HEIGHT
+	## 结构常量豁免不入表不锚定）
+	var cfg: CoreConfig = _game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
+	assert_object(cfg).is_not_null()
+	cfg.ui_battle_topbar_margin_top = 20.0
+	cfg.ui_battle_topbar_margin_bottom = 20.0
+	cfg.ui_battle_topbar_left_margin = 20.0
+	cfg.ui_battle_topbar_right_reserve = 200.0
+	cfg.ui_battle_topbar_bg_alpha = 0.8
+	cfg.ui_battle_topbar_degrade_count = 12
+	cfg.ui_battle_topbar_compact_entry_width = 60.0
+	var report: ValidationReport = DataValidator.run_all(_game_data)
+	for key_name: String in ["ui_battle_topbar_margin_top", "ui_battle_topbar_margin_bottom",
+			"ui_battle_topbar_left_margin", "ui_battle_topbar_right_reserve",
+			"ui_battle_topbar_bg_alpha", "ui_battle_topbar_degrade_count",
+			"ui_battle_topbar_compact_entry_width"]:
+		assert_bool(_HasError(report, "V-B2-cfg-fallback", key_name)) \
+				.override_failure_message("%s 表值漂移应报 V-B2 锚定" % key_name).is_true()
+	cfg.ui_battle_topbar_margin_top = UiTheme.TOPBAR_MARGIN_TOP
+	cfg.ui_battle_topbar_margin_bottom = UiTheme.TOPBAR_MARGIN_BOTTOM
+	cfg.ui_battle_topbar_left_margin = UiTheme.TOPBAR_LEFT_MARGIN
+	cfg.ui_battle_topbar_right_reserve = UiTheme.TOPBAR_RIGHT_RESERVE
+	cfg.ui_battle_topbar_bg_alpha = UiTheme.TOPBAR_BG_ALPHA
+	cfg.ui_battle_topbar_degrade_count = UiTheme.TOPBAR_DEGRADE_COUNT
+	cfg.ui_battle_topbar_compact_entry_width = UiTheme.TOPBAR_COMPACT_ENTRY_WIDTH
+	var report_after: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(report_after.errors.size()).is_equal(0)
+

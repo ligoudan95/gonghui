@@ -8,6 +8,9 @@
 ## M6 批 3.5b：make_dark_panel_style 扩 game_data 参——深底面板九宫格单源
 ## 切换（ui_panel_ninepatch 在档 → StyleBoxTexture 四边 24px 边距；缺件
 ## 回退 StyleBoxFlat 占位——缺件态视觉零回归）。
+## 顶部横条批：make_dark_panel_style 扩 alpha 第三参（默认 1.0 向后兼容）+
+## TOPBAR_* 兜底常量组与 topbar_total_height 横条总高单源静态口（四消费点
+## 共用：TopBar 自身 / 板区顶与 IdleLabel 顶覆写 / 日志卷轴展开顶）。
 class_name UiTheme
 extends RefCounted
 
@@ -174,6 +177,27 @@ const ZOOM_MIN_STEP_GAP: float = 0.02
 ## BattleBoard._ZoomStepRatio 同引——上限两处字面重复收口）
 const ZOOM_MAX_STEP_RATIO: float = 0.5
 
+# ---- 战斗屏顶部横条兜底（顶部横条批：cfg ui_battle_topbar_* 7 键——V-B2
+# # # cfg-fallback 锚定，值 == cfg_main 表值；TOPBAR_ENTRY_HEIGHT 为结构
+# # # 常量豁免 #26 同类——不入 cfg 不锚定、单源引用）----
+## 横条内容与横条顶的内边距兜底（像素）
+const TOPBAR_MARGIN_TOP: float = 12.0
+## 横条内容与横条底的内边距兜底（像素）
+const TOPBAR_MARGIN_BOTTOM: float = 12.0
+## 横条左端内容边距兜底（像素——回合标签距屏左缘）
+const TOPBAR_LEFT_MARGIN: float = 12.0
+## 横条右端预留宽兜底（像素——日志锚点条区让位；174 > 锚点热区 162 不撞头像）
+const TOPBAR_RIGHT_RESERVE: float = 174.0
+## 横条衬底透明度兜底（(0,1]——make_dark_panel_style 第三参）
+const TOPBAR_BG_ALPHA: float = 0.9
+## 行动序降级条目数阈值兜底（> 本值切紧凑条目）
+const TOPBAR_DEGRADE_COUNT: int = 10
+## 紧凑条目宽兜底（像素——降级态小卡：icon 居中无速度值）
+const TOPBAR_COMPACT_ENTRY_WIDTH: float = 52.0
+## 横条条目高（像素——结构常量豁免 #26 同类：布局结构契约不入 cfg，
+## 横条总高/条目构造/降级条目三处单源引用）
+const TOPBAR_ENTRY_HEIGHT: float = 44.0
+
 # ---- 探索层（M3——cfg ui_fog_*/ui_explore_* 兜底）----
 ## 探索逐格步进演出时长兜底（秒/格）
 const EXPLORE_MOVE_STEP_SECONDS: float = 0.18
@@ -239,15 +263,54 @@ static func font_of(cfg: CoreConfig, field: StringName, fallback: int) -> int:
 		return raw
 	return fallback
 
+static func topbar_margin_top_of(cfg: CoreConfig) -> float:
+	## 横条内上边距读取（顶部横条批）：cfg 优先、值域 (0,32] 外回退兜底
+	##（0 = 未回填哨兵——与 V-M0-cfg-domain 正值循环同判：表侧 0 非法、
+	## 运行时回退兜底，横条总高恒 ≥ 条目高）
+	## 参数 cfg：总控配置（可空——兜底模式）
+	## 返回：生效上边距（像素）
+	var raw: float = TOPBAR_MARGIN_TOP
+	if cfg != null:
+		raw = cfg.ui_battle_topbar_margin_top
+	if raw <= 0.0 or raw > 32.0:
+		return TOPBAR_MARGIN_TOP
+	return raw
+
+static func topbar_margin_bottom_of(cfg: CoreConfig) -> float:
+	## 横条内下边距读取（顶部横条批）：cfg 优先、值域 (0,32] 外回退兜底
+	##（0 哨兵同 top 口径）
+	## 参数 cfg：总控配置（可空——兜底模式）
+	## 返回：生效下边距（像素）
+	var raw: float = TOPBAR_MARGIN_BOTTOM
+	if cfg != null:
+		raw = cfg.ui_battle_topbar_margin_bottom
+	if raw <= 0.0 or raw > 32.0:
+		return TOPBAR_MARGIN_BOTTOM
+	return raw
+
+static func topbar_total_height(cfg: CoreConfig) -> float:
+	## 横条总高单源（顶部横条批）：margin_top + 条目高 + margin_bottom——
+	## 四消费点全走此口（TopBar 自身几何 / battle_screen 板区顶与 IdleLabel
+	## 顶覆写 / LogScroller 展开顶），cfg null/非法回退兜底合计 68.0
+	##（12 + 44 + 12）
+	## 参数 cfg：总控配置（可空——兜底模式）
+	## 返回：横条总高（像素）
+	return topbar_margin_top_of(cfg) + TOPBAR_ENTRY_HEIGHT \
+			+ topbar_margin_bottom_of(cfg)
+
 static func make_dark_panel_style(cfg: CoreConfig = null,
-		game_data: Node = null) -> StyleBox:
+		game_data: Node = null, alpha: float = 1.0) -> StyleBox:
 	## 深底面板样式单源（B-4：battle_board tips 与 battle_log 共用——
 	## 原 alpha 0.92/0.86 漂移统一为 0.9）：占位态圆角 6 + 内边距 8；
 	## M6 批 3.5b 组 7：game_data 注入且 ui_panel_ninepatch 在档 →
 	## StyleBoxTexture（四边 24px 纹理边距）——九宫格单源切换，缺件/
-	## 未注入回退 StyleBoxFlat 占位（缺件态视觉零回归）
+	## 未注入回退 StyleBoxFlat 占位（缺件态视觉零回归）；
+	## 顶部横条批：alpha 第三参整体透明度调制（贴图态 modulate_color /
+	## 占位态 bg_color.a × alpha——默认 1.0 既有调用点零传参零变化，
+	## TopBar 衬底 ui_battle_topbar_bg_alpha 消费）
 	## 参数 cfg：总控配置（可空——ui_panel_dark_color 表驱动）；
-	## game_data：GameData（可空——AssetTex 解析九宫格纹理）
+	## game_data：GameData（可空——AssetTex 解析九宫格纹理）；
+	## alpha：整体透明度（默认 1.0 不调制）
 	## 返回：StyleBox（贴图态 StyleBoxTexture / 占位态 StyleBoxFlat——
 	## 调用方 add_theme_stylebox_override("panel", ...)）
 	var texture: Texture2D = AssetTex.texture_of(PANEL_NINEPATCH_ASSET_ID,
@@ -256,9 +319,12 @@ static func make_dark_panel_style(cfg: CoreConfig = null,
 		var tex_style := StyleBoxTexture.new()
 		tex_style.texture = texture
 		tex_style.set_texture_margin_all(PANEL_NINEPATCH_MARGIN)
+		tex_style.modulate_color = Color(1.0, 1.0, 1.0, alpha)
 		return tex_style
 	var style := StyleBoxFlat.new()
-	style.bg_color = color_of(cfg, &"ui_panel_dark_color", PANEL_DARK)
+	var base_color: Color = color_of(cfg, &"ui_panel_dark_color", PANEL_DARK)
+	style.bg_color = Color(base_color.r, base_color.g, base_color.b,
+			base_color.a * alpha)
 	style.set_corner_radius_all(6)
 	style.set_content_margin_all(8)
 	return style

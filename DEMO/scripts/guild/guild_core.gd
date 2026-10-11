@@ -745,11 +745,13 @@ func _CompleteLightQuest(inst: QuestInstance, summary: DaySummary) -> void:
 		if member == null:
 			continue
 		# 盲审 R2-2：出战成员升级数收集（apply_exp 返回值——
-		## ExpeditionSummary.levels_gained 先例同构）
+		## ExpeditionSummary.levels_gained 先例同构）；三席盲审 T1-2：键改
+		## display_name（day_summary_panel 升级后缀直出人名——原裸 unit_id
+		## 上轮 R2-2 修复的二次缺陷）
 		var gained: int = GrowthCore.apply_exp(member, exp_won, cfg, game_data,
 				pending_tendency_levels)
 		if gained > 0:
-			result.levels_gained[String(member.unit_id)] = gained
+			result.levels_gained[member.display_name] = gained
 	# 板凳分享（拍板①：基数不含超额；busy=轻度编队——编队成员不得板凳份）
 	var bench_exp: Dictionary = {}
 	var bench_levels: Dictionary = {}
@@ -757,10 +759,11 @@ func _CompleteLightQuest(inst: QuestInstance, summary: DaySummary) -> void:
 	result.bench_member_count = bench_exp.size()
 	if not bench_exp.is_empty():
 		result.bench_exp_per_member = int(bench_exp.values()[0])
-	# 盲审 R2-2：板凳成员升级明细并入（同键合并——出战/板凳不重叠）
-	for unit_key: String in bench_levels:
-		result.levels_gained[unit_key] = \
-				int(result.levels_gained.get(unit_key, 0)) + int(bench_levels[unit_key])
+	# 盲审 R2-2：板凳成员升级明细并入（同键合并——出战/板凳不重叠；
+	## T1-2：两侧键均 display_name——人名直出语义闭环）
+	for member_name: String in bench_levels:
+		result.levels_gained[member_name] = \
+				int(result.levels_gained.get(member_name, 0)) + int(bench_levels[member_name])
 	board.remove(inst)
 	summary.light_completed.append(result)
 
@@ -794,8 +797,11 @@ func _ShareBenchExpCore(base_exp: int, busy_ids: Array[StringName],
 		out_exp[String(adv.unit_id)] = gained
 		var levels: int = GrowthCore.apply_exp(adv, gained, cfg, game_data, pending_tendency_levels)
 		if levels > 0:
-			out_levels[String(adv.unit_id)] = \
-					int(out_levels.get(String(adv.unit_id), 0)) + levels
+			# 三席盲审 T1-2：升级明细键改 display_name（LightQuestResult 消费链
+			## day_summary_panel 直出人名）；ExpeditionSummary.levels_gained 侧
+			##（暂无 UI 消费，_GainExp 主写侧维持 unit_id）随之混合键位在案
+			out_levels[adv.display_name] = \
+					int(out_levels.get(adv.display_name, 0)) + levels
 
 func _ConvertGrantedQuests(run: ExpeditionRun, summary: ExpeditionSummary) -> void:
 	## 步骤③：出征会话授予的委托转挂单（18-C6 防重：同模板已在挂单跳过；

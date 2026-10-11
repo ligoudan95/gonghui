@@ -44,11 +44,13 @@ func after() -> void:
 	## 返回：无
 	AssetTex.clear_cache()
 
-func _MakeBoard(board_size: Vector2, cfg: CoreConfig = null) -> BattleBoard:
-	## 构建挂树装配板（真实 8×8 地图 + 空队伍；cfg 可注入——空 = 纯兜底模式）
-	## 参数 board_size：板面像素尺寸；cfg：总控配置（可空）
+func _MakeBoard(board_size: Vector2, cfg: CoreConfig = null,
+		map_path: String = MAP_PATH) -> BattleBoard:
+	## 构建挂树装配板（真实地图 + 空队伍；cfg 可注入——空 = 纯兜底模式）
+	## 参数 board_size：板面像素尺寸；cfg：总控配置（可空）；
+	## map_path：地图资源路径（缺省 8×8）
 	## 返回：已 setup 的板层实例（auto_free 释放）
-	var map_def: BattleMapDef = load(MAP_PATH) as BattleMapDef
+	var map_def: BattleMapDef = load(map_path) as BattleMapDef
 	var grid := BattleGrid.new()
 	assert_bool(grid.setup(map_def, _LookupTile)).is_true()
 	var context := BattleSetup.BattleContext.new()
@@ -236,6 +238,24 @@ func test_layout_fit_below_min_yields_to_fit() -> void:
 			var cell: Vector2i = Vector2i(x, y)
 			assert_vector(board.cell_from_local(board.cell_rect(cell).get_center())) \
 					.is_equal(cell)
+
+func test_layout_fit_three_window_tiers_topbar_board() -> void:
+	## fit 三档复算（顶部横条批板区扩容后锁死）：三档窗口板区 × 两图——
+	## 8×8（span 16）：1404×748→175.5（宽约束带内）/1244×568→142.0（高
+	## 约束）/1884×928→176（上限钳）；10×10（span 20）：1404×748→140.4 /
+	## 1244×568→113.6（高约束——720 档锁定值与 short_window 套件互证）
+	##（板区口径：1440×900 档 1404×748 = 1440−24−12 × 900−68−84；
+	## 1280×720 档 1244×568；1920×1080 档 1884×928）
+	for probe: Array in [
+			[MAP_PATH, 16.0, Vector2(1404.0, 748.0), 175.5],
+			[MAP_PATH, 16.0, Vector2(1244.0, 568.0), 142.0],
+			[MAP_PATH, 16.0, Vector2(1884.0, 928.0), 176.0],
+			["res://data/battle/maps/btm_m1_lair_10x10.tres", 20.0, Vector2(1404.0, 748.0), 140.4],
+			["res://data/battle/maps/btm_m1_lair_10x10.tres", 20.0, Vector2(1244.0, 568.0), 113.6]]:
+		var board: BattleBoard = _MakeBoard(probe[2] as Vector2, null, probe[0] as String)
+		assert_float(board.cell_width).is_equal_approx(probe[3] as float, 0.01) \
+				.override_failure_message("%s @ %s 应取 %s（实际 %s）" % [
+						probe[0], probe[2], probe[3], str(board.cell_width)])
 
 func test_resize_keeps_roundtrip_consistency() -> void:
 	## resize 前后往返一致：同 cfg（兜底）尺寸变化 → 防抖重建后全格中心

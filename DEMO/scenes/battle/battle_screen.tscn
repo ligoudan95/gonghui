@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/battle/battle_screen.gd" id="1_screen"]
 [ext_resource type="Script" path="res://scripts/battle/battle_controller.gd" id="2_controller"]
@@ -8,6 +8,7 @@
 [ext_resource type="Script" path="res://scripts/ui/battle/unit_info_card.gd" id="6_infocard"]
 [ext_resource type="Script" path="res://scripts/ui/battle/battle_log.gd" id="7_log"]
 [ext_resource type="Script" path="res://scripts/ui/battle/battle_log_scroller.gd" id="8_scroller"]
+[ext_resource type="Script" path="res://scripts/ui/battle/battle_topbar.gd" id="9_topbar"]
 
 [node name="BattleScreen" type="Control"]
 layout_mode = 3
@@ -44,57 +45,72 @@ stretch_mode = 6
 unique_name_in_owner = true
 script = ExtResource("2_controller")
 
-[node name="LeftPanel" type="VBoxContainer" parent="."]
-unique_name_in_owner = true
-layout_mode = 1
-anchor_bottom = 1.0
-offset_left = 12.0
-offset_top = 12.0
-offset_right = 232.0
-offset_bottom = -92.0
-grow_horizontal = 1
-grow_vertical = 2
-theme_override_constants/separation = 8
-z_index = 250
-
-[node name="RoundLabel" type="Label" parent="LeftPanel"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_font_sizes/font_size = 26
-text = "回合 —"
-
-[node name="LeftScroll" type="ScrollContainer" parent="LeftPanel"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_vertical = 3
-horizontal_scroll_mode = 0
-
-[node name="TurnOrderBar" type="VBoxContainer" parent="LeftPanel/LeftScroll"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 4
-script = ExtResource("4_orderbar")
-
-[node name="UnitInfoCard" type="PanelContainer" parent="LeftPanel"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(212, 180)
-layout_mode = 2
-script = ExtResource("6_infocard")
-
 [node name="BoardLayer" type="Control" parent="."]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 240.0
-offset_top = 0.0
+offset_left = 24.0
+offset_top = 68.0
 offset_right = -12.0
 offset_bottom = -84.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("3_board")
+
+[node name="TopBar" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 68.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+clip_contents = true
+z_index = 250
+script = ExtResource("9_topbar")
+
+[node name="MarginBox" type="MarginContainer" parent="TopBar"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="TopBarContent" type="HBoxContainer" parent="TopBar/MarginBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="RoundLabel" type="Label" parent="TopBar/MarginBox/TopBarContent"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_font_sizes/font_size = 22
+text = "回合 —"
+
+[node name="TurnOrderBar" type="HBoxContainer" parent="TopBar/MarginBox/TopBarContent"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+script = ExtResource("4_orderbar")
+
+[node name="UnitInfoCard" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(212, 180)
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 32.0
+offset_top = -272.0
+offset_right = 244.0
+offset_bottom = -92.0
+grow_vertical = 0
+mouse_filter = 2
+z_index = 250
+script = ExtResource("6_infocard")
 
 [node name="ButtonRow" type="HBoxContainer" parent="."]
 unique_name_in_owner = true
@@ -203,7 +219,7 @@ anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
 offset_left = -344.0
-offset_top = 48.0
+offset_top = 76.0
 offset_right = -24.0
 offset_bottom = 537.6
 grow_horizontal = 0
@@ -239,7 +255,7 @@ anchors_preset = 8
 anchor_left = 0.5
 anchor_right = 0.5
 offset_left = -200.0
-offset_top = 40.0
+offset_top = 76.0
 offset_right = 200.0
 offset_bottom = 80.0
 grow_horizontal = 2

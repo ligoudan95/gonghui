@@ -7,6 +7,10 @@
 ## 敌方行动提示并入日志卷轴锚点条（拍板 C 2026-10-01；布局三改批随右栏
 ## 退役迁 BattleLogScroller——敌方轮提示语、我方轮/终局恢复）、
 ## 撤退确认弹窗、结算面板路由回公会壳。
+## 顶部横条批（2026-10-11）：LeftPanel 整树退役——回合 UI+行动序上移
+## 顶部横条（TopBar）、信息卡改左下角点选浮层（B 案点选驱动：点单位格显、
+## 四收起点独立挂——绝不进 _ClearSelection）、棋盘放大（左缘 240→24/
+## 顶 68 让横条）、板区顶与 IdleLabel 顶随横条总高联动。
 ## 移动范围回显口径（2026-09-26 试玩反馈②③）：指令窗内全部取消路径
 ## （出格点按/不可达空格/执行被拒/技能取消）统一 R3-05「取消后回显」——
 ## 此前单向清空致「跳过演出」连点漏入指令窗即永久隐藏范围层。
@@ -21,10 +25,18 @@ const NO_CELL: Vector2i = Vector2i(-9, -9)
 ## 场景背景资源 id（M6 批 3.5b 组 1：bg_battle_mine——矿洞战场底图，
 ## AssetRegistry 单源路径映射；正式多图后随 battle_map 表字段化归口 M6 后续）
 const BACKGROUND_ASSET_ID: StringName = &"bg_battle_mine"
-## 常驻 UI 基座 z（视口批：LeftPanel/ButtonRow/IdleLabel 恒置顶——棋盘
-## 缩放平移不遮操作区；tscn 三节点 z_index 字面值同引（ResultLayer z=400
-## 先例同式）；250 压 tips/飘字（200）、让日志卷轴（300）与结算（400））
+## 常驻 UI 基座 z（视口批：TopBar/ButtonRow/IdleLabel/UnitInfoCard 恒置顶
+## ——棋盘缩放平移不遮操作区（顶部横条批：LeftPanel 退役、TopBar 与浮层化
+## 信息卡入列）；tscn 四节点 z_index 字面值同引（ResultLayer z=400 先例
+## 同式）；250 压 tips/飘字（200）、让日志卷轴（300）与结算（400））
 const UI_BASE_Z: int = 250
+## IdleLabel 顶与横条下缘间距（像素——顶部横条批结构常量：横条下缘之下
+## 8px 视觉间隙；方案注释登记，不入 cfg）
+const IDLE_TOP_GAP: float = 8.0
+## IdleLabel 占位带高（像素——tscn 占位 offset_top..offset_bottom = 40 高；
+## 三席盲审 T1-1：底边联动补齐（顶随横条覆写后底边同步平移，修矩形塌缩
+## 与降级路径旧值叠字）；结构常量注释登记，不入 cfg）
+const IDLE_BAND_HEIGHT: float = 40.0
 
 ## 战斗上下文（装配后供测试/UI 查询）
 var context: BattleSetup.BattleContext = null
@@ -104,6 +116,10 @@ func _ready() -> void:
 			save_manager.set_expedition_lock(true)
 	controller = %BattleController as BattleController
 	%UnitInfoCard.setup(_StatusLookupOf(), _NameLookupOf())
+	# 三席盲审 T1-1：横条几何联动前置（降级分支同样生效——%TopBar 子树
+	# _ready 已先序运行，未 setup 时 total_height() 走兜底 68；装配路径
+	# setup 后二次调用幂等刷新）
+	_ApplyTopBarGeometry()
 	if battle_params == null:
 		push_warning("battle_screen: 无战斗参数（直开冒烟口径——显示待机提示）")
 		%IdleLabel.visible = true
@@ -126,8 +142,25 @@ func _ready() -> void:
 	%UnitInfoCard.apply_cfg(context.cfg, _game_data)
 	%BoardLayer.setup(context, _game_data)
 	%TurnOrderBar.setup(_game_data, context.cfg)
+	# 顶部横条批：横条装配 + 四联动几何收口（板区顶/IdleLabel 顶随横条总高；
+	## T1-1：_ready 前置已调一次（降级分支覆盖），setup 后二次调用幂等刷新）
+	%TopBar.setup(context.cfg, _game_data)
+	_ApplyTopBarGeometry()
 	_ConnectController()
 	controller.start_battle(context)
+
+func _ApplyTopBarGeometry() -> void:
+	## 顶部横条几何联动（顶部横条批：四消费点之两处在此覆写）——板区顶 =
+	## 横条总高、IdleLabel 顶 = 横条总高 + 8 结构间隙、底边 = 顶 + 40 占位带高
+	##（T1-1 补底边联动：顶随横条覆写后底边同步平移——修矩形塌缩 [76,80]=4px
+	## 与降级路径 IdleLabel 停留旧值落入横条暗底带文字叠字）；anchors 全锚下
+	## resize 只变 size 不变 offset——无需 resize 监听；总高单源 UiTheme.
+	## topbar_total_height（经 %TopBar.total_height 实例口）
+	## 参数：无
+	## 返回：无
+	%BoardLayer.offset_top = %TopBar.total_height()
+	%IdleLabel.offset_top = %TopBar.total_height() + IDLE_TOP_GAP
+	%IdleLabel.offset_bottom = %IdleLabel.offset_top + IDLE_BAND_HEIGHT
 
 func _ApplyBackgroundTexture() -> void:
 	## 场景背景接线（M6 批 3.5b 组 1）：AssetTex.apply_to 单源装配
@@ -140,15 +173,15 @@ func _ApplyBackgroundTexture() -> void:
 			get_node_or_null("/root/GameData"))
 
 func _ApplyFontTiers() -> void:
-	## tscn 内嵌字号档位覆写（B-7）：RoundLabel（26→large）/ IdleLabel（18→
-	## normal）——tscn 值留占位，运行时以 cfg 档位为准；W3-08：底部指令钮
-	## 四枚 + 撤退补齐（按钮统一 normal 档——三屏收口）；批次 B 布局重构：
-	## OrderTitle 节点已删（行动序竖列归左带，标题行退役）
+	## tscn 内嵌字号档位覆写（B-7）：RoundLabel（顶部横条批：26→subheading
+	## 22——横条内小字档）/ IdleLabel（18→normal）——tscn 值留占位，运行时
+	## 以 cfg 档位为准；W3-08：底部指令钮四枚 + 撤退补齐（按钮统一 normal
+	## 档——三屏收口）；批次 B 布局重构：OrderTitle 节点已删（标题行退役）
 	## 参数：无
 	## 返回：无
 	var cfg: CoreConfig = context.cfg if context != null else null
 	%RoundLabel.add_theme_font_size_override("font_size",
-			UiTheme.font_of(cfg, &"ui_font_size_large", UiTheme.FONT_LARGE))
+			UiTheme.font_of(cfg, &"ui_font_size_subheading", UiTheme.FONT_SUBHEADING))
 	%IdleLabel.add_theme_font_size_override("font_size",
 			UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL))
 	var button_font: int = UiTheme.font_of(cfg, &"ui_font_size_normal", UiTheme.FONT_NORMAL)
@@ -228,7 +261,9 @@ func _ConnectController() -> void:
 	controller.unit_downed.connect(func(unit: BattleUnit) -> void:
 		%BoardLayer.play_badge_action(unit, UnitAnimState.Action.DOWNED)
 		%BoardLayer.refresh_badge(unit)
-		%UnitInfoCard.show_unit(unit)
+		# 顶部横条批（B 案）：正在看该单位才刷新数字，不强制弹卡
+		if %UnitInfoCard.is_showing_unit(unit.unit_id):
+			%UnitInfoCard.show_unit(unit)
 		# S4-6：序条同回合即时灰显（此前倒地灰显只在回合初 rebuild 生效）
 		%TurnOrderBar.set_downed(unit)
 	)
@@ -264,15 +299,15 @@ func _OnRoundStarted(round_no: int) -> void:
 
 func _OnTurnStarted(unit: BattleUnit) -> void:
 	## 行动轮开始：清选择态、当前位高亮、按钮组刷新、蛊惑紫边提示；定身
-	## （ROOT——S3-07）与蛊惑同权不显示移动范围（被锁单位无移动可预览）；
-	## M6：行动位归位 IDLE（上一位 MOVE/HIT 残留终结）
+	##（ROOT——S3-07）与蛊惑同权不显示移动范围（被锁单位无移动可预览）；
+	## M6：行动位归位 IDLE（上一位 MOVE/HIT 残留终结）；顶部横条批（B 案）：
+	## 不弹信息卡——横条金色高亮已示当前位，信息卡改点选驱动
 	## 参数 unit：行动单位
 	## 返回：无
 	_ClearSelection()
 	%BoardLayer.set_current_unit(unit)
 	%BoardLayer.play_badge_action(unit, UnitAnimState.Action.IDLE)
 	%TurnOrderBar.set_current(unit)
-	%UnitInfoCard.show_unit(unit)
 	var control: int = context.status_manager.get_active_control(unit)
 	var is_bewitched: bool = control == StatusDef.ControlKind.BEWITCH
 	for badge_unit: BattleUnit in context.units:
@@ -346,10 +381,12 @@ func _DispatchSkillPose(caster: BattleUnit, result: SkillExecutor.ExecutionResul
 		%BoardLayer.flash_badge(target)
 
 func _OnStatusChanged(unit: BattleUnit, _status_id: StringName) -> void:
-	## 状态变化：信息卡与徽章刷新
+	## 状态变化：徽章刷新 + 信息卡条件刷新（顶部横条批 B 案：正在看该单位
+	## 才刷新数字，不强制弹卡）
 	## 参数 unit：目标单位
 	## 返回：无
-	%UnitInfoCard.show_unit(unit)
+	if %UnitInfoCard.is_showing_unit(unit.unit_id):
+		%UnitInfoCard.show_unit(unit)
 
 func _OnRoundSettled(_round_no: int, dot_damage: Array) -> void:
 	## 回合末结算完成（盲审批 3 D-2）：DOT 跳伤飘字（承伤单位格 −N）+
@@ -370,10 +407,12 @@ func _OnRoundSettled(_round_no: int, dot_damage: Array) -> void:
 	%BoardLayer.refresh_all_badges()
 
 func _OnBattleEnded(result: BattleResult) -> void:
-	## 终局：结算面板弹出（延迟一帧等待倒地演出落定；倒地名单经显示名
-	## 解析——单源 BattleContext.display_name_of，批 4 C 组 M4）
+	## 终局：收起信息卡（顶部横条批收起点④）+ 结算面板弹出（延迟一帧等待
+	## 倒地演出落定；倒地名单经显示名解析——单源 BattleContext.display_name_of，
+	## 批 4 C 组 M4）
 	## 参数 result：战斗结果
 	## 返回：无
+	%UnitInfoCard.hide_card()
 	# 拍板 C：终局恢复卷轴锚点文案（防终局面板背后残留「敌方行动中」）
 	%LogScroller.set_enemy_hint_active(false)
 	# M2 批 3+E3-01①：回传包**合并键**写入（战斗结果并入既有 expedition_run/
@@ -441,9 +480,11 @@ func _on_board_gui_input(event: InputEvent) -> void:
 	if cell == Vector2i(-1, -1):
 		# 出格点按取消（2026-09-26 试玩反馈②③：取消后回显移动范围——R3-05
 		# 口径扩展到板面点按；出格点击多来自「跳过演出」连点漏入指令窗，
-		# 此前单向清空致范围层消失直到下一行动轮）
+		# 此前单向清空致范围层消失直到下一行动轮）；顶部横条批：收起信息卡
+		#（收起点①——独立挂此分支，不进 _ClearSelection 防确认移动卡闪没）
 		_ClearSelection()
 		_RestoreMoveRangeIfUsable(controller.current_unit if controller != null else null)
+		%UnitInfoCard.hide_card()
 		return
 	if controller == null or not controller.awaiting_command:
 		if controller != null:
@@ -495,9 +536,11 @@ func _HandleMoveTap(cell: Vector2i) -> void:
 		return
 	if occupant == null:
 		# 不可达空格点按 = 取消路径预览（反馈②③：回显移动范围——跳过连点/
-		# 远格误点不再清掉范围层；has_moved/受控时回显自然短路）
+		# 远格误点不再清掉范围层；has_moved/受控时回显自然短路）；顶部横条
+		# 批：收起信息卡（收起点②——点空格=收起口径，独立挂不进 _ClearSelection）
 		_ClearSelection()
 		_RestoreMoveRangeIfUsable(unit)
+		%UnitInfoCard.hide_card()
 
 func _HandleSkillTap(cell: Vector2i) -> void:
 	## 技能模式两段式（2026-09-24 二轮反馈升级）：首点射程内目标格 = 确认提示，
@@ -575,9 +618,11 @@ func _HandleSkillTap(cell: Vector2i) -> void:
 		_pending_cell = NO_CELL
 		%BattleLog.push_line(BattleLog.MSG_TARGET_OUT_OF_RANGE, BattleLog.LineKind.SYSTEM)
 		return
-	# 纯空区域取消技能选择（反馈②③：与按钮取消同口径回显移动范围——R3-05）
+	# 纯空区域取消技能选择（反馈②③：与按钮取消同口径回显移动范围——R3-05）；
+	# 顶部横条批：收起信息卡（收起点③——独立挂不进 _ClearSelection）
 	_ClearSelection()
 	_RestoreMoveRangeIfUsable(unit)
+	%UnitInfoCard.hide_card()
 
 func _ClearSelection() -> void:
 	## 清空选择态（技能/待定格/覆盖层）

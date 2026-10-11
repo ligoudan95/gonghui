@@ -280,6 +280,32 @@ func test_bench_share_lv2() -> void:
 	assert_int(_core.roster[3].exp).is_equal(0)
 	assert_bool(inst != null).is_true()
 
+func test_levels_gained_keys_are_display_names() -> void:
+	## ⑯升级明细键契约（三席盲审 T1-2）：出战与板凳升级键均 display_name
+	##（day_summary_panel 后缀直出人名——原裸 unit_id 二次缺陷防回归）；
+	## 夹具：出战者预置 85 经验（+30=115 ≥100 升 1 级）、板凳预置 95
+	##（+9=104 ≥100 升 1 级）——同回合双双越线
+	_core.roster[0].exp = 85
+	_core.roster[1].exp = 95
+	_StartLight(&"q_chore_supply_run", 1)
+	_core.settle_one_day()
+	var summary: GuildCore.DaySummary = _core.settle_one_day()
+	var result: GuildCore.LightQuestResult = summary.light_completed[0]
+	assert_int(_core.roster[0].level).is_equal(2) \
+			.override_failure_message("夹具失效：出战者应升 1 级")
+	assert_int(_core.roster[1].level).is_equal(2) \
+			.override_failure_message("夹具失效：板凳应升 1 级")
+	assert_int(result.levels_gained.size()).is_equal(2)
+	assert_bool(result.levels_gained.has(_core.roster[0].display_name)).is_true() \
+			.override_failure_message("出战升级键应为 display_name（实际 %s）" % str(result.levels_gained))
+	assert_bool(result.levels_gained.has(_core.roster[1].display_name)).is_true() \
+			.override_failure_message("板凳升级键应为 display_name（实际 %s）" % str(result.levels_gained))
+	assert_int(int(result.levels_gained[_core.roster[0].display_name])).is_equal(1)
+	assert_int(int(result.levels_gained[_core.roster[1].display_name])).is_equal(1)
+	# 裸 unit_id 键不得存在（二次缺陷防回归——unit_id ≠ display_name 时红灯）
+	assert_bool(result.levels_gained.has(String(_core.roster[0].unit_id))).is_false()
+	assert_bool(result.levels_gained.has(String(_core.roster[1].unit_id))).is_false()
+
 func test_v3_roundtrip_work_days() -> void:
 	## ⑮v3 roundtrip：LIGHT_RUNNING state+work_days_left 往返；缺
 	## work_days_left 键 → from_dict null（必填反转断言）

@@ -1,17 +1,22 @@
-## 回合序条（TurnOrderBar，VBoxContainer——左带 LeftPanel/LeftScroll 内竖排）
+## 回合序条（TurnOrderBar，HBoxContainer——顶部横条 TopBar/MarginBox/
+## TopBarContent 内横排）
 ## 职责：展示本回合行动序列——各单位小头像（M6：idle 竖条首帧 AtlasTexture
-## 36×36 Nearest）+ 速度值（批次 B 布局重构：条目改横排小卡 icon 左/速度右，
-## 序条整体竖列化贴左带），当前行动位金色高亮、倒地灰显；每回合初
-## （round_started）重建。
-## 数据来源：M1 批 3 方案 §7.1（头像+速度值当前高亮——批次 B 改竖列布局）。
+## 36×36 Nearest）+ 速度值（条目横排小卡 icon 左/速度右），当前行动位金色
+## 高亮、倒地灰显；每回合初（round_started）重建；顶部横条批：竖列改横排 +
+## 降级护栏（条目数 > cfg 阈值切紧凑条目——icon 居中无速度值，宽度 52，
+## 每回合 rebuild 重判、8↔11 交替自动切换；重建式组件无残留态）。
+## 数据来源：M1 批 3 方案 §7.1（头像+速度值当前高亮——顶部横条批改横排布局）。
 class_name TurnOrderBar
-extends VBoxContainer
+extends HBoxContainer
 
 ## 序条头像显示尺寸
 const ICON_SIZE: float = 36.0
 ## 条目间距
 const ENTRY_SEPARATION: int = 8
-## 总控配置（B-2/B-3/B-7：配色/字号表驱动注入——setup 传入，空 = 纯兜底）
+## 常规条目宽（像素——icon 左 36 + 速度值右；高单源 UiTheme.TOPBAR_ENTRY_HEIGHT）
+const ENTRY_WIDTH: float = 92.0
+## 总控配置（B-2/B-3/B-7：配色/字号表驱动注入 + 顶部横条批降级阈值——
+## setup 传入，空 = 纯兜底）
 var _cfg: CoreConfig = null
 
 ## 表驱动色读取（B-2/B-3）
@@ -35,7 +40,7 @@ var _units: Dictionary = {}
 var _game_data: Node = null
 
 func setup(game_data: Node, cfg: CoreConfig = null) -> void:
-	## 注入依赖（sprite 解析 + 配色/字号表驱动配置）
+	## 注入依赖（sprite 解析 + 配色/字号/降级阈值表驱动配置）
 	## 参数 game_data：GameData；cfg：总控配置（可空——B 席批表驱动）
 	## 返回：无
 	_game_data = game_data
@@ -43,9 +48,12 @@ func setup(game_data: Node, cfg: CoreConfig = null) -> void:
 	add_theme_constant_override("separation", ENTRY_SEPARATION)
 
 func rebuild(units: Array) -> void:
-	## 重建序列条（ROUND_START 调；按行动序排布；倒地条目建即灰显）
+	## 重建序列条（ROUND_START 调；按行动序排布；倒地条目建即灰显）；
+	## 顶部横条批：开头重判降级态（compact = 条目数 > 阈值——每回合人数
+	## 变化 8↔11 交替自动切换；旧条目全量 queue_free 重建，无残留态）
 	## 参数 units：本回合行动序列（速度排序产物）
 	## 返回：无
+	var compact: bool = units.size() > _DegradeCount()
 	for child: Node in get_children():
 		# S4-R3-01 同式（event_panel._Reset 先例）：先隐藏断渲染再释放
 		#（queue_free 延迟帧末——每回合 rebuild 旧条目与新条目一帧叠渲，
@@ -58,8 +66,14 @@ func rebuild(units: Array) -> void:
 	_units.clear()
 	for unit: BattleUnit in units:
 		var entry := PanelContainer.new()
-		# 批次 B：条目改横排小卡（icon 左/速度右）——序条竖列化的条目形态
-		entry.custom_minimum_size = Vector2(92, 44)
+		# 条目横排小卡（icon 左/速度右）——高单源 UiTheme.TOPBAR_ENTRY_HEIGHT；
+		# 降级态紧凑条目（icon 居中无速度值）
+		if compact:
+			entry.custom_minimum_size = Vector2(_CompactEntryWidth(),
+					UiTheme.TOPBAR_ENTRY_HEIGHT)
+		else:
+			entry.custom_minimum_size = Vector2(ENTRY_WIDTH,
+					UiTheme.TOPBAR_ENTRY_HEIGHT)
 		entry.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var box := HBoxContainer.new()
 		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -75,13 +89,18 @@ func rebuild(units: Array) -> void:
 				SpriteResolver.sprite_id_of(unit, _game_data),
 				UnitAnimState.Action.IDLE, 0, _game_data)
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if compact:
+			# 紧凑条目：icon 水平居中（宽 52 内不撑满）
+			icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		box.add_child(icon)
-		var speed_label := Label.new()
-		speed_label.text = str(unit.speed_for_order())
-		speed_label.add_theme_font_size_override("font_size", _UiFont(&"ui_font_size_minor", UiTheme.FONT_MINOR))
-		speed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		speed_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		box.add_child(speed_label)
+		if not compact:
+			# 降级条目不创建速度值（重建式组件无残留态——非降级重建即恢复）
+			var speed_label := Label.new()
+			speed_label.text = str(unit.speed_for_order())
+			speed_label.add_theme_font_size_override("font_size", _UiFont(&"ui_font_size_minor", UiTheme.FONT_MINOR))
+			speed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+			speed_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			box.add_child(speed_label)
 		entry.add_child(box)
 		add_child(entry)
 		_entries[unit.unit_id] = entry
@@ -119,3 +138,27 @@ func _IsDowned(unit_id: StringName) -> bool:
 	var unit: BattleUnit = _units.get(unit_id, null)
 	return unit != null and not unit.alive
 
+# ---- cfg 读取口（cfg 优先、UiTheme 兜底、值域外回退——log_scroller
+# ---- _AnchorWidth 同模式；顶部横条批降级两键）----
+
+func _DegradeCount() -> int:
+	## 降级条目数阈值（cfg 优先；值域 [6,20] 外回退兜底）
+	## 参数：无
+	## 返回：生效阈值
+	var raw: int = UiTheme.TOPBAR_DEGRADE_COUNT
+	if _cfg != null:
+		raw = _cfg.ui_battle_topbar_degrade_count
+	if raw < 6 or raw > 20:
+		return UiTheme.TOPBAR_DEGRADE_COUNT
+	return raw
+
+func _CompactEntryWidth() -> float:
+	## 紧凑条目宽（cfg 优先；值域 [36,72] 外回退兜底）
+	## 参数：无
+	## 返回：生效宽（像素）
+	var raw: float = UiTheme.TOPBAR_COMPACT_ENTRY_WIDTH
+	if _cfg != null:
+		raw = _cfg.ui_battle_topbar_compact_entry_width
+	if raw < 36.0 or raw > 72.0:
+		return UiTheme.TOPBAR_COMPACT_ENTRY_WIDTH
+	return raw

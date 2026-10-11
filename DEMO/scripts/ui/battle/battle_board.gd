@@ -31,7 +31,9 @@ extends Control
 
 ## 覆盖层容器 z_index（恒压一切格/徽章深度——12×12 上限 x+y=22）
 const Z_OVERLAY: int = 100
-## tips 面板/飘字 z_index（恒压覆盖层——树序置顶逻辑保留作双保险）
+## tips 面板/飘字 z_index（恒压覆盖层——树序置顶逻辑保留作双保险；顶部
+## 横条批 z 值域契约：被常驻 UI 基座 250 成员 TopBar/ButtonRow/IdleLabel/
+## UnitInfoCard 恒压——成员表单源 battle_screen.UI_BASE_Z 注释）
 const Z_TEXT: int = 200
 ## 平移拖动激活阈值（像素——按下位移达阈值才进入拖动，防误触吞格点按；
 ## 结构契约常量不入 cfg——策划拍板豁免，案 16 §2.7 登记口径）

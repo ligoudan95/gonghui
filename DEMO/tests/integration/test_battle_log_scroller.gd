@@ -6,7 +6,9 @@
 ## ≥48 且 cfg 驱动重算、720/600/450 三档展开钳制公式（381.6/309.6/240
 ## 兜底）+ 展开右缘不越屏宽−12、未读计数（收起累计/展开清零/收起不清/
 ## 展开态不计）、敌方轮锚点文案切换、降级路径（卷轴在位收起不遮
-## IdleLabel）、BattleLog 迁移零回归（push_line 计数）。
+## IdleLabel）、BattleLog 迁移零回归（push_line 计数）；顶部横条批 +2：
+## 展开顶改横条总高单源（默认 76 + cfg 跟随）、三档展开高公式零触维持
+##（381.6/309.6/240 + 展开顶跨档恒 76）。
 ## 环境口径：scene_runner 直开走无参降级路径（卷轴在位保持收起、cfg 读取
 ## 口兜底）；cfg 注入经 apply_cfg（cfg_main 实例临时改键、用后还原——
 ## test_battle_anim_flow 同式）。
@@ -282,3 +284,49 @@ func test_battle_log_migration_zero_regression() -> void:
 	assert_int(log_panel.get_entries().get_child_count()).is_equal(before + 1) \
 			.override_failure_message("迁移后 push_line 未入容器（%d → %d）" % [
 					before, log_panel.get_entries().get_child_count()])
+
+func test_expand_top_tracks_topbar_height() -> void:
+	## 用例⑫（顶部横条批）：展开顶基准改横条总高单源——默认 = 68+8 = 76；
+	## cfg margin_top 改 20（总高 76）apply_cfg 跟随 → 84；还原回 76
+	var runner: GdUnitSceneRunner = scene_runner(BATTLE_SCENE)
+	var battle: Control = runner.scene() as Control
+	var scroller: BattleLogScroller = battle.get_node("%LogScroller") as BattleLogScroller
+	var expand_panel: PanelContainer = battle.get_node("%ExpandPanel") as PanelContainer
+	await get_tree().process_frame
+	assert_float(expand_panel.offset_top).is_equal(
+			UiTheme.topbar_total_height(null) + BattleLogScroller.EXPAND_TOP_GAP) \
+			.override_failure_message("展开顶默认应为横条总高 68 + 8 = 76（实际 %s）" % str(expand_panel.offset_top))
+	assert_float(expand_panel.offset_top).is_equal(76.0)
+	var cfg: CoreConfig = _Cfg()
+	var original_top: float = cfg.ui_battle_topbar_margin_top
+	cfg.ui_battle_topbar_margin_top = 20.0
+	scroller.apply_cfg(cfg, null)
+	assert_float(expand_panel.offset_top).is_equal(84.0) \
+			.override_failure_message("margin_top 20 时展开顶应跟随 76+8 = 84（实际 %s）" % str(expand_panel.offset_top))
+	cfg.ui_battle_topbar_margin_top = original_top
+	scroller.apply_cfg(cfg, null)
+	assert_float(expand_panel.offset_top).is_equal(76.0)
+
+func test_expand_height_three_tiers_unchanged_with_topbar() -> void:
+	## 用例⑬（顶部横条批）：三档展开钳制公式零触维持——720/600/450 档
+	## 381.6/309.6/240（board_h = 屏高 − 84 口径不变）+ 展开顶横条基准跨档
+	## 恒 76（横条总高与窗口尺寸无关）
+	var runner: GdUnitSceneRunner = scene_runner(BATTLE_SCENE)
+	var battle: Control = runner.scene() as Control
+	var cfg: CoreConfig = _Cfg()
+	var original_seconds: float = cfg.ui_battle_log_toggle_seconds
+	var scroller: BattleLogScroller = _MakeInstant(runner)
+	var expand_panel: PanelContainer = battle.get_node("%ExpandPanel") as PanelContainer
+	scroller.set_expanded(true)
+	for tier: Array in [[Vector2(1280.0, 720.0), 381.6], [Vector2(1280.0, 600.0), 309.6],
+			[Vector2(1280.0, 450.0), 240.0]]:
+		battle.size = tier[0] as Vector2
+		await get_tree().process_frame
+		await get_tree().process_frame
+		assert_float(expand_panel.size.y).is_equal_approx(tier[1] as float, 0.1) \
+				.override_failure_message("档 %s 展开高 %s 应维持 %s（公式零触）" % [
+						tier[0], expand_panel.size.y, tier[1]])
+		assert_float(expand_panel.offset_top).is_equal(76.0) \
+				.override_failure_message("档 %s 展开顶应恒 76（实际 %s）" % [tier[0], expand_panel.offset_top])
+	scroller.set_expanded(false)
+	cfg.ui_battle_log_toggle_seconds = original_seconds

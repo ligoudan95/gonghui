@@ -1,6 +1,9 @@
-## 单位信息卡（UnitInfoCard，PanelContainer——右侧悬停面板）
+## 单位信息卡（UnitInfoCard，PanelContainer——战斗屏左下角点选浮层）
 ## 职责：点选单位的详情展示——名称/阵营/HP/本系资源/在场状态列表
 ## （状态图标 + 悬停/长按 Tooltip 详情：名称、剩余回合、修正量、来源）。
+## 顶部横条批：左带退役改 BattleScreen 直下浮层（z=250、底锚左下角），
+## 触显/收起口径改点选驱动（show_unit 显 / hide_card 收——收起独立挂
+## battle_screen 四点，绝不进 _ClearSelection）。
 ## 数据来源：M1 批 3 方案 §7.1（UnitInfoCard + StatusTooltip）。
 class_name UnitInfoCard
 extends PanelContainer
@@ -61,6 +64,9 @@ var _stats_label: Label = null
 var _status_box: HBoxContainer = null
 ## 状态区标题标签（R3-02：apply_cfg 重设字号需成员引用）
 var _status_title: Label = null
+## 当前展示单位 id（顶部横条批：is_showing_unit 判据 / hide_card 清空；
+## &"" = 未展示）
+var _current_unit_id: StringName = &""
 
 func setup(status_lookup: Callable, name_resolver: Callable = Callable(),
 		cfg: CoreConfig = null) -> void:
@@ -161,6 +167,24 @@ func show_unit(unit: BattleUnit) -> void:
 		none_label.modulate = _Color(&"ui_card_unknown_color", UiTheme.CARD_UNKNOWN)
 		_status_box.add_child(none_label)
 	visible = true
+	# 顶部横条批：记录当前展示单位（is_showing_unit 判据——切换单位
+	# 随 show_unit 覆写记录）
+	_current_unit_id = unit.unit_id
+
+func hide_card() -> void:
+	## 收起信息卡（顶部横条批：battle_screen 四收起点消费——出格点按/
+	## 不可达空格/技能纯空取消/终局；幂等——未展示态零操作）
+	## 参数：无
+	## 返回：无
+	visible = false
+	_current_unit_id = &""
+
+func is_showing_unit(unit_id: StringName) -> bool:
+	## 是否正在展示指定单位（顶部横条批：B 案条件刷新判据——正在看才刷新
+	## 数字，不强制弹；visible 且 id 匹配双条件）
+	## 参数 unit_id：单位 id
+	## 返回：true = 正在展示该单位
+	return visible and _current_unit_id == unit_id
 
 func _DisplayNameOf(unit: BattleUnit) -> String:
 	## 单位显示名单源解析（S4-9）：resolver 有效且解析非空优先（BattleContext.

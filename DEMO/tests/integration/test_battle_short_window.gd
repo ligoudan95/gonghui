@@ -1,13 +1,15 @@
 ## 极矮窗口契约测试（M6 批 2 挂账 4.3；批次 B 布局重构改版 2026-10-07；
-## 布局三改批 2026-10-09：右栏退役、日志卷轴化——右栏/中4 滚动条补偿
-## 契约随 RightPanel 整树退役删除，日志右缘改卷轴展开态口径）
+## 布局三改批 2026-10-09：右栏退役、日志卷轴化；顶部横条批 2026-10-11：
+## LeftPanel 整树退役——左栏/滚动条契约随整树退役删除，改顶部横条条目
+## 宽度契约）
 ## 覆盖：project 最小窗口 1280×720 设置且不与双档视口冲突；新树结构契约
-##（UnitInfoCard 归 LeftPanel 末子、BattleLog 归 ExpandPanel、EnemyTurnHint
-## 退役、HitArea/AnchorBar 在 LogScroller 内、TurnOrderBar 在 LeftScroll 内）；
-## 720 档左栏 7 条目不溢出（LeftScroll 在位且无需滚动）；600 嵌入视口档
-## LeftScroll 纵向可滚 + 棋盘正尺寸 + 日志卷轴展开态右缘不越屏宽−12；
-## ButtonRow 右缘不越屏右缘内边 12px（遮蔽护栏）；E1 等距 720 档棋盘右扩后
-##（1028 宽）菱形全宽达全带 [72,176] 不再让位。
+##（RoundLabel/TurnOrderBar 归 TopBar/MarginBox/TopBarContent、UnitInfoCard
+## 挂 BattleScreen 直下浮层化、LeftPanel/LeftScroll 退役、BattleLog 归
+## ExpandPanel、HitArea/AnchorBar 在 LogScroller 内）；720 档横条 8 条目
+## 宽度收纳（TopBarContent combined min ≤ 可用宽实测）；600 嵌入视口档
+## 棋盘正尺寸 + 日志卷轴展开态右缘不越屏宽−12 + 信息卡点亮态与日志展开态
+## 矩形不相交；ButtonRow 右缘不越屏右缘内边 12px（遮蔽护栏）；E1 等距
+## 720 档棋盘板区扩容后（1244×568）菱形全宽 113.6 达全带 [72,176]。
 extends GdUnitTestSuite
 
 ## 战斗场景路径
@@ -46,23 +48,27 @@ func _MakeUnits(count: int) -> Array:
 	return units
 
 func test_layout_structure_new_tree() -> void:
-	## 新树结构契约（批次 B 布局重构 + 布局三改批卷轴化）：RoundLabel=
-	## LeftPanel 首子、TurnOrderBar=LeftScroll 内、UnitInfoCard=LeftPanel
-	## 末子；BattleLog=ExpandPanel 内（LogScroller 卷轴）、EnemyTurnHint
-	## 退役；HitArea/AnchorBar/AnchorLabel 在 LogScroller 子树
+	## 新树结构契约（顶部横条批）：RoundLabel=TopBarContent 首子、
+	## TurnOrderBar=TopBarContent 次子（TopBar/MarginBox/TopBarContent 链）、
+	## UnitInfoCard=BattleScreen 直下（浮层化）；BattleLog=ExpandPanel 内
+	##（LogScroller 卷轴）、LeftPanel/LeftScroll/EnemyTurnHint 退役；
+	## HitArea/AnchorBar/AnchorLabel 在 LogScroller 子树
 	var runner: GdUnitSceneRunner = scene_runner(BATTLE_SCENE)
 	var battle: Control = runner.scene() as Control
 	assert_object(battle).is_not_null()
-	var left_panel: Control = battle.get_node("%LeftPanel")
+	var topbar: Control = battle.get_node("%TopBar")
+	assert_object(topbar.get_parent()).is_same(battle)
 	var round_label: Control = battle.get_node("%RoundLabel")
-	assert_str(round_label.get_parent().name).is_equal("LeftPanel")
+	assert_str(round_label.get_parent().name).is_equal("TopBarContent")
+	assert_str(round_label.get_parent().get_parent().name).is_equal("MarginBox")
+	assert_str(round_label.get_parent().get_parent().get_parent().name).is_equal("TopBar")
 	assert_int(round_label.get_index()).is_equal(0)
 	var order_bar: Control = battle.get_node("%TurnOrderBar")
-	assert_str(order_bar.get_parent().name).is_equal("LeftScroll")
-	assert_str(order_bar.get_parent().get_parent().name).is_equal("LeftPanel")
+	assert_str(order_bar.get_parent().name).is_equal("TopBarContent")
+	assert_int(order_bar.get_index()).is_equal(1)
 	var info_card: Control = battle.get_node("%UnitInfoCard")
-	assert_str(info_card.get_parent().name).is_equal("LeftPanel")
-	assert_int(info_card.get_index()).is_equal(left_panel.get_child_count() - 1)
+	assert_object(info_card.get_parent()).is_same(battle) \
+			.override_failure_message("UnitInfoCard 应挂 BattleScreen 直下（浮层化）")
 	var log_panel: Control = battle.get_node("%BattleLog")
 	assert_str(log_panel.get_parent().name).is_equal("ExpandPanel")
 	assert_str(log_panel.get_parent().get_parent().name).is_equal("LogScroller")
@@ -73,56 +79,45 @@ func test_layout_structure_new_tree() -> void:
 	assert_str(anchor_bar.get_parent().name).is_equal("HitArea")
 	var anchor_label: Control = battle.get_node("%AnchorLabel")
 	assert_str(anchor_label.get_parent().name).is_equal("AnchorBar")
-	# 敌方提示行随右栏整树退役（文案并入卷轴锚点条）
+	# 左带与敌方提示行整树退役（残留即场景未同步）
+	assert_object(battle.get_node_or_null("%LeftPanel")).is_null()
+	assert_object(battle.get_node_or_null("%LeftScroll")).is_null()
 	assert_object(battle.get_node_or_null("%EnemyTurnHint")).is_null()
 
-func test_short_window_left_panel_no_overflow() -> void:
-	## 720 档左栏不溢出契约（批次 B 改版）：模拟 1280×720 根尺寸 + 信息卡
-	## 点亮 + 序条 7 条目 rebuild（满员口径）——左栏内容 min 总高（31+8+356+
-	## 8+180 = 583）低于左栏可用高（720 − 12 顶 − 92 底 = 616），LeftScroll
-	## 无需纵向滚动（v_bar max == 0）；LeftScroll 在位（结构不塌）
+func test_720_topbar_8_entries_fit() -> void:
+	## 720 档横条宽度收纳契约（顶部横条批）：模拟 1280×720 根尺寸 + 序条
+	## 8 条目 rebuild（DEMO 满员口径）——TopBarContent combined min 实测
+	## ≤ 可用宽（1280 − 左边距 12 − 右预留 174 = 1094）；不假设字体宽度，
+	## 全实测断言（8×92 + 7×8 间距 = 792 + 回合标签 ≈ 百级仍收纳）
 	var runner: GdUnitSceneRunner = scene_runner(BATTLE_SCENE)
 	var battle: Control = runner.scene() as Control
-	battle.get_node("%UnitInfoCard").visible = true
 	var order_bar: TurnOrderBar = battle.get_node("%TurnOrderBar") as TurnOrderBar
-	order_bar.rebuild(_MakeUnits(7))
+	order_bar.rebuild(_MakeUnits(8))
 	battle.size = Vector2(1280.0, 720.0)
 	await get_tree().process_frame
 	await get_tree().process_frame
-	var left_scroll: ScrollContainer = battle.get_node("%LeftScroll") as ScrollContainer
-	assert_object(left_scroll).is_not_null() \
-			.override_failure_message("LeftScroll 结构塌失")
-	assert_float(left_scroll.size.y).is_greater(200.0) \
-			.override_failure_message("720 档 LeftScroll 高度塌缩（%s）" % left_scroll.size)
-	# 溢出判据：v_bar max_value 语义 = 内容总高（Range.max）——无溢出 = 内容高
-	# 不超视口高（max ≤ size.y；条目总高 332-356 < 720 档视口 ~384 恰好收纳）
-	assert_float(left_scroll.get_v_scroll_bar().max_value) \
-			.is_less_equal(left_scroll.size.y + 0.5) \
-			.override_failure_message("720 档左栏溢出（内容高 %s > 视口高 %s）——满员序条+信息卡应恰好收纳" % [
-					left_scroll.get_v_scroll_bar().max_value, left_scroll.size.y])
+	var content: Control = battle.get_node("TopBar/MarginBox/TopBarContent")
+	var available: float = 1280.0 - UiTheme.TOPBAR_LEFT_MARGIN - UiTheme.TOPBAR_RIGHT_RESERVE
+	assert_float(content.get_combined_minimum_size().x).is_less_equal(available) \
+			.override_failure_message("720 档横条 8 条目 combined min %s 超可用宽 %s" % [
+					content.get_combined_minimum_size().x, available])
+	# 8 条目 = 常规构造（非降级）：92×44 全卡
+	assert_float(order_bar.get_combined_minimum_size().x).is_greater_equal(
+			8.0 * TurnOrderBar.ENTRY_WIDTH - 1.0)
+	assert_int(order_bar.get_child_count()).is_equal(8)
 
-func test_600_height_left_scroll_and_log_and_board() -> void:
+func test_600_height_board_log_and_card() -> void:
 	## 600 嵌入视口监测档（低16 同款：编辑器嵌入不守最小窗——回归红灯）：
-	## 1280×600 下左栏必然超高（LeftScroll 可滚 = 7 条目竖列完整可达）+
-	## 棋盘正尺寸（满高布局不塌）+ 日志卷轴展开态右缘不越屏宽−12（布局三改：
-	## 右栏退役、日志改卷轴浮层——展开面板右缘 = 屏宽 − 锚点边距 − 展开边距）
+	## 1280×600 下棋盘正尺寸（满高布局不塌）+ 日志卷轴展开态右缘不越屏宽−12
+	## + 信息卡点亮态与日志展开态矩形不相交（两浮层零遮挡——顶部横条批
+	## 信息卡左下浮层与右上卷轴展开的隔离断言）
 	var runner: GdUnitSceneRunner = scene_runner(BATTLE_SCENE)
 	var battle: Control = runner.scene() as Control
 	battle.get_node("%UnitInfoCard").visible = true
-	var order_bar: TurnOrderBar = battle.get_node("%TurnOrderBar") as TurnOrderBar
-	order_bar.rebuild(_MakeUnits(7))
 	battle.size = Vector2(1280.0, 600.0)
 	await get_tree().process_frame
 	await get_tree().process_frame
 	await get_tree().process_frame
-	var left_scroll: ScrollContainer = battle.get_node("%LeftScroll") as ScrollContainer
-	var left_bar: VScrollBar = left_scroll.get_v_scroll_bar()
-	assert_bool(left_bar.is_visible_in_tree()).is_true() \
-			.override_failure_message("600 档左栏滚动条未出现——竖列序条不可达")
-	# 溢出判据（v_bar max = 内容总高）：内容高超视口高 = 纵向可滚（序条可达）
-	assert_float(left_bar.max_value).is_greater(left_scroll.size.y) \
-			.override_failure_message("600 档左栏不可滚动（内容高 %s ≤ 视口高 %s）" % [
-					left_bar.max_value, left_scroll.size.y])
 	var board: Control = battle.get_node("%BoardLayer")
 	assert_float(board.size.x).is_greater(200.0)
 	assert_float(board.size.y).is_greater(150.0) \
@@ -141,6 +136,12 @@ func test_600_height_left_scroll_and_log_and_board() -> void:
 			.override_failure_message("600 档展开日志右缘 %s 越屏宽−12 %s" % [
 					expand_panel.get_global_rect().end.x,
 					battle.get_global_rect().end.x - 12.0])
+	# 信息卡点亮态与日志展开态矩形不相交（左下浮层 vs 右上展开——两浮层隔离）
+	var info_card: Control = battle.get_node("%UnitInfoCard")
+	assert_bool(info_card.get_global_rect().intersects(
+			expand_panel.get_global_rect())).is_false() \
+			.override_failure_message("600 档信息卡 %s 与展开日志 %s 矩形相交——两浮层须隔离" % [
+					info_card.get_global_rect(), expand_panel.get_global_rect()])
 	scroller.set_expanded(false)
 	cfg.ui_battle_log_toggle_seconds = original_seconds
 
@@ -160,14 +161,14 @@ func test_short_window_button_row_within_screen() -> void:
 					battle.get_global_rect().end.x - 12.0])
 
 func test_720_iso_board_full_band_no_overflow() -> void:
-	## E1 等距 720 档适配复核（布局三改批棋盘右扩版）：10×10 图在 720 档
-	## BoardLayer 剩余区（1280−240−12 = 1028 宽 × 720−84 = 636 高）——
-	## fit_w = 2×1028/20 = 102.8 ≥ 下限 72 不再让位，取钳制带内值 102.8
-	##（∈ [72,176] 全带达标）；断言：cell_width 达标、包围盒不溢出板面、
-	## 全宽 ≥ 72 触控下限、全格中心命中恒等
+	## E1 等距 720 档适配复核（顶部横条批板区扩容版）：10×10 图在 720 档
+	## BoardLayer 剩余区（1280−24−12 = 1244 宽 × 720−68−84 = 568 高）——
+	## fit_w = 2×1244/20 = 124.4、fit_h = 2×568/(20×0.5) = 113.6 → 高约束
+	## 取 113.6（∈ [72,176] 全带达标）；断言：cell_width 达标、包围盒不溢出
+	## 板面、全宽 ≥ 72 触控下限、全格中心命中恒等
 	var board: BattleBoard = auto_free(BattleBoard.new())
 	add_child(board)
-	board.size = Vector2(1028.0, 636.0)
+	board.size = Vector2(1244.0, 568.0)
 	var map_def: BattleMapDef = load("res://data/battle/maps/btm_m1_lair_10x10.tres") as BattleMapDef
 	var tiles: Dictionary = {}
 	for tile_id: StringName in [&"tile_normal", &"tile_obstacle", &"tile_grass",
@@ -181,9 +182,9 @@ func test_720_iso_board_full_band_no_overflow() -> void:
 	context.units = []
 	var game_data: Node = get_tree().root.get_node("GameData")
 	board.setup(context, game_data)
-	# 达标：fit_w = 102.8 ∈ [72,176] → cell_width = 102.8（钳制带内非让位）
-	assert_float(board.cell_width).is_equal_approx(102.8, 0.01) \
-			.override_failure_message("720 档 10×10 应取钳制带内 102.8（实际 %s）" % str(board.cell_width))
+	# 达标：fit = 113.6（高约束）∈ [72,176] → cell_width = 113.6（钳制带内非让位）
+	assert_float(board.cell_width).is_equal_approx(113.6, 0.01) \
+			.override_failure_message("720 档 10×10 应取高约束 113.6（实际 %s）" % str(board.cell_width))
 	assert_float(board.cell_width).is_greater_equal(72.0)
 	assert_float(board.cell_width).is_less_equal(176.0)
 	# 包围盒不溢出
@@ -191,8 +192,8 @@ func test_720_iso_board_full_band_no_overflow() -> void:
 	var box: Vector2 = Vector2(span * board.cell_width * 0.5,
 			span * board.cell_height * 0.5)
 	assert_bool(board.origin.x >= -0.5 and board.origin.y >= -0.5).is_true()
-	assert_bool(board.origin.x + box.x <= 1028.0 + 0.5
-			and board.origin.y + box.y <= 636.0 + 0.5) \
+	assert_bool(board.origin.x + box.x <= 1244.0 + 0.5
+			and board.origin.y + box.y <= 568.0 + 0.5) \
 			.override_failure_message("720 档达标分支包围盒溢出（origin %s + box %s）" % [
 					str(board.origin), str(box)])
 	# 全格中心命中恒等
@@ -201,10 +202,10 @@ func test_720_iso_board_full_band_no_overflow() -> void:
 			var cell: Vector2i = Vector2i(x, y)
 			assert_vector(board.cell_from_local(board.cell_rect(cell).get_center())) \
 					.is_equal(cell)
-	# 视口批顺加：720 档 zoom 档表非单档（fit 102.8 → zoom_max = 176/102.8
-	## ≈ 1.71，1.1 步进多档——缩放在该档位仍有操作空间）+ WorldLayer 已随
+	# 视口批顺加：720 档 zoom 档表非单档（fit 113.6 → zoom_max = 176/113.6
+	## ≈ 1.55，1.1 步进多档——缩放在该档位仍有操作空间）+ WorldLayer 已随
 	## 装配懒建（地格挂其下）
 	assert_int(board._zoom_steps.size()).is_greater(2) \
-			.override_failure_message("720 档 10×10 档表应非单档（zoom_max ≈ 1.71）")
+			.override_failure_message("720 档 10×10 档表应非单档（zoom_max ≈ 1.55）")
 	assert_float(board._zoom_steps[0]).is_equal(1.0)
 	assert_object(board._world_layer).is_not_null()

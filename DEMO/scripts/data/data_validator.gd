@@ -36,6 +36,9 @@
 ## V-M0-cfg-domain 扩日志卷参数基本值域、V-B2-cfg-fallback 扩 10 键锚定）。
 ## + 视口批新增（V-M6-viewport-cfg 战斗屏视口交互 ui_battle_zoom_* 两键值域；
 ## V-M0-cfg-domain 扩视口参数基本值域、V-B2-cfg-fallback 扩 2 键锚定）。
+## + 顶部横条批新增（V-M6-topbar-cfg 战斗屏顶部横条 ui_battle_topbar_* 七键
+## 值域；V-M0-cfg-domain 扩顶部横条参数基本值域、V-B2-cfg-fallback 扩
+## 7 键锚定）。
 ## 用法：DataValidator.run_all(game_data)——game_data 为 GameData 自动加载单例或其实例。
 class_name DataValidator
 extends RefCounted
@@ -263,6 +266,8 @@ static func run_all(game_data: Node) -> ValidationReport:
 	_CheckLogCfg(report, game_data)
 	# ---- 视口批新增（V-M6-viewport-cfg 战斗屏视口交互参数值域——错误级）----
 	_CheckViewportCfg(report, game_data)
+	# ---- 顶部横条批新增（V-M6-topbar-cfg 战斗屏顶部横条参数值域——错误级）----
+	_CheckTopbarCfg(report, game_data)
 	return report
 
 # --------------------------------------------------------------------------
@@ -1235,7 +1240,7 @@ static func _CheckCfgDomains(report: ValidationReport, game_data: Node) -> void:
 	for rate_name: String in ["hit_base", "dodge_base", "attr_hit_weight",
 			"attr_dodge_weight", "status_resist_base", "status_resist_weight",
 			"resist_weight", "crit_base", "crit_luck_weight", "crit_agility_weight",
-			"ui_battle_path_highlight_peak_alpha"]:
+			"ui_battle_path_highlight_peak_alpha", "ui_battle_topbar_bg_alpha"]:
 		var rate_value: float = float(cfg.get(rate_name))
 		if rate_value <= 0.0 or rate_value > 1.0:
 			report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
@@ -1283,6 +1288,18 @@ static func _CheckCfgDomains(report: ValidationReport, game_data: Node) -> void:
 	if float(cfg.get("ui_battle_zoom_seconds")) < 0.0:
 		report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
 				"ui_battle_zoom_seconds < 0（视口交互参数非法）")
+	# 顶部横条批扩展：战斗屏顶部横条参数基本值域（精确范围在 V-M6-topbar-cfg；
+	# 五 float + 一 int 正值检查（0 = 未回填哨兵非法——横条总高/避让/降级数学
+	# 依赖正值）、bg_alpha 并入 (0,1] 率值循环）
+	for topbar_positive: String in ["ui_battle_topbar_margin_top",
+			"ui_battle_topbar_margin_bottom", "ui_battle_topbar_left_margin",
+			"ui_battle_topbar_right_reserve", "ui_battle_topbar_compact_entry_width"]:
+		if float(cfg.get(topbar_positive)) <= 0.0:
+			report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
+					"%s ≤ 0（顶部横条参数未回填/非法）" % topbar_positive)
+	if int(cfg.get("ui_battle_topbar_degrade_count")) <= 0:
+		report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_topbar_degrade_count ≤ 0（顶部横条参数未回填/非法）")
 	# 试玩反馈批：路径闪烁高光呼吸渐变形态——Tween.TransitionType 合法值集
 	#（0 = 未回填哨兵与 LINEAR 同值故一并禁用；运行时回退兜底 SINE，表侧
 	# 拦非法定值——合法集单源 UiTheme.BATTLE_PATH_HIGHLIGHT_TRANS_VALID）
@@ -1387,6 +1404,8 @@ static func _CheckCfgFallbacks(report: ValidationReport, game_data: Node) -> voi
 		# 探索屏三栏布局批：侧栏宽度/列间距入表锚定（调表须同步 UiTheme 兜底）
 		["ui_explore_side_panel_width", UiTheme.EXPLORE_SIDE_PANEL_WIDTH],
 		["ui_explore_column_gap", UiTheme.EXPLORE_COLUMN_GAP],
+		# 顶部横条批：降级条目数阈值锚定（调表须同步 UiTheme 兜底）
+		["ui_battle_topbar_degrade_count", UiTheme.TOPBAR_DEGRADE_COUNT],
 	]
 	for pair: Array in int_pairs:
 		var raw_int: Variant = cfg.get(pair[0])
@@ -1449,6 +1468,14 @@ static func _CheckCfgFallbacks(report: ValidationReport, game_data: Node) -> voi
 		# 视口批：战斗屏视口交互两参数锚定（调表须同步 UiTheme 兜底）
 		["ui_battle_zoom_step_ratio", UiTheme.BATTLE_ZOOM_STEP_RATIO],
 		["ui_battle_zoom_seconds", UiTheme.BATTLE_ZOOM_SECONDS],
+		# 顶部横条批：战斗屏顶部横条六数值参数锚定（调表须同步 UiTheme 兜底；
+		# 条目高 TOPBAR_ENTRY_HEIGHT 为结构常量豁免不入表不锚定）
+		["ui_battle_topbar_margin_top", UiTheme.TOPBAR_MARGIN_TOP],
+		["ui_battle_topbar_margin_bottom", UiTheme.TOPBAR_MARGIN_BOTTOM],
+		["ui_battle_topbar_left_margin", UiTheme.TOPBAR_LEFT_MARGIN],
+		["ui_battle_topbar_right_reserve", UiTheme.TOPBAR_RIGHT_RESERVE],
+		["ui_battle_topbar_bg_alpha", UiTheme.TOPBAR_BG_ALPHA],
+		["ui_battle_topbar_compact_entry_width", UiTheme.TOPBAR_COMPACT_ENTRY_WIDTH],
 	]
 	for pair: Array in float_pairs:
 		var raw_float: Variant = cfg.get(pair[0])
@@ -3789,6 +3816,43 @@ static func _CheckViewportCfg(report: ValidationReport, game_data: Node) -> void
 	if cfg.ui_battle_zoom_seconds < 0.0 or cfg.ui_battle_zoom_seconds > 0.5:
 		report.add_error("V-M6-viewport-cfg", CoreConfig.CFG_MAIN_ID,
 				"ui_battle_zoom_seconds %f 越界 [0, 0.5]（0=瞬跳）" % cfg.ui_battle_zoom_seconds)
+
+
+# --------------------------------------------------------------------------
+# 顶部横条批（V-M6-topbar-cfg 战斗屏顶部横条参数值域）
+# --------------------------------------------------------------------------
+
+static func _CheckTopbarCfg(report: ValidationReport, game_data: Node) -> void:
+	## V-M6-topbar-cfg（顶部横条批）：战斗屏顶部横条 ui_battle_topbar_* 七键
+	## 值域全检——上下边距 [0,32] / 左边距 [0,32] / 右预留 [120,280]（日志
+	## 锚点让位）/ 衬底 alpha ∈ (0,1] / 降级阈值 [6,20] / 紧凑条目宽 [36,72]
+	##（错误级——值域破坏横条总高数学/日志锚点避让/降级护栏）
+	## 参数：报告 / GameData
+	## 返回：无
+	var cfg: CoreConfig = game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
+	if cfg == null:
+		return
+	if cfg.ui_battle_topbar_margin_top < 0.0 or cfg.ui_battle_topbar_margin_top > 32.0:
+		report.add_error("V-M6-topbar-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_topbar_margin_top %f 越界 [0, 32]" % cfg.ui_battle_topbar_margin_top)
+	if cfg.ui_battle_topbar_margin_bottom < 0.0 or cfg.ui_battle_topbar_margin_bottom > 32.0:
+		report.add_error("V-M6-topbar-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_topbar_margin_bottom %f 越界 [0, 32]" % cfg.ui_battle_topbar_margin_bottom)
+	if cfg.ui_battle_topbar_left_margin < 0.0 or cfg.ui_battle_topbar_left_margin > 32.0:
+		report.add_error("V-M6-topbar-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_topbar_left_margin %f 越界 [0, 32]" % cfg.ui_battle_topbar_left_margin)
+	if cfg.ui_battle_topbar_right_reserve < 120.0 or cfg.ui_battle_topbar_right_reserve > 280.0:
+		report.add_error("V-M6-topbar-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_topbar_right_reserve %f 越界 [120, 280]（日志锚点让位）" % cfg.ui_battle_topbar_right_reserve)
+	if cfg.ui_battle_topbar_bg_alpha <= 0.0 or cfg.ui_battle_topbar_bg_alpha > 1.0:
+		report.add_error("V-M6-topbar-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_topbar_bg_alpha %f 越界 (0, 1]" % cfg.ui_battle_topbar_bg_alpha)
+	if cfg.ui_battle_topbar_degrade_count < 6 or cfg.ui_battle_topbar_degrade_count > 20:
+		report.add_error("V-M6-topbar-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_topbar_degrade_count %d 越界 [6, 20]" % cfg.ui_battle_topbar_degrade_count)
+	if cfg.ui_battle_topbar_compact_entry_width < 36.0 or cfg.ui_battle_topbar_compact_entry_width > 72.0:
+		report.add_error("V-M6-topbar-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_topbar_compact_entry_width %f 越界 [36, 72]" % cfg.ui_battle_topbar_compact_entry_width)
 
 
 static func _AllDomains(game_data: Node) -> Array[StringName]:

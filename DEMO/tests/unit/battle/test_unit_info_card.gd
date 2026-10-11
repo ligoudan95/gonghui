@@ -1,8 +1,11 @@
-## UnitInfoCard 单元测试（2026-09-24 九轮后 BUG 修复防回归）
+## UnitInfoCard 单元测试（2026-09-24 九轮后 BUG 修复防回归；顶部横条批
+## 2026-10-11 增点选驱动三契约）
 ## 覆盖：状态图标修正量文本格式化——float 域（dodge +0.15）与 int 域
 ## （armor_physical +4）正确渲染（原 %g 非 GDScript % 运算符支持的格式
 ## 字符，运行时报 unsupported format character 且修正文本丢失；gdUnit
-## 运行时错误会令用例失败，天然拦截回归）。
+## 运行时错误会令用例失败，天然拦截回归）；顶部横条批：hide_card 幂等 /
+## is_showing_unit 三态（show 后 true、hide 后 false、异单位 false）/
+## show_unit 记录随切换覆写（B 案条件刷新判据）。
 extends GdUnitTestSuite
 
 ## cfg_main 真实数据路径
@@ -98,3 +101,67 @@ func test_mouse_filter_and_name_resolver_contract() -> void:
 	degraded.setup(_LookupStatus)
 	degraded.show_unit(unit)
 	assert_str(degraded._name_label.text).is_equal("测试单位（我方）")
+
+func test_hide_card_idempotent() -> void:
+	## hide_card 幂等契约（顶部横条批）：未展示态收起零操作不报错；展示后
+	## 收起 → invisible + id 清空；重复收起维持（幂等）
+	var card := UnitInfoCard.new()
+	add_child(card)
+	auto_free(card)
+	card.setup(_LookupStatus)
+	# 未展示态收起（幂等入口零守卫需求）
+	card.hide_card()
+	assert_bool(card.visible).is_false()
+	var pair: Array = _MakeCardAndUnit()
+	var unit: BattleUnit = pair[1]
+	card.show_unit(unit)
+	assert_bool(card.visible).is_true()
+	card.hide_card()
+	assert_bool(card.visible).is_false()
+	assert_bool(card.is_showing_unit(unit.unit_id)).is_false()
+	# 重复收起幂等维持
+	card.hide_card()
+	assert_bool(card.visible).is_false()
+
+func test_is_showing_unit_three_states() -> void:
+	## is_showing_unit 三态契约（顶部横条批 B 案判据）：show 后 true /
+	## hide 后 false / 异单位 false；visible 且 id 匹配双条件
+	var card := UnitInfoCard.new()
+	add_child(card)
+	auto_free(card)
+	card.setup(_LookupStatus)
+	var other := BattleUnit.new()
+	other.unit_id = &"other_unit"
+	other.display_name = "另一单位"
+	# 状态一：未展示（setup 默认 invisible）
+	assert_bool(card.is_showing_unit(&"test_unit")).is_false()
+	var pair: Array = _MakeCardAndUnit()
+	var unit: BattleUnit = pair[1]
+	# 状态二：show 后对本单位 true、异单位 false
+	card.show_unit(unit)
+	assert_bool(card.is_showing_unit(unit.unit_id)).is_true()
+	assert_bool(card.is_showing_unit(other.unit_id)).is_false()
+	# 状态三：hide 后 false
+	card.hide_card()
+	assert_bool(card.is_showing_unit(unit.unit_id)).is_false()
+
+func test_show_unit_records_current_unit_switch() -> void:
+	## show_unit 记录切换契约（顶部横条批）：连续 show 不同单位——记录随
+	## 最后一次 show 覆写（条件刷新判据不串台）
+	var card := UnitInfoCard.new()
+	add_child(card)
+	auto_free(card)
+	card.setup(_LookupStatus)
+	var pair: Array = _MakeCardAndUnit()
+	var unit_a: BattleUnit = pair[1]
+	var unit_b := BattleUnit.new()
+	unit_b.unit_id = &"test_unit_b"
+	unit_b.display_name = "测试单位乙"
+	unit_b.current_hp = 10
+	unit_b.max_hp = 20
+	card.show_unit(unit_a)
+	assert_bool(card.is_showing_unit(unit_a.unit_id)).is_true()
+	card.show_unit(unit_b)
+	assert_bool(card.is_showing_unit(unit_a.unit_id)).is_false() \
+			.override_failure_message("切换单位后旧单位记录应被覆写")
+	assert_bool(card.is_showing_unit(unit_b.unit_id)).is_true()
