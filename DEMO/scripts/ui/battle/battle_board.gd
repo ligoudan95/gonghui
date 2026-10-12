@@ -8,7 +8,8 @@
 ## （特殊/障碍格 PASS + tooltip_text，文案取 tile 表 description——UI 零硬编码；
 ## 2026-09-24 试玩反馈）、动态地格标记（陷阱点——贴图态整盒半透明/缺件
 ## 菱形下角角块）、覆盖层（移动范围高亮/技能范围红显——组 8 fx_battle_range
-## 菱形染色态；E1：程序四边框带退役——菱形描边随贴图自带/
+## 菱形染色态；范围修复批：菱形描边程序化回归——染色态叠全透明填充+亮
+## 描边子层/
 ## 路径预览高光与移动燃线（试玩反馈批：A8 箭头表现改呼吸式高光标记——D4
 ## 契约修订，移动过程真实路径逐格熄灭；漏洞1 修复：燃线挂独立生命周期——
 ## 与 clear_overlays/_ClearSelection 解耦，由逐格熄灭回调与移动 tween
@@ -16,8 +17,11 @@
 ## 单位徽章池、飘字伤害数字；提供本地坐标 → 格坐标换算（点击命中入口——
 ## E1：菱形反投影 round 判据，共享边确定性归属单格）。
 ## E1 深度排序 = 手动 z_index（等距深度 = x+y，不用 Y-sort——子节点异质
-## 重排破坏树序契约；探索屏 Z_* 先例）：格/陷阱标记/徽章 z = x+y、
-## 覆盖层容器 Z_OVERLAY=100、tips/飘字 Z_TEXT=200（树序置顶逻辑保留双保险）。
+## 重排破坏树序契约；探索屏 Z_* 先例）：格/陷阱标记/徽章/覆盖块 z = x+y
+##（网格下移批：覆盖层逐格深度融入——容器 z=0 仅作池挂载点、深度逐
+## holder 设（_ShowOverlay/_ShowBlockedOverlay/_ShowPathHighlights 三处），
+## 容器树序定位首徽章之前，同格 tie-break 树序「格→覆盖块→徽章」）、
+## tips/飘字 Z_TEXT=200（恒压全棋盘深度）。
 ## 数据来源：M1 批 3 方案 §7.1 + E1 方案 §二（投影数学单源锚点）；
 ## 菱形全宽自适应版面（cfg 钳制带 [min,max] + fit 不足让位护栏）。
 ## 输入口径：本层 gui_input 统一接点按（battle_screen 分发两段式确认）；
@@ -29,18 +33,19 @@
 class_name BattleBoard
 extends Control
 
-## 覆盖层容器 z_index（恒压一切格/徽章深度——12×12 上限 x+y=22）
-const Z_OVERLAY: int = 100
-## tips 面板/飘字 z_index（恒压覆盖层——树序置顶逻辑保留作双保险；顶部
-## 横条批 z 值域契约：被常驻 UI 基座 250 成员 TopBar/ButtonRow/IdleLabel/
-## UnitInfoCard 恒压——成员表单源 battle_screen.UI_BASE_Z 注释）
+## tips 面板/飘字 z_index（恒压全棋盘格/徽章/覆盖块深度（≤22）——树序
+## 置顶逻辑保留作双保险；顶部横条批 z 值域契约：被常驻 UI 基座 250 成员
+## TopBar/ButtonRow/IdleLabel/UnitInfoCard 恒压——成员表单源 battle_screen.
+## UI_BASE_Z 注释；网格下移批：Z_OVERLAY=100 退役——覆盖层改逐格深度融入，
+## 容器 z=0 仅作池挂载点）
 const Z_TEXT: int = 200
 ## 平移拖动激活阈值（像素——按下位移达阈值才进入拖动，防误触吞格点按；
 ## 结构契约常量不入 cfg——策划拍板豁免，案 16 §2.7 登记口径）
 const PAN_DRAG_THRESHOLD: float = 4.0
 ## 菱形命中判据浮点容差（边界点 round 归属的数值抖动护栏）
 const HIT_EPS: float = 0.0001
-## 覆盖层边框条宽（像素——E1 程序四边框带退役后仅 _MakeEdgeStrips 签名默认值保留）
+## 覆盖层边框条宽（像素——E1 退役后由 _ShowBlockedOverlay 灰描边消费；
+## _ShowOverlay 形参默认值同款）
 const OVERLAY_BORDER_WIDTH: float = 2.0
 ## 陷阱标记色兜底（S1-4：主值入 tile 表 mark_color——tile_trap.tres；
 ## 表值缺失时的回退护栏）
@@ -48,7 +53,8 @@ const COLOR_TRAP_MARK_FALLBACK: Color = Color(1.0, 0.5, 0.1, 0.8)
 ## 地格解析失败兜底色兜底（S1-4/#8：主值入 cfg_main.ui_tile_fallback_color；
 ## 常量单源在 UiTheme.TILE_FALLBACK——DataValidator C-3 同引）
 const TILE_FALLBACK_COLOR_FALLBACK: Color = UiTheme.TILE_FALLBACK
-## 范围层边框条宽（像素——E1 同上退役，签名默认值保留）
+## 范围层边框条宽（像素——范围修复批：菱形描边程序化回归，移动/技能范围
+## 描边层消费）
 const RANGE_BORDER_WIDTH: float = 3.0
 ## 视线阻断格中心斜杠条高（像素）
 const BLOCKED_SLASH_WIDTH: float = 3.0
@@ -536,6 +542,9 @@ func _ShowPathHighlights(cells: Array[Vector2i], pool: Array[Control],
 		holder.position = _CellAnchor(cell)
 		holder.size = Vector2(cell_width, cell_height)
 		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		# 网格下移批：覆盖块随格深度（同 _ShowOverlay——预览与燃线共用
+		## 渲染体一处设深；容器 z=0 池挂载点）
+		holder.z_index = cell.x + cell.y
 		var glow: Control = _MakeDiamondFill(_PathHighlightColor())
 		glow.size = holder.size
 		glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -796,8 +805,9 @@ func _FaceBadgeOnStep(badge: UnitBadge, from_x: int, to_x: int) -> void:
 
 func _UpdateBadgeDepth(badge: UnitBadge, cell: Vector2i) -> void:
 	## 徽章等距深度设定（E1 私有助手——move_badge 逐段链回调与瞬移/直落
-	## 一次设定共用）：z = cell.x + cell.y（与地格同深；同格 tie-break 树序
-	## 格→陷阱标记→徽章天然正确；12×12 上限 22 < Z_OVERLAY）
+	## 一次设定共用）：z = cell.x + cell.y（与地格/覆盖块同深；同格
+	## tie-break 树序格→覆盖块→徽章→陷阱标记天然正确——网格下移批起
+	## 覆盖层容器树序在首徽章之前）
 	## 参数 badge：移动单位徽章；cell：所在/迈入格
 	## 返回：无
 	badge.z_index = cell.x + cell.y
@@ -1337,12 +1347,15 @@ func _ShowOverlay(cells: Array[Vector2i], color: Color, pool: Array[Control],
 		border_color: Color = Color(0, 0, 0, 0), border_width: float = OVERLAY_BORDER_WIDTH) -> void:
 	## 覆盖层画制（清池重画；每格容器 = 菱形填充面）；挂覆盖层专用容器——
 	## 层级见 _overlay_layer 注；M6 批 3.5b 组 8：fx_battle_range 在档 →
-	## 填充块 TextureRect + modulate=填充色（E1：菱形染色态——贴图自带菱形
-	## 描边，移动范围染蓝/技能范围染红，α 语义随 cfg 色不变）；缺件回退
-	## 菱形色面（E1：原 ColorRect 方形回退与程序四边框带退役——方形元素
-	## 越菱形界；border_color/border_width 签名保留兼容、不再消费）
+	## 填充块 TextureRect + modulate=填充色（E1：菱形染色态——移动范围染蓝/
+	## 技能范围染红，α 语义随 cfg 色不变）；范围修复批：菱形描边程序化回归
+	##——贴图染色态 α 过淡深色 tile 上不可见，叠加全透明填充 + 亮描边
+	## DiamondFill 子层（顶点单源 _DiamondPoints，不引入第二套坐标换算）；
+	## 缺件回退菱形色面三参同款描边（E1：原 ColorRect 方形回退与程序四边
+	## 边框带退役——方形元素越菱形界）；border_color α ≤ 0 不画描边（确认框
+	## 单参调用行为不变）
 	## 参数 cells/color/pool/border_color/border_width：格列表、填充色、目标池、
-	## 边框色（退役不消费）、边框条宽（退役不消费）
+	## 边框色（α ≤ 0 无描边）、边框条宽
 	## 返回：无
 	_ClearOverlay(pool)
 	_EnsureOverlayLayer()
@@ -1353,6 +1366,9 @@ func _ShowOverlay(cells: Array[Vector2i], color: Color, pool: Array[Control],
 		holder.position = _CellAnchor(cell)
 		holder.size = Vector2(cell_width, cell_height)
 		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		# 网格下移批：覆盖块随格深度（容器 z=0 池挂载点——有效深度 = 格和；
+		# 同格 tie-break 树序「格→覆盖块→徽章」：染色画在格上、单位脚下）
+		holder.z_index = cell.x + cell.y
 		if range_texture != null:
 			# 贴图染色态：贴图 + modulate = 填充色（α 随色——淡填充语义不变）
 			var fill_tex := TextureRect.new()
@@ -1363,8 +1379,16 @@ func _ShowOverlay(cells: Array[Vector2i], color: Color, pool: Array[Control],
 			fill_tex.size = holder.size
 			fill_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			holder.add_child(fill_tex)
+			# 描边子层（范围修复批）：全透明填充不遮贴图底色 + 亮描边勾格界
+			if border_color.a > 0.0 and border_width > 0.0:
+				var border_layer: Control = _MakeDiamondFill(
+						Color(0, 0, 0, 0), border_color, border_width)
+				border_layer.size = holder.size
+				border_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				holder.add_child(border_layer)
 		else:
-			var fill := _MakeDiamondFill(color)
+			# 缺件回退：菱形色面 + 同款描边（三参——fill 与 border 同节点）
+			var fill := _MakeDiamondFill(color, border_color, border_width)
 			fill.size = holder.size
 			fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			holder.add_child(fill)
@@ -1372,8 +1396,11 @@ func _ShowOverlay(cells: Array[Vector2i], color: Color, pool: Array[Control],
 		pool.append(holder)
 
 func _EnsureOverlayLayer() -> void:
-	## 懒建覆盖层专用容器（全屏 IGNORE——徽章之后建立保持「地格→徽章→
-	## 覆盖层」现状层级；tips 恒在其后建，z 序恒高）
+	## 懒建覆盖层专用容器（全屏 IGNORE）；网格下移批：容器 z=0 仅作池挂载
+	## 点（逐格深度融入——深度逐 holder 设 cell.x+cell.y，防退化要点：z 若
+	## 误设在容器上则整层同深、树序退化为压徽章）+ 树序定位到首徽章之前
+	##（同格 tie-break「格→覆盖块→徽章」）；tips/飘字 Z_TEXT=200 恒压不受
+	## 容器树位影响
 	## 参数：无
 	## 返回：无
 	if _overlay_layer != null and is_instance_valid(_overlay_layer):
@@ -1382,17 +1409,36 @@ func _EnsureOverlayLayer() -> void:
 	_overlay_layer.name = "OverlayLayer"
 	_overlay_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_overlay_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# E1：覆盖层容器恒压一切格/徽章深度（z = x+y ≤ 22 < Z_OVERLAY）
-	_overlay_layer.z_index = Z_OVERLAY
+	# 网格下移批：容器 z=0（池挂载点）——holder 深度逐格在 _ShowOverlay/
+	# _ShowBlockedOverlay/_ShowPathHighlights 三处设置
+	_overlay_layer.z_index = 0
 	# 视口批：挂 _world_layer（缩放/平移随视口同步——覆盖层贴棋盘世界）
 	_EnsureWorldLayer()
 	_world_layer.add_child(_overlay_layer)
+	_PositionOverlayLayer()
+
+func _PositionOverlayLayer() -> void:
+	## 覆盖层容器树序定位（网格下移批）：挪到 WorldLayer 下首个徽章之前——
+	## 同深 tie-break 树序契约「地格→覆盖块→徽章」（地面染色画在格上、
+	## 单位脚下）；无徽章降级路径不挪（容器在层尾仅随格深度融入）。
+	## 闭环：容器懒建必在徽章之后（首个 show_* 调用晚于 _BuildBadges）；
+	## resize 全量重建置空 _overlay_layer，下次懒建经本口重新定位
+	## 参数：无
+	## 返回：无
+	if _world_layer == null or not is_instance_valid(_world_layer):
+		return
+	for index: int in _world_layer.get_child_count():
+		if _world_layer.get_child(index) is UnitBadge:
+			_world_layer.move_child(_overlay_layer, index)
+			return
 
 func _ShowBlockedOverlay(cells: Array[Vector2i], pool: Array[Control]) -> void:
-	## 视线阻断格渲染（十四轮反馈）：极淡灰菱形填充 + 中心 45° 斜杠
-	##（ColorRect 旋转组合；E1：长度系数按 cell_width 复核 = 0.45 全宽——
-	## 2:1 菱形内 45° 可容全长 ≈ 0.471w，方形边框带退役）；holder 带
-	## &"los_blocked" 元标记（测试/调试契约）
+	## 视线阻断格渲染（十四轮反馈）：极淡灰菱形填充 + 灰描边（范围修复批：
+	## 三参 _MakeDiamondFill——E1 退役方形边框带后描边丢失只剩 α0.08 淡灰
+	## 填充不可辨，菱形描边程序化回归）+ 中心 45° 斜杠（ColorRect 旋转组合；
+	## E1：长度系数按 cell_width 复核 = 0.45 全宽——2:1 菱形内 45° 可容全长
+	## ≈ 0.471w，方形边框带退役）；holder 带 &"los_blocked" 元标记（测试/
+	## 调试契约）
 	## 参数 cells/pool：格列表、目标池
 	## 返回：无
 	_EnsureOverlayLayer()
@@ -1401,9 +1447,13 @@ func _ShowBlockedOverlay(cells: Array[Vector2i], pool: Array[Control]) -> void:
 		holder.position = _CellAnchor(cell)
 		holder.size = Vector2(cell_width, cell_height)
 		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		# 网格下移批：覆盖块随格深度（同 _ShowOverlay——容器 z=0 池挂载点）
+		holder.z_index = cell.x + cell.y
 		holder.set_meta(&"los_blocked", true)
 		var fill := _MakeDiamondFill(
-				_OverlayColor(&"ui_overlay_blocked_fill_color", UiTheme.OVERLAY_BLOCKED_FILL))
+				_OverlayColor(&"ui_overlay_blocked_fill_color", UiTheme.OVERLAY_BLOCKED_FILL),
+				_OverlayColor(&"ui_overlay_blocked_border_color", UiTheme.OVERLAY_BLOCKED_BORDER),
+				OVERLAY_BORDER_WIDTH)
 		fill.size = holder.size
 		fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		holder.add_child(fill)

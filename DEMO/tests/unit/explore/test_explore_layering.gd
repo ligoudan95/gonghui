@@ -2,7 +2,8 @@
 ## 覆盖：UI 弹层 z 高于 board 全部绘制层（事件面板不再被迷雾穿透——z_index
 ## 在 CanvasLayer 内跨子树全局生效的回归锚点）/ PanelHost 树序与类型（全屏
 ## 居中容器、EventPanel 挂其下且限宽弹窗化）/ board 内部 z 序（迷雾盖已探索
-## 内容图标、常显目标点+衬底与小队在迷雾之上）/ 中栏行距 ≥12（三栏改版批
+## 内容图标、目标点+衬底与小队在迷雾之上——2026-10-12 起目标点显示受迷雾
+## 口径约束〔UNSEEN 不可见〕，z 层级契约不变）/ 中栏行距 ≥12（三栏改版批
 ## 改道 %CenterColumn——提示行叠加态不再占布局高）。
 ## 环境：gdUnit 帧内真 autoload（GameData/SaveManager/SceneManager）。
 extends GdUnitTestSuite
@@ -98,9 +99,10 @@ func test_board_fog_over_content_icons() -> void:
 		assert_int(panel.z_index).is_less(ExploreBoard.Z_FOG)
 
 func test_board_overlay_and_party_above_fog() -> void:
-	## board 内部契约②：常显目标点图标+衬底(Z_OVERLAY) 与小队图标(Z_PARTY)
-	## 在迷雾之上（拍板例外：目标点常显带衬底、视野内小队可见）——但恒低于
-	## UI 弹层 z；M6 批 3.5b：图标值类型泛化 Control（贴图/降级同锚）
+	## board 内部契约②：目标点图标+衬底(Z_OVERLAY) 与小队图标(Z_PARTY)
+	## 在迷雾之上（拍板例外：目标点高亮带衬底、视野内小队可见——2026-10-12
+	## 起目标点显示受迷雾口径约束〔UNSEEN 不可见〕，z 层级契约不变）——但恒
+	## 低于 UI 弹层 z；M6 批 3.5b：图标值类型泛化 Control（贴图/降级同锚）
 	var screen: Control = await _OpenExploreScreen()
 	assert_int(screen._board._party_icon.z_index).is_equal(ExploreBoard.Z_PARTY)
 	for tp_id: StringName in screen._board._target_icons:

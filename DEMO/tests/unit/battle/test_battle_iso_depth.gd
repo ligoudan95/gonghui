@@ -2,7 +2,8 @@
 ## 子节点异质，Y-sort 会重排覆盖层容器/tips/飘字破坏树序契约；等距深度
 ## = x+y 精确 O(1)，探索屏 Z_* 先例）
 ## 覆盖：地格 z == cell.x+cell.y / 徽章 z == grid_pos.x+grid_pos.y /
-## 覆盖层容器 z == Z_OVERLAY(100) / tips·飘字 z == Z_TEXT(200) /
+## 覆盖块逐格深度融入（容器 z=0 池挂载点 + holder z == x+y + 容器树序
+## 在首徽章之前——网格下移批）/ tips·飘字 z == Z_TEXT(200) /
 ## move_badge 逐段跨格 z 随步更新（tween 回调与朝向同插入位）/ 瞬移一次
 ## 设定 / 倒地徽章 z 不变（尸态不重排）。
 extends GdUnitTestSuite
@@ -77,7 +78,7 @@ func _BadgeOf(board: BattleBoard) -> UnitBadge:
 
 func test_cell_depth_equals_x_plus_y() -> void:
 	## 地格深度：全图每格视觉根 z_index == cell.x + cell.y
-	##（12×12 上限 22 < Z_OVERLAY——覆盖层恒压格）
+	##（覆盖块同深融入——恒压口径已随 Z_OVERLAY 退役废除，见 overlay 用例）
 	var board: BattleBoard = _MakeBoard()
 	for y: int in 8:
 		for x: int in 8:
@@ -93,15 +94,27 @@ func test_badge_depth_equals_grid_pos_sum() -> void:
 	assert_int(badge.z_index).is_equal(4)
 
 func test_overlay_layer_and_texts_depth() -> void:
-	## 覆盖层容器 z == Z_OVERLAY(100)、tips/飘字 z == Z_TEXT(200)——
-	## 恒压一切格/徽章深度（≤ 22）与覆盖层；视口批：容器/tips/飘字挂
-	## WorldLayer 下——查找路径与遍历随挂载点（断言语义不变）
+	## 覆盖块逐格深度融入（网格下移批）：容器 z == 0（仅作池挂载点）+
+	## holder 深度逐格 == x+y（防退化锚：z 误设在容器上则整层同深退化）+
+	## 容器树位在首徽章之前（同格 tie-break 树序「格→覆盖块→徽章」）；
+	## tips/飘字 z == Z_TEXT(200) 恒压（视口批：容器/tips/飘字挂
+	## WorldLayer 下——查找路径与遍历随挂载点）
 	var board: BattleBoard = _MakeBoard()
-	board.show_move_range([Vector2i(0, 0)])
+	board.show_move_range([Vector2i(0, 0), Vector2i(2, 2)])
 	var overlay_layer: Control = board.get_node("WorldLayer/OverlayLayer") as Control
 	assert_object(overlay_layer).is_not_null()
-	assert_int(overlay_layer.z_index).is_equal(BattleBoard.Z_OVERLAY)
-	assert_int(BattleBoard.Z_OVERLAY).is_equal(100)
+	assert_int(overlay_layer.z_index).is_equal(0)
+	# holder 深度逐格 == x+y（两格异深 0/4 证「逐格」非整层同深）
+	assert_int(board._move_overlays.size()).is_equal(2)
+	for holder: Control in board._move_overlays:
+		var cell: Vector2i = board.cell_from_local(holder.position + holder.size * 0.5)
+		assert_int(holder.z_index).is_equal(cell.x + cell.y) \
+				.override_failure_message("覆盖块 %s 深度 != x+y" % str(cell))
+	# 同格三方树序 tie-break：地格视觉 < 覆盖层容器 < 徽章（(2,2) 格
+	# tile/holder/徽章三方同深 z=4——树序定「格上单位下」）
+	var badge: UnitBadge = _BadgeOf(board)
+	assert_int(board._cells[Vector2i(2, 2)].get_index()).is_less(overlay_layer.get_index())
+	assert_int(overlay_layer.get_index()).is_less(badge.get_index())
 	board.show_target_tips(Vector2i(3, 3), "预计伤害 5", "命中率 85%")
 	assert_int(board.target_tips_panel().z_index).is_equal(BattleBoard.Z_TEXT)
 	assert_int(BattleBoard.Z_TEXT).is_equal(200)

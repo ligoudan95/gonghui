@@ -467,6 +467,111 @@ func test_los_blocked_range_rendering_and_tap() -> void:
 			.is_true()
 	battle.controller.abort_battle()
 
+func test_range_overlay_border_contract() -> void:
+	## 范围描边契约（范围不可见修复批）：E1 退役程序描边后贴图染色态仅剩
+	## α0.18 淡填充、深色 tile 上不可见——本批菱形描边程序化回归：①移动范围
+	## 贴图态 holder = 填充贴图（modulate == cfg 填充色）+ 描边子层（全透明
+	## 填充 + border α>0 + 宽 RANGE_BORDER_WIDTH、IGNORE）；②技能范围通格
+	## 同构红描边；③断格 = 灰填充 + 灰描边单 DiamondFill（OVERLAY_BORDER_WIDTH）；
+	## ④确认框单参调用（border 默认 α0）无描边——行为不变锚定；⑤缺件回退
+	## 态单 DiamondFill 三参描边（缓存注入缺件，用例尾清缓存还原）
+	await _EnterRandomBattle()
+	var battle: Control = get_tree().root.find_child("BattleScreen", true, false) as Control
+	assert_object(battle).is_not_null()
+	battle.controller.delay_seconds = 0.0
+	var unit: BattleUnit = await _AwaitFirstCommandWindow(battle)
+	assert_object(unit).is_not_null()
+	var board: BattleBoard = battle.get_node("%BoardLayer") as BattleBoard
+	var cfg: CoreConfig = battle.context.cfg
+	var move_fill: Color = UiTheme.color_of(cfg, &"ui_overlay_move_fill_color",
+			UiTheme.OVERLAY_MOVE_FILL)
+	# ①移动范围贴图态（开局 turn_started 已画）：逐 holder 断描边契约
+	assert_int(board._move_overlays.size()).is_greater(0)
+	for holder: Control in board._move_overlays:
+		var fill_tex: TextureRect = null
+		var border_layer: BattleBoard.DiamondFill = null
+		for child: Node in holder.get_children():
+			if child is TextureRect:
+				fill_tex = child as TextureRect
+			elif child is BattleBoard.DiamondFill \
+					and (child as BattleBoard.DiamondFill).border_color.a > 0.0:
+				border_layer = child as BattleBoard.DiamondFill
+		assert_object(fill_tex).is_not_null() \
+				.override_failure_message("fx_battle_range 在档应走贴图染色态")
+		assert_bool(fill_tex.modulate.is_equal_approx(move_fill)).is_true()
+		assert_object(border_layer).is_not_null() \
+				.override_failure_message("贴图态 holder 缺描边子层——范围不可见回归")
+		assert_float(border_layer.border_width).is_equal(BattleBoard.RANGE_BORDER_WIDTH)
+		assert_bool(border_layer.border_color.is_equal_approx(
+				UiTheme.color_of(cfg, &"ui_overlay_move_border_color",
+						UiTheme.OVERLAY_MOVE_BORDER))).is_true()
+		assert_float(border_layer.fill_color.a).is_equal(0.0) \
+				.override_failure_message("描边子层填充应全透明（不遮贴图底色）")
+		assert_int(border_layer.mouse_filter).is_equal(Control.MOUSE_FILTER_IGNORE)
+	# ②③技能范围通格 + 断格（caster 传送 (0,2)——障碍 (2,2) 正西向阻断，
+	## 与 los 用例同图同口径：断格 (3-5,2) 三格、通格 (0-1,2) 两格）
+	battle.context.grid.remove_unit(unit.grid_pos)
+	unit.grid_pos = Vector2i(0, 2)
+	battle.context.grid.place_unit(Vector2i(0, 2), unit)
+	var cells: Array[Vector2i] = [Vector2i(0, 2), Vector2i(1, 2), Vector2i(3, 2),
+			Vector2i(4, 2), Vector2i(5, 2)]
+	board.clear_overlays()
+	board.show_skill_range(cells, Vector2i(0, 2), true)
+	var blocked_count: int = 0
+	var visible_count: int = 0
+	for holder: Control in board._skill_overlays:
+		var is_blocked: bool = holder.get_meta(&"los_blocked", false)
+		var border_layer: BattleBoard.DiamondFill = null
+		for child: Node in holder.get_children():
+			if child is BattleBoard.DiamondFill \
+					and (child as BattleBoard.DiamondFill).border_color.a > 0.0:
+				border_layer = child as BattleBoard.DiamondFill
+		assert_object(border_layer).is_not_null() \
+				.override_failure_message("技能范围 holder 缺描边子层")
+		if is_blocked:
+			blocked_count += 1
+			assert_float(border_layer.border_width).is_equal(BattleBoard.OVERLAY_BORDER_WIDTH)
+			assert_bool(border_layer.border_color.is_equal_approx(
+					UiTheme.color_of(cfg, &"ui_overlay_blocked_border_color",
+							UiTheme.OVERLAY_BLOCKED_BORDER))).is_true()
+			assert_bool(border_layer.fill_color.is_equal_approx(
+					UiTheme.color_of(cfg, &"ui_overlay_blocked_fill_color",
+							UiTheme.OVERLAY_BLOCKED_FILL))).is_true()
+		else:
+			visible_count += 1
+			assert_float(border_layer.border_width).is_equal(BattleBoard.RANGE_BORDER_WIDTH)
+			assert_bool(border_layer.border_color.is_equal_approx(
+					UiTheme.color_of(cfg, &"ui_overlay_skill_border_color",
+							UiTheme.OVERLAY_SKILL_BORDER))).is_true()
+	assert_int(blocked_count).is_equal(3)
+	assert_int(visible_count).is_equal(2)
+	# ④确认框（单参调用 border 默认 α0）：无描边子层
+	board.show_target_confirm(Vector2i(1, 2))
+	var confirm_holder: Control = board._path_overlays[board._path_overlays.size() - 1]
+	var confirm_border_count: int = 0
+	for child: Node in confirm_holder.get_children():
+		if child is BattleBoard.DiamondFill \
+				and (child as BattleBoard.DiamondFill).border_color.a > 0.0:
+			confirm_border_count += 1
+	assert_int(confirm_border_count).is_equal(0) \
+			.override_failure_message("确认框单参调用不应画描边（行为不变锚定）")
+	# ⑤缺件回退：注入缺件 → 移动范围单 DiamondFill（fill + 描边三参）
+	AssetTex._cache[&"fx_battle_range"] = null
+	board.show_move_range([Vector2i(1, 3)])
+	var fallback_holder: Control = board._move_overlays[board._move_overlays.size() - 1]
+	var fallback_diamond: BattleBoard.DiamondFill = null
+	for child: Node in fallback_holder.get_children():
+		if child is BattleBoard.DiamondFill:
+			fallback_diamond = child as BattleBoard.DiamondFill
+	assert_object(fallback_diamond).is_not_null()
+	assert_bool(fallback_diamond.fill_color.is_equal_approx(move_fill)).is_true()
+	assert_float(fallback_diamond.border_width).is_equal(BattleBoard.RANGE_BORDER_WIDTH)
+	assert_bool(fallback_diamond.border_color.is_equal_approx(
+			UiTheme.color_of(cfg, &"ui_overlay_move_border_color",
+					UiTheme.OVERLAY_MOVE_BORDER))).is_true()
+	AssetTex.clear_cache()
+	battle.controller.abort_battle()
+
 func test_target_tips_hidden_on_target_switch() -> void:
 	## 换目标 tips 不残留（盲审批 3 D-3）：进确认态（tips 显示）后点射程内
 	## 空格（无可显示数据的新目标位）→ tips 立即隐藏且不残留旧目标数据；
@@ -1079,4 +1184,63 @@ func test_board_resize_rebuild_hides_old_visuals_instantly() -> void:
 		assert_bool(fresh_visual.visible) \
 				.override_failure_message("重建后新格子应可见").is_true()
 	assert_int(board._badges.size()).is_equal(battle.context.units.size())
+	battle.controller.abort_battle()
+
+
+# --------------------------------------------------------------------------
+# 选中闪烁批（网格下移批随行：指令窗当前我方徽章闪烁激活 + 覆盖块随格深度）
+# --------------------------------------------------------------------------
+
+func test_current_ally_badge_flickers_in_command_window() -> void:
+	## 指令窗闪烁激活链（选中闪烁批）：turn_started → set_current_unit →
+	## 当前我方徽章闪烁激活（意图位 + tween 运行）；结束行动轮换到下一
+	## 我方指令窗后：上一单位闪烁已停、新当前单位激活
+	await _EnterRandomBattle()
+	var battle: Control = get_tree().root.find_child("BattleScreen", true, false) as Control
+	assert_object(battle).is_not_null()
+	battle.controller.delay_seconds = 0.0
+	var unit: BattleUnit = await _AwaitFirstCommandWindow(battle)
+	assert_object(unit).is_not_null()
+	var board: BattleBoard = battle.get_node("%BoardLayer") as BattleBoard
+	var badge: UnitBadge = board._badges[unit.unit_id]
+	assert_bool(badge._flicker_active).is_true() \
+			.override_failure_message("指令窗当前我方徽章闪烁应激活")
+	assert_bool(badge._flicker_tween != null and badge._flicker_tween.is_valid()).is_true()
+	# 结束行动轮 → 等下一我方指令窗：上一单位已停、新单位激活
+	battle.controller.request_end_unit_turn()
+	var next_unit: BattleUnit = null
+	var waited: int = 0
+	while waited < MAX_WAIT_FRAMES * 4:
+		if battle.controller.awaiting_command and battle.controller.current_unit != null \
+				and battle.controller.current_unit != unit:
+			next_unit = battle.controller.current_unit
+			break
+		await get_tree().process_frame
+		waited += 1
+	assert_object(next_unit).override_failure_message("未等到下一指令窗").is_not_null()
+	assert_bool(badge._flicker_active).is_false() \
+			.override_failure_message("上一行动单位闪烁应已停")
+	var next_badge: UnitBadge = board._badges[next_unit.unit_id]
+	assert_bool(next_badge._flicker_active).is_true() \
+			.override_failure_message("新当前我方单位闪烁应激活")
+	battle.controller.abort_battle()
+
+func test_move_overlay_holders_follow_cell_depth() -> void:
+	## 覆盖块随格深度（网格下移批）：首指令窗移动范围层每 holder z ==
+	## 所在格 x+y、容器 z == 0（池挂载点——逐格深度融入，染色画在格上、
+	## 单位脚下）
+	await _EnterRandomBattle()
+	var battle: Control = get_tree().root.find_child("BattleScreen", true, false) as Control
+	assert_object(battle).is_not_null()
+	battle.controller.delay_seconds = 0.0
+	var unit: BattleUnit = await _AwaitFirstCommandWindow(battle)
+	assert_object(unit).is_not_null()
+	var board: BattleBoard = battle.get_node("%BoardLayer") as BattleBoard
+	assert_int(board._move_overlays.size()).is_greater(0)
+	var overlay_layer: Control = board.get_node("WorldLayer/OverlayLayer") as Control
+	assert_int(overlay_layer.z_index).is_equal(0)
+	for holder: Control in board._move_overlays:
+		var cell: Vector2i = board.cell_from_local(holder.position + holder.size * 0.5)
+		assert_int(holder.z_index).is_equal(cell.x + cell.y) \
+				.override_failure_message("覆盖块 %s 深度 != x+y" % str(cell))
 	battle.controller.abort_battle()

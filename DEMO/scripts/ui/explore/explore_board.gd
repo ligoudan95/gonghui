@@ -5,14 +5,17 @@
 ## UNSEEN 浓雾/DIM 记忆贴图染色态 modulate=cfg 色（净 α=cfg 调定值——中2：
 ## 贴图与纯色兜底同格二选一显示，不再叠加），LIT 透——缺件纯色现状）、
 ## 交互点图标（组 4：icon_pt_* 贴图 48 居中，缺件降级字形；已消耗灰态、
-## 暗门未揭示隐藏）、目标点常显（icon_pt_target，仅当前会话绑定委托的
+## 暗门未揭示隐藏）、目标点显示（icon_pt_target，仅当前会话绑定委托的
 ## 目标点渲染金色高亮——2026-10-03 试玩反馈修订：未绑定目标点完全隐藏、
-## 自由探索不显示任何目标点，绘制在迷雾层之上）、小队图标
+## 自由探索不显示任何目标点；2026-10-12 修订：显示受迷雾口径约束——与
+## 其他交互点同判定，未探索浓雾中不可见，已探索后绘制在迷雾层之上）、小队图标
 ## （icon_explore_party）、出口达成态、矿洞段可通行格淡鹅黄染色（同批
 ## 反馈 B——modulate 承载，村子段全亮行与不可通行格不染）。
 ## 显示层级（2026-09-25 用户拍板）：底格(Z_TILE) < 已探索内容图标(Z_CONTENT)
 ## < 迷雾遮罩(Z_FOG——画在图标之后：DIM 半透明压暗已探索图标) <
-## 常显目标点+衬底(Z_OVERLAY) < 小队图标(Z_PARTY)；UI 弹层（事件面板等）
+## 常显目标点+衬底(Z_OVERLAY) < 小队图标(Z_PARTY)——2026-10-12 起目标点
+## 显示受迷雾口径约束（同交互点判定：UNSEEN 浓雾中不可见），Z_OVERLAY 层
+## 仅承载「已显示时不被 DIM 雾压暗」的高亮语义；UI 弹层（事件面板等）
 ## 在 explore_screen 侧以 UI_POPUP_Z_INDEX 更高位整体压过 board（z_index
 ## 在 CanvasLayer 内跨子树全局生效——弹层绝不能留默认 0，否则被迷雾穿透）。
 ## 数据来源：M3 方案批 2（色块 + 图标占位视觉）；配色 cfg 表驱动
@@ -37,13 +40,13 @@ const CELL_SIZE: int = 60
 ## 渲染层口径（数据格坐标/迷雾/寻路/邻接判定零改，仅绘制落位翻转）
 const RENDER_FLIP_VERTICAL: bool = true
 ## 绘制层 z 值单源（层级契约锚点——test_explore_layering 消费；
-## 语义见文件头「显示层级」）：底格 < 已探索内容 < 迷雾 < 常显目标点 < 小队
+## 语义见文件头「显示层级」）：底格 < 已探索内容 < 迷雾 < 目标点 < 小队
 const Z_TILE: int = 0
 const Z_CONTENT: int = 1
 const Z_FOG: int = 2
 const Z_OVERLAY: int = 3
 const Z_PARTY: int = 4
-## 常显图标衬底内缩（设计 px——衬底不顶满格线）
+## 目标点图标衬底内缩（设计 px——衬底不顶满格线）
 ## （占位 UI 结构参数，2026-09-26 审计 V-6 拍板豁免登记，归口案 16 §2.7——
 ## 文档登记由 docs-updater 后续补；不入 CoreConfig）
 const BACKDROP_INSET: int = 8
@@ -68,9 +71,9 @@ const KIND_ICONS: Dictionary = {
 	InteractPointDef.Kind.BATTLE: &"icon_pt_battle",
 	InteractPointDef.Kind.EXIT: &"icon_pt_exit",
 }
-## 目标点图标资产 id（常显层）
+## 目标点图标资产 id（迷雾上层高亮）
 const TARGET_ASSET_ID: StringName = &"icon_pt_target"
-## 目标点图标字形（常显——降级）
+## 目标点图标字形（降级）
 const TARGET_GLYPH: String = "◇"
 ## 小队图标资产 id
 const PARTY_ASSET_ID: StringName = &"icon_explore_party"
@@ -106,10 +109,10 @@ var _fog_unseen_tex: Texture2D = null
 var _fog_dim_tex: Texture2D = null
 ## 交互点图标表（point_id -> Control——贴图态 TextureRect / 降级 Label）
 var _point_icons: Dictionary = {}
-## 目标点图标表（tp_id -> Control——迷雾上层常显；贴图态 TextureRect /
-## 降级 Label）
+## 目标点图标表（tp_id -> Control——迷雾上层高亮，显示受迷雾口径约束；
+## 贴图态 TextureRect / 降级 Label）
 var _target_icons: Dictionary = {}
-## 目标点衬底表（tp_id -> ColorRect——迷雾上层常显对比底）
+## 目标点衬底表（tp_id -> ColorRect——迷雾上层高亮对比底）
 var _target_backdrops: Dictionary = {}
 ## 小队图标（贴图态 TextureRect / 降级 Label）
 var _party_icon: Control = null
@@ -277,15 +280,28 @@ func refresh(party_pos: Vector2i, fog: FogOfWar, consumed: Dictionary,
 			# 未消耗常态白（X3-06 豁免登记：占位视觉中性色，非业务口径——
 			# 与 EventPanel.ATTR_NAMES 同先例不入表）
 			icon.modulate = dim_glyph if is_consumed else Color(1, 1, 1)
-	# 目标点常显（2026-10-03 试玩反馈批 A 口径修订——推翻案 7 §2.1/案 20
-	# §3.1「非绑定灰显」：灰色委托交互点误导玩家）：仅当前会话绑定委托的
-	# 目标点渲染（金色高亮口径不变）；未绑定目标点完全隐藏（图标+衬底——
-	# 原非绑定灰显渲染路径删除）；自由探索（active_tp_id 空）不显示任何目标点
+	# 目标点显示（2026-10-12 用户修订——推翻案 7 #25「目标点常显」拍板条款：
+	# 显示与其他交互点同判定口径——未探索浓雾 UNSEEN 中不可见，已探索
+	# 〔DIM 记忆/视野 LIT〕后显示；保留 2026-10-03 批 A「仅绑定渲染金色
+	# 高亮」——未绑定目标点与自由探索〔active_tp_id 空〕不显示）；层级仍
+	# Z_OVERLAY 迷雾之上（DIM 不压暗金色高亮——层级拍板另一维度，本次
+	# 只改可见性判定不动层级）
 	for tp_id: StringName in _target_icons:
-		var is_bound: bool = tp_id == active_tp_id
-		_target_icons[tp_id].visible = is_bound
-		_target_backdrops[tp_id].visible = is_bound
-		if is_bound:
+		var target: TargetPointDef = _game_data.get_record(tp_id) as TargetPointDef
+		if target == null:
+			# X3-10 同式守卫：查无记录跳过不中断刷新（本段需 target.cell 判迷雾）
+			push_warning("ExploreBoard: 目标点 '%s' 查无——图标跳过" % tp_id)
+			_target_icons[tp_id].visible = false
+			_target_backdrops[tp_id].visible = false
+			continue
+		var cell_state_target: int = FogOfWar.CellState.LIT
+		if fog != null:
+			cell_state_target = fog.state_of(target.cell, party_pos)
+		var show_target: bool = tp_id == active_tp_id \
+				and cell_state_target != FogOfWar.CellState.UNSEEN
+		_target_icons[tp_id].visible = show_target
+		_target_backdrops[tp_id].visible = show_target
+		if show_target:
 			_target_icons[tp_id].modulate = _ActiveColor()
 	# 小队图标
 	_party_icon.position = _cell_origin(party_pos)
@@ -373,7 +389,8 @@ func _MineWalkTintOf(cell: Vector2i, tile: ExploreTileDef) -> Color:
 
 func _BuildFogLayer() -> void:
 	## 迷雾遮罩层（Z_FOG——画在已探索内容图标之后：DIM 半透明压暗记忆格图标 /
-	## UNSEEN 浓雾遮蔽；常显目标点与小队在更高层不受遮）；M6 批 3.5b 组 5：
+	## UNSEEN 浓雾遮蔽；目标点与小队在更高层不受遮——目标点显示受迷雾
+	## 口径约束〔2026-10-12 修订，见 refresh〕）；M6 批 3.5b 组 5：
 	## 每格 ColorRect 常驻兜底 + 懒建同格兄弟 TextureRect（fx_fog_unseen/
 	## fx_fog_dim 任一在档即建——染色态 refresh 按态选贴图 modulate=cfg 色，
 	## 净 α = cfg 调定值；两键均缺件不建——纯色现状零回归）。中2 修复：贴图
@@ -423,7 +440,8 @@ func _ApplyFogTexture(cell: Vector2i, texture: Texture2D, tint: Color) -> void:
 
 func _BuildIconLayers() -> void:
 	## 图标层：交互点图标（Z_CONTENT 已探索内容层——迷雾之下，DIM 态被遮罩
-	## 压暗）/ 目标点常显图标+衬底（Z_OVERLAY——迷雾之上）/ 小队图标
+	## 压暗）/ 目标点图标+衬底（Z_OVERLAY——迷雾之上，显示受迷雾口径
+	## 约束〔2026-10-12 修订，见 refresh〕）/ 小队图标
 	## （Z_PARTY——迷雾之上，深色描边保证可读）；M6 批 2 挂账 4.1：按当前图
 	##（_map_def.id）过滤点位归属——多图数据不越权建图标；
 	## M6 批 3.5b 组 4：图标经 _MakeIconNode 接线——贴图在档走 icon_pt_* /
@@ -512,7 +530,7 @@ func _MakeGlyphLabel(glyph: String) -> Label:
 	return label
 
 func _MakeBackdrop() -> ColorRect:
-	## 常显图标衬底构建（迷雾之上图标的对比底——内缩不顶格线；position 由
+	## 目标点图标衬底构建（迷雾之上图标的对比底——内缩不顶格线；position 由
 	## 调用方按格偏移设定）。
 	## W4-14 登记注：backdrop 色当前为半透明纯色（UiTheme.EXPLORE_ICON_BACKDROP
 	## / cfg ui_explore_icon_backdrop_color 表驱动）——衬底贴图/九宫格资源化

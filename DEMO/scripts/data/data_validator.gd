@@ -39,6 +39,10 @@
 ## + 顶部横条批新增（V-M6-topbar-cfg 战斗屏顶部横条 ui_battle_topbar_* 七键
 ## 值域；V-M0-cfg-domain 扩顶部横条参数基本值域、V-B2-cfg-fallback 扩
 ## 7 键锚定）。
+## + 选中闪烁批新增（V-M6-flicker-cfg 当前行动单位选中半透明闪烁
+## ui_battle_selected_flicker_* 两数值键值域；V-M0-cfg-domain 扩闪烁周期
+## 非负检查、V-B2-cfg-fallback 扩 min_alpha/period 两 float 锚定 + 新增
+## bool_pairs 小节锚定 enable）。
 ## 用法：DataValidator.run_all(game_data)——game_data 为 GameData 自动加载单例或其实例。
 class_name DataValidator
 extends RefCounted
@@ -268,6 +272,8 @@ static func run_all(game_data: Node) -> ValidationReport:
 	_CheckViewportCfg(report, game_data)
 	# ---- 顶部横条批新增（V-M6-topbar-cfg 战斗屏顶部横条参数值域——错误级）----
 	_CheckTopbarCfg(report, game_data)
+	# ---- 选中闪烁批新增（V-M6-flicker-cfg 选中半透明闪烁参数值域——错误级）----
+	_CheckFlickerCfg(report, game_data)
 	return report
 
 # --------------------------------------------------------------------------
@@ -1288,6 +1294,11 @@ static func _CheckCfgDomains(report: ValidationReport, game_data: Node) -> void:
 	if float(cfg.get("ui_battle_zoom_seconds")) < 0.0:
 		report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
 				"ui_battle_zoom_seconds < 0（视口交互参数非法）")
+	# 选中闪烁批扩展：闪烁周期非负基本值域（精确范围在 V-M6-flicker-cfg——
+	# 0 未回填哨兵在 V-M6 下界 0.2 之外必报值域；负值在此拦截）
+	if float(cfg.get("ui_battle_selected_flicker_period")) < 0.0:
+		report.add_error("V-M0-cfg-domain", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_selected_flicker_period < 0（选中闪烁参数非法）")
 	# 顶部横条批扩展：战斗屏顶部横条参数基本值域（精确范围在 V-M6-topbar-cfg；
 	# 五 float + 一 int 正值检查（0 = 未回填哨兵非法——横条总高/避让/降级数学
 	# 依赖正值）、bg_alpha 并入 (0,1] 率值循环）
@@ -1468,6 +1479,9 @@ static func _CheckCfgFallbacks(report: ValidationReport, game_data: Node) -> voi
 		# 视口批：战斗屏视口交互两参数锚定（调表须同步 UiTheme 兜底）
 		["ui_battle_zoom_step_ratio", UiTheme.BATTLE_ZOOM_STEP_RATIO],
 		["ui_battle_zoom_seconds", UiTheme.BATTLE_ZOOM_SECONDS],
+		# 选中闪烁批：选中半透明闪烁两数值参数锚定（调表须同步 UiTheme 兜底）
+		["ui_battle_selected_flicker_min_alpha", UiTheme.BATTLE_SELECTED_FLICKER_MIN_ALPHA],
+		["ui_battle_selected_flicker_period", UiTheme.BATTLE_SELECTED_FLICKER_PERIOD],
 		# 顶部横条批：战斗屏顶部横条六数值参数锚定（调表须同步 UiTheme 兜底；
 		# 条目高 TOPBAR_ENTRY_HEIGHT 为结构常量豁免不入表不锚定）
 		["ui_battle_topbar_margin_top", UiTheme.TOPBAR_MARGIN_TOP],
@@ -1487,6 +1501,19 @@ static func _CheckCfgFallbacks(report: ValidationReport, game_data: Node) -> voi
 		if not is_equal_approx(table_value_f, float(pair[1])):
 			report.add_error("V-B2-cfg-fallback", CoreConfig.CFG_MAIN_ID,
 					"%s 表值 %s != 兜底常量 %s（调表须同步兜底）" % [pair[0], str(table_value_f), str(pair[1])])
+	# bool 域（选中闪烁批新增小节：开关锚定——调表须同步 UiTheme 兜底）
+	var bool_pairs: Array = [
+		["ui_battle_selected_flicker_enable", UiTheme.BATTLE_SELECTED_FLICKER_ENABLE],
+	]
+	for pair: Array in bool_pairs:
+		var raw_bool: Variant = cfg.get(pair[0])
+		if not (raw_bool is bool):
+			report.add_error("V-B2-cfg-fallback", CoreConfig.CFG_MAIN_ID,
+					"%s 字段类型异常（期望 bool，实际 %s）" % [pair[0], typeof(raw_bool)])
+			continue
+		if raw_bool != bool(pair[1]):
+			report.add_error("V-B2-cfg-fallback", CoreConfig.CFG_MAIN_ID,
+					"%s 表值 %s != 兜底常量 %s（调表须同步兜底）" % [pair[0], str(raw_bool), str(pair[1])])
 	# UI 颜色域（表值须回填且 == UiTheme 兜底常量）
 	var color_pairs: Array = [
 		["ui_tile_fallback_color", UiTheme.TILE_FALLBACK],
@@ -3853,6 +3880,31 @@ static func _CheckTopbarCfg(report: ValidationReport, game_data: Node) -> void:
 	if cfg.ui_battle_topbar_compact_entry_width < 36.0 or cfg.ui_battle_topbar_compact_entry_width > 72.0:
 		report.add_error("V-M6-topbar-cfg", CoreConfig.CFG_MAIN_ID,
 				"ui_battle_topbar_compact_entry_width %f 越界 [36, 72]" % cfg.ui_battle_topbar_compact_entry_width)
+
+
+# --------------------------------------------------------------------------
+# 选中闪烁批（V-M6-flicker-cfg 当前行动单位选中半透明闪烁参数值域）
+# --------------------------------------------------------------------------
+
+static func _CheckFlickerCfg(report: ValidationReport, game_data: Node) -> void:
+	## V-M6-flicker-cfg（选中闪烁批）：当前行动单位选中半透明闪烁
+	## ui_battle_selected_flicker_* 两数值键值域全检——min_alpha ∈ [0.1, 0.9]
+	##（下界保单位可见、上界保闪烁可辨）、period ∈ [0.2, 3.0]（秒——过快
+	## 闪烁刺眼/过慢无闪烁感）（错误级——值域破坏演出可辨性；enable 为
+	## 开关无值域，锚定在 V-B2-cfg-fallback bool_pairs 小节）
+	## 参数：报告 / GameData
+	## 返回：无
+	var cfg: CoreConfig = game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
+	if cfg == null:
+		return
+	if cfg.ui_battle_selected_flicker_min_alpha < 0.1 \
+			or cfg.ui_battle_selected_flicker_min_alpha > 0.9:
+		report.add_error("V-M6-flicker-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_selected_flicker_min_alpha %f 越界 [0.1, 0.9]" % cfg.ui_battle_selected_flicker_min_alpha)
+	if cfg.ui_battle_selected_flicker_period < 0.2 \
+			or cfg.ui_battle_selected_flicker_period > 3.0:
+		report.add_error("V-M6-flicker-cfg", CoreConfig.CFG_MAIN_ID,
+				"ui_battle_selected_flicker_period %f 越界 [0.2, 3.0]" % cfg.ui_battle_selected_flicker_period)
 
 
 static func _AllDomains(game_data: Node) -> Array[StringName]:

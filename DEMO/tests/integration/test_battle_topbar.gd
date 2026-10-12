@@ -168,7 +168,8 @@ func test_topbar_total_height_pure_function() -> void:
 func test_four_consumers_single_source_linkage() -> void:
 	## 用例⑤：四消费点单源联动——cfg margin_top 改 20（总高 76）一次断言
 	## 四处：TopBar offset_bottom 76 / BoardLayer offset_top 76 / IdleLabel
-	## offset_top 84（76+8）/ LogScroller 展开顶 84（76+8）；还原后四处回默认
+	## offset_top 84（76+8）/ LogScroller 展开顶 144（76+12+48+8——范围修复
+	## 批展开顶改锚点下缘基准）；还原后四处回默认
 	var runner: GdUnitSceneRunner = scene_runner(BATTLE_SCENE)
 	var battle: Control = runner.scene() as Control
 	var cfg: CoreConfig = _Cfg()
@@ -187,8 +188,8 @@ func test_four_consumers_single_source_linkage() -> void:
 			.override_failure_message("消费点② 板区顶应 76")
 	assert_float(battle.get_node("%IdleLabel").offset_top).is_equal(84.0) \
 			.override_failure_message("消费点③ IdleLabel 顶应 76+8=84")
-	assert_float(expand_panel.offset_top).is_equal(84.0) \
-			.override_failure_message("消费点④ 卷轴展开顶应 76+8=84")
+	assert_float(expand_panel.offset_top).is_equal(144.0) \
+			.override_failure_message("消费点④ 卷轴展开顶应 76+12+48+8=144")
 	# 还原后四处回默认
 	cfg.ui_battle_topbar_margin_top = original_top
 	topbar.apply_cfg(cfg)
@@ -198,7 +199,7 @@ func test_four_consumers_single_source_linkage() -> void:
 	assert_float(topbar.offset_bottom).is_equal(68.0)
 	assert_float(battle.get_node("%BoardLayer").offset_top).is_equal(68.0)
 	assert_float(battle.get_node("%IdleLabel").offset_top).is_equal(76.0)
-	assert_float(expand_panel.offset_top).is_equal(76.0)
+	assert_float(expand_panel.offset_top).is_equal(136.0)
 
 func _EnterRandomBattle() -> Control:
 	## 直构 BattleParams（默认 4 职业）进 BATTLE_SCREEN 并等挂载

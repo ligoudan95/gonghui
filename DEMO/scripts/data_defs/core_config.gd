@@ -299,6 +299,19 @@ enum Mode {
 ## 同走即时口径，log_toggle_seconds 先例）
 @export var ui_battle_zoom_seconds: float = 0.0
 
+# ---- 当前行动单位选中半透明闪烁参数（选中闪烁批：ui_battle_selected_
+# # flicker_* 3 键——仅我方存活单位（阵营门代码侧固定）、选中期间 sprite/
+# # 占位色块 modulate.a 呼吸闪烁助辨实际站位；铁律①：演出数值入表；默认
+# # 0/false = 未回填哨兵，UiTheme BATTLE_SELECTED_FLICKER_* 兜底——
+# # V-M6-flicker-cfg 值域 / V-B2-cfg-fallback 锚定双校验；波形 SINE 固定
+# # 代码——公式形态代码化，不入表）----
+## 选中半透明闪烁开关（false = 不闪烁仅金环呼吸）
+@export var ui_battle_selected_flicker_enable: bool = false
+## 闪烁透明度下限（modulate.a 1.0 ⇄ 下限呼吸；值域 [0.1, 0.9]）
+@export var ui_battle_selected_flicker_min_alpha: float = 0.0
+## 闪烁完整周期（秒——一完整明暗循环；值域 [0.2, 3.0]）
+@export var ui_battle_selected_flicker_period: float = 0.0
+
 # ---- 战斗屏顶部横条参数（顶部横条批：ui_battle_topbar_* 7 键——LeftPanel
 # # 整树退役、回合 UI+行动序上移顶部横条；铁律①：横条几何数值入表；默认
 # # 0 = 未回填哨兵，UiTheme TOPBAR_* 兜底——V-M6-topbar-cfg 值域 /

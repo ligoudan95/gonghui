@@ -178,12 +178,11 @@ func test_skill_pose_flip_resets_on_same_column() -> void:
 		assert_bool(_FlipHOf(_BadgeOf(battle, caster))).is_true()
 
 func _FlipHOf(badge: UnitBadge) -> bool:
-	## 徽章 sprite 水平翻转态查询（低8 契约断言口）
+	## 徽章 sprite 水平翻转态查询（低8 契约断言口；网格下移批注：选中金环
+	## TextureRect 已移 sprite 之前——按类型取 [0] 会拿错节点，直引 _sprite）
 	## 参数 badge：徽章
 	## 返回：flip_h
-	var sprite: TextureRect = badge.get_children().filter(
-			func(child: Node) -> bool: return child is TextureRect)[0] as TextureRect
-	return sprite.flip_h
+	return badge._sprite.flip_h
 
 func test_miss_no_hit_and_float_text() -> void:
 	## 闪避拍板口径：攻击掷未命中 → 目标不播受击 + MISS 飘字可见
@@ -220,8 +219,7 @@ func test_hit_damage_plays_hit_and_flash() -> void:
 	cfg.ui_hit_flash_seconds = original_flash
 	var target_badge: UnitBadge = _BadgeOf(battle, target)
 	assert_int(target_badge.current_action()).is_equal(UnitAnimState.Action.HIT)
-	var sprite: TextureRect = target_badge.get_children().filter(
-			func(child: Node) -> bool: return child is TextureRect)[0] as TextureRect
+	var sprite: TextureRect = target_badge._sprite
 	assert_bool(sprite.modulate == Color(1, 1, 1, 1)).is_false() \
 			.override_failure_message("受击白闪未生效（sprite modulate 未高亮）")
 	# 低14（盲审）：白闪峰值色入表（cfg ui_hit_flash_peak_color——HDR 亮白
@@ -435,8 +433,7 @@ func test_trap_triggered_alive_plays_hit() -> void:
 	cfg.ui_hit_flash_seconds = flash_backup
 	var badge: UnitBadge = _BadgeOf(battle, unit)
 	assert_int(badge.current_action()).is_equal(UnitAnimState.Action.HIT)
-	var sprite: TextureRect = badge.get_children().filter(
-			func(child: Node) -> bool: return child is TextureRect)[0] as TextureRect
+	var sprite: TextureRect = badge._sprite
 	assert_bool(sprite.modulate == Color(1, 1, 1, 1)).is_false() \
 			.override_failure_message("陷阱承伤未补受击白闪（低7 未修）")
 
@@ -455,8 +452,7 @@ func test_round_settled_dot_plays_hit_with_flash() -> void:
 	cfg.ui_hit_flash_seconds = flash_backup
 	var badge: UnitBadge = _BadgeOf(battle, unit)
 	assert_int(badge.current_action()).is_equal(UnitAnimState.Action.HIT)
-	var sprite: TextureRect = badge.get_children().filter(
-			func(child: Node) -> bool: return child is TextureRect)[0] as TextureRect
+	var sprite: TextureRect = badge._sprite
 	assert_bool(sprite.modulate == Color(1, 1, 1, 1)).is_false() \
 			.override_failure_message("DOT 承伤未补受击白闪（低7 未修）")
 

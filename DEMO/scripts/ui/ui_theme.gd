@@ -44,10 +44,11 @@ const DAMAGE_NORMAL: Color = Color(1.0, 0.9, 0.6)
 const TIPS_LINE1: Color = Color(0.98, 0.6, 0.5)
 const TIPS_LINE2: Color = Color(0.85, 0.88, 0.9)
 
-# ---- 覆盖层（B-5：battle_board 范围/路径/确认/阻断兜底）----
-const OVERLAY_MOVE_FILL: Color = Color(0.4, 0.7, 1.0, 0.10)
+# ---- 覆盖层（B-5：battle_board 范围/路径/确认/阻断兜底；范围修复批：
+# # 范围填充 α 0.1 → 0.18 微调——与 cfg_main 表值同步锚定）----
+const OVERLAY_MOVE_FILL: Color = Color(0.4, 0.7, 1.0, 0.18)
 const OVERLAY_MOVE_BORDER: Color = Color(0.55, 0.85, 1.0, 0.95)
-const OVERLAY_SKILL_FILL: Color = Color(1.0, 0.3, 0.25, 0.10)
+const OVERLAY_SKILL_FILL: Color = Color(1.0, 0.3, 0.25, 0.18)
 const OVERLAY_SKILL_BORDER: Color = Color(1.0, 0.42, 0.35, 0.95)
 const OVERLAY_BLOCKED_FILL: Color = Color(0.35, 0.35, 0.38, 0.08)
 const OVERLAY_BLOCKED_BORDER: Color = Color(0.45, 0.45, 0.5, 0.85)
@@ -145,7 +146,8 @@ const BADGE_BASE_RING_ENEMY: Color = Color(0.85, 0.32, 0.28, 0.85)
 const BATTLE_LOG_ANCHOR_WIDTH: float = 150.0
 ## 收起态锚点条视觉高兜底（像素）
 const BATTLE_LOG_ANCHOR_HEIGHT: float = 28.0
-## 锚点条距屏右上角边距兜底（像素）
+## 锚点热区距横条下缘边距兜底（像素——范围修复批：锚点下移与横条下缘
+## 平齐后边距基准由屏右上角改横条下缘，值 12 不变）
 const BATTLE_LOG_ANCHOR_MARGIN: float = 12.0
 ## 锚点热区最小边长兜底（像素——触控硬条款 ≥ 48）
 const BATTLE_LOG_HIT_MIN: float = 48.0
@@ -176,6 +178,17 @@ const ZOOM_MIN_STEP_GAP: float = 0.02
 ## 缩放档距比上限（过大档距缩放跳变过激；V-M6-viewport-cfg /
 ## BattleBoard._ZoomStepRatio 同引——上限两处字面重复收口）
 const ZOOM_MAX_STEP_RATIO: float = 0.5
+
+# ---- 当前行动单位选中半透明闪烁兜底（选中闪烁批：cfg ui_battle_selected_
+# # flicker_* 3 键——V-B2 cfg-fallback 锚定，值 == cfg_main 表值；仅我方
+# # 存活单位（阵营门代码侧固定）；波形 SINE 固定代码——公式形态代码化
+# # 不入表，铁律①）----
+## 选中半透明闪烁开关兜底（false = 不闪烁仅金环呼吸）
+const BATTLE_SELECTED_FLICKER_ENABLE: bool = true
+## 闪烁透明度下限兜底（modulate.a 1.0 ⇄ 下限呼吸；值域锚定 V-M6-flicker-cfg）
+const BATTLE_SELECTED_FLICKER_MIN_ALPHA: float = 0.5
+## 闪烁完整周期兜底（秒——一完整明暗循环；值域锚定 V-M6-flicker-cfg）
+const BATTLE_SELECTED_FLICKER_PERIOD: float = 1.0
 
 # ---- 战斗屏顶部横条兜底（顶部横条批：cfg ui_battle_topbar_* 7 键——V-B2
 # # # cfg-fallback 锚定，值 == cfg_main 表值；TOPBAR_ENTRY_HEIGHT 为结构

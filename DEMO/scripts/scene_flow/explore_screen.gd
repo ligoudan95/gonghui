@@ -14,8 +14,9 @@
 ## 汇总」聚合段——拍板②并入正文，BuildDetailLines 与 DaySummaryPanel 共用）。
 ## 显示层级（2026-09-25 用户拍板）：UI 弹层（事件面板/结算面板，z=
 ## UI_POPUP_Z_INDEX）> 战争迷雾（board Z_FOG）> 已显示内容（board Z_TILE/
-## Z_CONTENT）；例外：委托目标点常显（+衬底）与视野内小队图标浮于迷雾上
-## （board Z_OVERLAY/Z_PARTY——恒低于 UI 弹层）。
+## Z_CONTENT）；例外：已显示的委托目标点（+衬底，迷雾口径同交互点——
+## 2026-10-12 修订推翻案 7 #25「常显」条款：未探索浓雾中不可见）与视野内
+## 小队图标浮于迷雾上（board Z_OVERLAY/Z_PARTY——恒低于 UI 弹层）。
 ## 三栏布局（三栏改版批，C1 拍板 A 三栏对称）：Layout HBox = 左栏
 ## ExplorePartyPanel（冒险者信息）+ 中栏 GoalBanner/BoardHost（板面满高，
 ## 提示行叠加板面底部不占布局高）+ 右栏 ExploreQuestPanel（委托信息/图例/

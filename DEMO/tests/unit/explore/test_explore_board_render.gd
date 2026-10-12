@@ -1,10 +1,13 @@
 ## 探索板渲染镜像与适配契约测试（三栏改版批——C2 拍板 (b) 渲染镜像 + C7 放宽上限；
-## 2026-10-03 试玩反馈批增：目标点仅绑定渲染〔批 A〕+ 矿洞段可通行格染色〔批 B〕）
+## 2026-10-03 试玩反馈批增：目标点仅绑定渲染〔批 A〕+ 矿洞段可通行格染色〔批 B〕；
+## 2026-10-12 用户修订增：目标点迷雾口径契约——推翻案 7 #25「常显」条款，
+## 与交互点同判定〔UNSEEN 浓雾不可见·已探索可见〕）
 ## 覆盖：镜像正映射（数据 y=0〔北/村口〕绘于屏幕下方——出口贴底/北行靠下/
 ## 南北翻转序）/ 全图 round-trip（cell_from_local 与 _cell_origin 互逆——点按
 ## 命中与绘制落位同口径）/ fit 上限参数化（cfg 表值 1.2 生效 + cfg 缺省回退
-## UiTheme 兜底）/ 目标点可见性（绑定金色渲染·未绑定与自由探索全隐藏）/
-## 矿洞染色（可通行格淡鹅黄·岩壁与村子段不染·cfg 缺省回退兜底）。
+## UiTheme 兜底）/ 目标点可见性（绑定金色渲染·未绑定与自由探索全隐藏·
+## 迷雾口径 UNSEEN 不可见已探索可见）/ 矿洞染色（可通行格淡鹅黄·岩壁与
+## 村子段不染·cfg 缺省回退兜底）。
 ## 环境与形态：帧内真 autoload（GameData——layering 先例），板面直注构建
 ## （不经场景——镜像映射与适配是纯逻辑）。
 extends GdUnitTestSuite
@@ -97,7 +100,9 @@ func _Cfg() -> CoreConfig:
 func test_target_icons_bound_only_visible() -> void:
 	## 目标点可见性契约（2026-10-03 试玩反馈批 A——原非绑定灰显推翻）：
 	## refresh 绑定 tp_old_well——仅该点图标+衬底可见且金色高亮，其余 5 目标点
-	## 完全隐藏；构建期（refresh 前）默认全隐藏（首帧不闪现）
+	## 完全隐藏；构建期（refresh 前）默认全隐藏（首帧不闪现）。
+	## 本用例 fog=null（全图常亮口径）；迷雾三态口径另见
+	## test_target_icon_fog_contract（2026-10-12 修订）
 	var cfg: CoreConfig = _Cfg()
 	var active: Color = UiTheme.color_of(cfg, &"ui_explore_target_active_color",
 			UiTheme.EXPLORE_TARGET_ACTIVE)
@@ -127,6 +132,40 @@ func test_target_icons_free_explore_all_hidden() -> void:
 		assert_bool(board._target_icons[tp_id].visible).is_false() \
 				.override_failure_message("自由探索 %s 应隐藏" % tp_id)
 		assert_bool(board._target_backdrops[tp_id].visible).is_false()
+
+func test_target_icon_fog_contract() -> void:
+	## 目标点迷雾口径契约（2026-10-12 用户修订——推翻案 7 #25「目标点常显」
+	## 拍板条款）：绑定目标点与其他交互点同判定——未探索浓雾（UNSEEN）中
+	## 不可见，进入视野（LIT）与离开视野已探索（DIM 记忆）后显示金色高亮。
+	## 迷雾手工装配（无遮蔽回调纯圆口径——三态语义判定不依赖真实图墙体）
+	var cfg: CoreConfig = _Cfg()
+	var active: Color = UiTheme.color_of(cfg, &"ui_explore_target_active_color",
+			UiTheme.EXPLORE_TARGET_ACTIVE)
+	var board: ExploreBoard = _MakeBoard(cfg)
+	var fog := FogOfWar.new()
+	fog.setup(2, [], board._map_def.size)
+	# 首帧：小队村子出生 (7,1)，绑定目标 tp_old_well 在矿洞深处 (5,13)——
+	## 浓雾 UNSEEN 中不可见（常显推翻——不再穿雾显示）
+	fog.on_moved(Vector2i(7, 1))
+	board.refresh(Vector2i(7, 1), fog, {}, {}, &"tp_old_well", false)
+	assert_bool(board._target_icons[&"tp_old_well"].visible).is_false() \
+			.override_failure_message("未探索浓雾中绑定目标点应不可见")
+	assert_bool(board._target_backdrops[&"tp_old_well"].visible).is_false() \
+			.override_failure_message("未探索浓雾中绑定目标点衬底应不可见")
+	# 小队抵近目标格（同格视野 LIT）→ 可见 + 金色高亮
+	fog.on_moved(Vector2i(5, 13))
+	board.refresh(Vector2i(5, 13), fog, {}, {}, &"tp_old_well", false)
+	assert_bool(board._target_icons[&"tp_old_well"].visible).is_true() \
+			.override_failure_message("视野内（LIT）绑定目标点应可见")
+	assert_bool(board._target_backdrops[&"tp_old_well"].visible).is_true() \
+			.override_failure_message("视野内（LIT）绑定目标点衬底应可见")
+	assert_bool(board._target_icons[&"tp_old_well"].modulate.is_equal_approx(active)).is_true()
+	# 小队离开（(5,13) 已入探索记忆 → DIM）→ 仍可见（已探索口径同交互点）
+	board.refresh(Vector2i(7, 1), fog, {}, {}, &"tp_old_well", false)
+	assert_bool(board._target_icons[&"tp_old_well"].visible).is_true() \
+			.override_failure_message("已探索记忆（DIM）绑定目标点应可见")
+	assert_bool(board._target_backdrops[&"tp_old_well"].visible).is_true() \
+			.override_failure_message("已探索记忆（DIM）绑定目标点衬底应可见")
 
 func test_mine_walkable_tint_and_others_untinted() -> void:
 	## 矿洞段染色契约（试玩反馈批 B）：矿洞可通行格（地面/毒沼）modulate

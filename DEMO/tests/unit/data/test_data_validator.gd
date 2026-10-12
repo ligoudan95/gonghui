@@ -1279,3 +1279,80 @@ func test_v_b2_topbar_cfg_fallback_anchor() -> void:
 	var report_after: ValidationReport = DataValidator.run_all(_game_data)
 	assert_int(report_after.errors.size()).is_equal(0)
 
+# --------------------------------------------------------------------------
+# 选中闪烁批（V-M6-flicker-cfg 值域双向 + V-B2-cfg-fallback 三键锚定）
+# --------------------------------------------------------------------------
+
+func test_v_m6_flicker_cfg_domain_both_directions() -> void:
+	## V-M6-flicker-cfg 双向：min_alpha 0.05/0.95（越 [0.1,0.9]）、period
+	## 0.1/3.5（越 [0.2,3.0]）→ 各报错；0 哨兵（未回填）在值域外必报；
+	## period 负值连带 V-M0 非负循环；合法域内（== 兜底 0.5/1.0）不报本规则；
+	## 恢复后归零
+	var cfg: CoreConfig = _game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
+	assert_object(cfg).is_not_null()
+	var alpha_backup: float = cfg.ui_battle_selected_flicker_min_alpha
+	var period_backup: float = cfg.ui_battle_selected_flicker_period
+	# min_alpha 双向：0.05 越下界 / 0.95 越上界
+	cfg.ui_battle_selected_flicker_min_alpha = 0.05
+	var alpha_under: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(alpha_under, "V-M6-flicker-cfg", "ui_battle_selected_flicker_min_alpha")) \
+			.override_failure_message("min_alpha 0.05 越下界应报 V-M6-flicker-cfg").is_true()
+	cfg.ui_battle_selected_flicker_min_alpha = 0.95
+	var alpha_over: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(alpha_over, "V-M6-flicker-cfg", "ui_battle_selected_flicker_min_alpha")) \
+			.override_failure_message("min_alpha 0.95 越上界应报错").is_true()
+	# 0 哨兵（未回填）在值域外（0 < 0.1）必报值域
+	cfg.ui_battle_selected_flicker_min_alpha = 0.0
+	var alpha_sentinel: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(alpha_sentinel, "V-M6-flicker-cfg", "ui_battle_selected_flicker_min_alpha")) \
+			.override_failure_message("min_alpha 0 哨兵应报 V-M6-flicker-cfg").is_true()
+	cfg.ui_battle_selected_flicker_min_alpha = alpha_backup
+	# period 双向：0.1 越下界 / 3.5 越上界 / 负值连带 V-M0 非负 / 0 哨兵必报
+	cfg.ui_battle_selected_flicker_period = 0.1
+	var period_under: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(period_under, "V-M6-flicker-cfg", "ui_battle_selected_flicker_period")) \
+			.override_failure_message("period 0.1 越下界应报错").is_true()
+	cfg.ui_battle_selected_flicker_period = 3.5
+	var period_over: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(period_over, "V-M6-flicker-cfg", "ui_battle_selected_flicker_period")) \
+			.override_failure_message("period 3.5 越上界应报错").is_true()
+	cfg.ui_battle_selected_flicker_period = -0.5
+	var period_neg: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(period_neg, "V-M6-flicker-cfg", "ui_battle_selected_flicker_period")) \
+			.override_failure_message("period 负值应报 V-M6-flicker-cfg").is_true()
+	assert_bool(_HasError(period_neg, "V-M0-cfg-domain", "ui_battle_selected_flicker_period")) \
+			.override_failure_message("period 负值应连带 V-M0 非负循环").is_true()
+	cfg.ui_battle_selected_flicker_period = 0.0
+	var period_sentinel: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(period_sentinel, "V-M6-flicker-cfg", "ui_battle_selected_flicker_period")) \
+			.override_failure_message("period 0 哨兵应报 V-M6-flicker-cfg").is_true()
+	cfg.ui_battle_selected_flicker_period = period_backup
+	# 合法域内（== 兜底锚定值）零错误
+	var valid_report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(valid_report.errors.size()).is_equal(0)
+
+func test_v_b2_flicker_cfg_fallback_anchor() -> void:
+	## V-B2-cfg-fallback 三键锚定：min_alpha/period 合法域内漂移（0.6/1.2）+
+	## enable 关（false ≠ 兜底 true——bool_pairs 小节）→ 各报错；恢复后归零
+	##（调表须同步兜底——C-3 护栏）
+	var cfg: CoreConfig = _game_data.get_record(CoreConfig.CFG_MAIN_ID) as CoreConfig
+	assert_object(cfg).is_not_null()
+	var alpha_backup: float = cfg.ui_battle_selected_flicker_min_alpha
+	var period_backup: float = cfg.ui_battle_selected_flicker_period
+	var enable_backup: bool = cfg.ui_battle_selected_flicker_enable
+	cfg.ui_battle_selected_flicker_min_alpha = 0.6
+	cfg.ui_battle_selected_flicker_period = 1.2
+	cfg.ui_battle_selected_flicker_enable = false
+	var report: ValidationReport = DataValidator.run_all(_game_data)
+	assert_bool(_HasError(report, "V-B2-cfg-fallback", "ui_battle_selected_flicker_min_alpha")) \
+			.override_failure_message("min_alpha 表值漂移应报 V-B2 锚定").is_true()
+	assert_bool(_HasError(report, "V-B2-cfg-fallback", "ui_battle_selected_flicker_period")) \
+			.override_failure_message("period 表值漂移应报 V-B2 锚定").is_true()
+	assert_bool(_HasError(report, "V-B2-cfg-fallback", "ui_battle_selected_flicker_enable")) \
+			.override_failure_message("enable 表值关应报 V-B2 锚定（bool_pairs）").is_true()
+	cfg.ui_battle_selected_flicker_min_alpha = alpha_backup
+	cfg.ui_battle_selected_flicker_period = period_backup
+	cfg.ui_battle_selected_flicker_enable = enable_backup
+	var report_after: ValidationReport = DataValidator.run_all(_game_data)
+	assert_int(report_after.errors.size()).is_equal(0)
+

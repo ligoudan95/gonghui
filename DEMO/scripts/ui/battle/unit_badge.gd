@@ -8,7 +8,10 @@
 ## 椭圆底圈（E1 纯新增：阵营色 draw_polyline 椭圆点集——cfg
 ## ui_badge_base_ring_ally/enemy_color；倒地随 _SetBarsVisible 一并隐藏）、
 ## 当前行动高亮环（5px 金边 + 呼吸脉动——2026-09-24 试玩反馈增强辨识；
-## E1：贴图态 fx_battle_select 满盒菱形 STRETCH_SCALE 零改）、血条伤害预览
+## E1：贴图态 fx_battle_select 满盒菱形 STRETCH_SCALE 零改；网格下移批
+## 拍板 2：环树序移 sprite 前（画在单位脚下）；选中闪烁批：仅我方存活
+## 单位另启 modulate.a 半透明闪烁——cfg ui_battle_selected_flicker_* 表
+## 驱动，与受击白闪同属性串行互斥）、血条伤害预览
 ##（预扣色带 + 「−N」闪烁数字——二轮试玩反馈）、蛊惑紫边闪烁、受击白闪
 ##（M6：ui_hit_flash_seconds）、倒地尸态（D5=A：downed 末帧锁定 + 灰度
 ## 维持 + 隐藏血条/资源条/高亮环/底圈）。
@@ -88,6 +91,11 @@ var _anim_atlas: AtlasTexture = null
 var _last_frame_index: int = -1
 ## 受击白闪 Tween（null = 无闪烁）
 var _flash_tween: Tween = null
+## 选中半透明闪烁 Tween（null = 无闪烁——选中闪烁批）
+var _flicker_tween: Tween = null
+## 选中闪烁意图位（true = 选中资格在身：白闪暂停期保持 true、白闪结束
+## 回调据此恢复；set_current(false)/倒地清理置 false）
+var _flicker_active: bool = false
 ## 菱形全宽（像素——E1：原 cell_size 方形边长口径退役）
 var cell_width: float = 72.0
 ## 菱形全高（像素——setup 时按注入 cfg 的 iso_ratio 派生：cell_width × ratio）
@@ -176,6 +184,37 @@ func _IsoRingRatio() -> float:
 		raw = _cfg.ui_battle_iso_ring_ratio
 	if raw <= 0.0 or raw > 0.5:
 		return UiTheme.ISO_RING_RATIO
+	return raw
+
+## 选中闪烁批三读取口（cfg ui_battle_selected_flicker_* 优先、UiTheme
+## BATTLE_SELECTED_FLICKER_* 兜底；数值两口值域外非法回退兜底——
+## _IsoRatio/_PathHighlight* 同模式；波形 SINE 固定代码：公式形态代码化）
+func _SelectedFlickerEnabled() -> bool:
+	## 参数：无
+	## 返回：生效开关
+	var raw: bool = UiTheme.BATTLE_SELECTED_FLICKER_ENABLE
+	if _cfg != null:
+		raw = _cfg.ui_battle_selected_flicker_enable
+	return raw
+
+func _SelectedFlickerMinAlpha() -> float:
+	## 参数：无
+	## 返回：生效透明度下限（[0.1, 0.9]）
+	var raw: float = UiTheme.BATTLE_SELECTED_FLICKER_MIN_ALPHA
+	if _cfg != null:
+		raw = _cfg.ui_battle_selected_flicker_min_alpha
+	if raw < 0.1 or raw > 0.9:
+		return UiTheme.BATTLE_SELECTED_FLICKER_MIN_ALPHA
+	return raw
+
+func _SelectedFlickerPeriod() -> float:
+	## 参数：无
+	## 返回：生效闪烁周期（秒，[0.2, 3.0]）
+	var raw: float = UiTheme.BATTLE_SELECTED_FLICKER_PERIOD
+	if _cfg != null:
+		raw = _cfg.ui_battle_selected_flicker_period
+	if raw < 0.2 or raw > 3.0:
+		return UiTheme.BATTLE_SELECTED_FLICKER_PERIOD
 	return raw
 
 func setup(badge_unit: BattleUnit, badge_cell_width: float,
@@ -270,13 +309,18 @@ func set_flip(flip: bool) -> void:
 
 func play_hit_flash() -> void:
 	## 受击白闪（M6：sprite modulate 亮白 → 复位，时长 = cfg.
-	## ui_hit_flash_seconds；时长 ≤ 0 立即复位——测试注 0 口径）
+	## ui_hit_flash_seconds；时长 ≤ 0 立即复位——测试注 0 口径）；
+	## 选中闪烁批：白闪与闪烁同写 _sprite.modulate——至多一个 tween 持有
+	##（同属性互斥收口）：闪烁进行中先暂停（kill、意图位保持），白闪完
+	## 据意图位自动恢复（finished 回调 / 立即复位分支直启）
 	## 参数：无
 	## 返回：无
 	if _sprite == null:
 		return
 	if _flash_tween != null:
 		_flash_tween.kill()
+	if _flicker_active and _flicker_tween != null and _flicker_tween.is_valid():
+		_flicker_tween.kill()
 	var duration: float = UiTheme.HIT_FLASH_SECONDS
 	if _cfg != null:
 		duration = _cfg.ui_hit_flash_seconds
@@ -285,9 +329,11 @@ func play_hit_flash() -> void:
 	_sprite.modulate = _Color(&"ui_hit_flash_peak_color", UiTheme.HIT_FLASH_PEAK)
 	if duration <= 0.0:
 		_sprite.modulate = Color(1, 1, 1, 1)
+		_StartSelectedFlicker()
 		return
 	_flash_tween = create_tween()
 	_flash_tween.tween_property(_sprite, "modulate", Color(1, 1, 1, 1), duration)
+	_flash_tween.finished.connect(_StartSelectedFlicker)
 
 func _AnimFpsOf(action: int) -> float:
 	## 动作帧率读取（cfg 表驱动：ui_anim_*_fps；cfg 注入即取表值——
@@ -361,7 +407,8 @@ func refresh() -> void:
 func _SetBarsVisible(visible_bars: bool) -> void:
 	## 血条/资源条可见性 + 倒地态高亮环/蛊惑边/椭圆底圈清理（D5：倒地隐藏
 	## ——尸态只留 sprite；E1：底圈随本口一并隐藏；存活时环可见性仍由
-	## set_current 独立管理）
+	## set_current 独立管理；选中闪烁批：闪烁随倒地一并停——灰度尸态
+	## 不被闪烁覆盖，refresh 倒地分支经本口收口）
 	## 参数 visible_bars：true = 显示条
 	## 返回：无
 	for bar: ColorRect in [_hp_back, _hp_fill, _res_back, _res_fill]:
@@ -376,6 +423,7 @@ func _SetBarsVisible(visible_bars: bool) -> void:
 		for edge: Control in _bewitch_ring:
 			edge.visible = false
 		_StopRingBreath()
+		_StopSelectedFlicker()
 
 func show_damage_preview(amount: int) -> void:
 	## 血条伤害预览：当前 HP 末段显示预扣色带 + 血条上方「−N」数字，
@@ -446,15 +494,21 @@ func _SetPreviewAlpha(alpha: float) -> void:
 		_preview_label.modulate.a = alpha
 
 func set_current(current: bool) -> void:
-	## 当前行动高亮环开关（开启时呼吸脉动——2026-09-24 试玩反馈增强辨识）
+	## 当前行动高亮环开关（开启时呼吸脉动——2026-09-24 试玩反馈增强辨识）；
+	## 选中闪烁批：开启时按资格另启半透明闪烁（拍板 3：仅我方存活单位——
+	## 敌方金环呼吸照常、闪烁不启）；关闭时两者一并停
 	## 参数 current：true = 高亮
 	## 返回：无
 	for edge: Control in _ring:
 		edge.visible = current
 	if current:
 		_StartRingBreath()
+		_flicker_active = _SelectedFlickerEnabled() and unit != null and unit.alive \
+				and unit.side == SkillDef.SkillSide.ALLY
+		_StartSelectedFlicker()
 	else:
 		_StopRingBreath()
+		_StopSelectedFlicker()
 
 func _StartRingBreath() -> void:
 	## 启动高亮环呼吸（透明度 1.0 → 下限 → 1.0 循环 Tween；已在跑则不重启）
@@ -481,6 +535,50 @@ func _SetRingAlpha(alpha: float) -> void:
 	## 返回：无
 	for edge: Control in _ring:
 		edge.modulate.a = alpha
+
+func _FlickerTarget() -> CanvasItem:
+	## 闪烁目标视觉主体（贴图态 sprite / 缺件占位色块——两态同权闪烁；
+	## 均空返回 null 不启）
+	## 参数：无
+	## 返回：目标 CanvasItem（可能 null）
+	if _sprite != null:
+		return _sprite
+	return _fallback
+
+func _StartSelectedFlicker() -> void:
+	## 启动选中半透明闪烁（意图位假/未启用/目标空早退；kill 旧 tween 防重入）：
+	## modulate.a 1.0 → 下限 → 1.0 无限循环，各段 period×0.5、SINE 正弦呼吸
+	##（波形固定代码——公式形态代码化）
+	## 参数：无
+	## 返回：无
+	if not _flicker_active or not _SelectedFlickerEnabled():
+		return
+	var target: CanvasItem = _FlickerTarget()
+	if target == null:
+		return
+	if _flicker_tween != null and _flicker_tween.is_valid():
+		_flicker_tween.kill()
+	var min_alpha: float = _SelectedFlickerMinAlpha()
+	var half_period: float = _SelectedFlickerPeriod() * 0.5
+	_flicker_tween = create_tween().set_loops()
+	_flicker_tween.tween_property(target, "modulate:a", min_alpha, half_period) \
+			.set_trans(Tween.TransitionType.TRANS_SINE)
+	_flicker_tween.tween_property(target, "modulate:a", 1.0, half_period) \
+			.set_trans(Tween.TransitionType.TRANS_SINE)
+
+func _StopSelectedFlicker() -> void:
+	## 停止选中半透明闪烁（kill tween + 意图位清 + 透明度复位 1.0——只动
+	## modulate.a 不碰 rgb：与白闪峰值色、倒地灰度〔挂徽章根 modulate，
+	## 属性路径不同〕互不干扰；幂等）
+	## 参数：无
+	## 返回：无
+	if _flicker_tween != null and _flicker_tween.is_valid():
+		_flicker_tween.kill()
+	_flicker_tween = null
+	_flicker_active = false
+	var target: CanvasItem = _FlickerTarget()
+	if target != null:
+		target.modulate.a = 1.0
 
 func _process(delta: float) -> void:
 	## 帧推进驱动（M6：UnitAnimState.advance + 跨帧重设 AtlasTexture.region；
@@ -598,6 +696,14 @@ func _BuildChildren() -> void:
 			BEWITCH_RING_THICKNESS)
 	for edge: Control in _ring + _bewitch_ring:
 		edge.visible = false
+	# 选中金环下移（网格下移批拍板 2）：环画到单位脚下——树序挪到视觉
+	# 主体（sprite / 占位色块）之前，菱形环露出 sprite 两侧轮廓便于辨实际
+	# 站位；呼吸 tween / 可见性管理零改（只动树序）；蛊惑边不随移（伤害
+	# 提示维持压主体现状）
+	var body: Control = _sprite if _sprite != null else _fallback
+	if body != null:
+		for edge: Control in _ring:
+			move_child(edge, body.get_index())
 
 func _MakeBar(position: Vector2, size: Vector2, color: Color) -> ColorRect:
 	## 构建条形子节点并挂树

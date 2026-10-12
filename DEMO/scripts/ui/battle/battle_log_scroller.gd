@@ -6,7 +6,9 @@
 ## 关闭逻辑——拍板口径）；敌方轮锚点条切提示语（拍板 C 文案单源自
 ## battle_screen 迁入本组件）、我方轮/终局恢复；resize 跟随重算（板区高
 ## 变化 → 展开钳制公式重算 + kill 在途 tween，锚点条右上锚定静态 offset
-## 免重算）。展开几何 = cfg ui_battle_log_* 十键表驱动（UiTheme
+## 免重算）；范围修复批：锚点热区纵向基准 = 横条总高 + 边距（下移与回合
+## 标识横条下缘平齐）、展开顶基准 = 锚点热区下缘 + 间距。展开几何 = cfg
+## ui_battle_log_* 十键表驱动（UiTheme
 ## BATTLE_LOG_* 兜底、值域外回退）；未读计数单源 = BattleLog 条目容器
 ## child_entered_tree（不订 controller 信号，与日志渲染解耦）。
 ## 输入口径：仅锚点 HitArea STOP + 展开 ExpandPanel STOP，其余全穿透；
@@ -16,11 +18,12 @@ class_name BattleLogScroller
 extends Control
 
 ## 卷轴浮层 z_index（结构契约：压棋盘 tips/飘字 BattleBoard.Z_TEXT=200、
-## 被 ResultLayer z=400 压——与 BattleBoard.Z_OVERLAY/Z_TEXT 同先例不入 cfg）
+## 被 ResultLayer z=400 压——与 BattleBoard.Z_TEXT 同先例不入 cfg；网格
+## 下移批注：BattleBoard.Z_OVERLAY 已退役——覆盖层改逐格深度融入）
 const Z_LOG_OVERLAY: int = 300
-## 展开顶与横条下缘间距（像素——结构常量，方案定值 8px；顶部横条批：
-## 展开顶基准由锚点条下缘改横条总高（UiTheme.topbar_total_height 单源），
-## 值与语义维持 8px 间距）
+## 展开顶与锚点热区下缘间距（像素——结构常量，方案定值 8px；范围修复批：
+## 展开顶基准改锚点热区下缘（横条总高 + 锚点边距 + 热区高 + 本值——锚点
+## 下移与横条下缘平齐后展开面板随之让位），值维持 8px 间距）
 const EXPAND_TOP_GAP: float = 8.0
 ## 板区底保留高（像素——镜像 tscn BoardLayer offset_bottom=-84 按钮行区；
 ## 展开钳制公式的 board_h = 屏高 − 本值）
@@ -48,8 +51,8 @@ var _enemy_hint_active: bool = false
 ## 在途展开/收起 tween（新动作/resize 先 kill 防插值竞态）
 var _toggle_tween: Tween = null
 ## 展开面板顶 offset（_RecalcLayout 缓存——tween 插值/回落目标基准；
-## 占位 = 兜底横条总高 68 + 间距 8 = 76，_ready 重算覆盖）
-var _expand_top: float = 76.0
+## 占位 = 兜底横条总高 68 + 边距 12 + 热区 48 + 间距 8 = 136，_ready 重算覆盖）
+var _expand_top: float = 136.0
 ## 展开面板高（_RecalcLayout 缓存——钳制公式结果）
 var _expand_height: float = 240.0
 
@@ -170,10 +173,11 @@ func get_unread_count() -> int:
 func _RecalcLayout() -> void:
 	## 布局重算（resize 跟随 / cfg 变更 / 初帧）：锚点热区右上锚定静态
 	## offset（热区 = max(锚点视觉, 触控下限)，视觉条居中命中垫内——随屏
-	## 尺寸免重算）；展开面板 rect 按钳制公式（右缘 = 屏宽 − 锚点边距 −
-	## 展开边距、顶 = 横条总高 + 8（顶部横条批改横条下缘基准）、高 = 钳制
-	## 公式）；在途 tween 先 kill；已展开态直接落位新 rect，已收起态强制
-	## 闭落位（kill 中途回落不留半开）
+	## 尺寸免重算；范围修复批：纵向基准 = 横条总高 + anchor_margin——锚点
+	## 下移与回合标识横条下缘平齐，原屏顶基准与横条重叠）；展开面板 rect
+	## 按钳制公式（右缘 = 屏宽 − 锚点边距 − 展开边距、顶 = 锚点热区下缘 +
+	## 间距 8、高 = 钳制公式）；在途 tween 先 kill；已展开态直接落位新
+	## rect，已收起态强制闭落位（kill 中途回落不留半开）
 	## 参数：无
 	## 返回：无
 	_KillToggleTween()
@@ -183,15 +187,16 @@ func _RecalcLayout() -> void:
 	var anchor_margin: float = _AnchorMargin()
 	var hit_w: float = maxf(anchor_w, hit_min)
 	var hit_h: float = maxf(anchor_h, hit_min)
+	var anchor_top: float = _AnchorTopY()
 	# 锚点热区（右上锚定——静态 offset，窗口尺寸变化由锚点自动跟随）
 	_hit_area.anchor_left = 1.0
 	_hit_area.anchor_right = 1.0
 	_hit_area.anchor_top = 0.0
 	_hit_area.anchor_bottom = 0.0
 	_hit_area.offset_left = -(anchor_margin + hit_w)
-	_hit_area.offset_top = anchor_margin
+	_hit_area.offset_top = anchor_top
 	_hit_area.offset_right = -anchor_margin
-	_hit_area.offset_bottom = anchor_margin + hit_h
+	_hit_area.offset_bottom = anchor_top + hit_h
 	# 锚点条：热区内满锚 + 居中差分 offset（视觉横条居中命中垫内）
 	_anchor_bar.anchor_left = 0.0
 	_anchor_bar.anchor_right = 1.0
@@ -202,12 +207,13 @@ func _RecalcLayout() -> void:
 	_anchor_bar.offset_top = (hit_h - anchor_h) * 0.5
 	_anchor_bar.offset_bottom = -(hit_h - anchor_h) * 0.5
 	_anchor_bar.custom_minimum_size = Vector2(anchor_w, anchor_h)
-	# 展开面板（右上锚定 + 钳制公式——唯一随屏高重算的量）；顶部横条批：
-	# 展开顶基准 = 横条总高（UiTheme 单源——默认 68）+ 间距 8 = 76
+	# 展开面板（右上锚定 + 钳制公式——唯一随屏高重算的量）；范围修复批：
+	# 展开顶基准 = 锚点热区下缘 + 间距 8（默认 68+12+48+8 = 136——锚点
+	# 下移让位后展开面板随之跟随，不压锚点热区）
 	var expand_w: float = _ExpandWidth()
 	var expand_margin: float = _ExpandMargin()
 	_expand_height = _ExpandHeightOf(size)
-	_expand_top = UiTheme.topbar_total_height(_cfg) + EXPAND_TOP_GAP
+	_expand_top = anchor_top + hit_h + EXPAND_TOP_GAP
 	_expand_panel.anchor_left = 1.0
 	_expand_panel.anchor_right = 1.0
 	_expand_panel.anchor_top = 0.0
@@ -225,14 +231,23 @@ func _RecalcLayout() -> void:
 func _ExpandHeightOf(scroller_size: Vector2) -> float:
 	## 展开高钳制公式（方案 §卷轴组件——纯函数口径便于测试复算）：
 	## board_h = 屏高 − 按钮行区 → clamp(board_h × 高比, 最小高,
-	## board_h − 锚点下缘 − 展开边距)；上限不足时最小高兜底（极矮窗 450 档
-	## → 240）
+	## board_h − 锚点热区下缘 − 展开边距)；上限不足时最小高兜底（极矮窗
+	## 450 档 → 240）；范围修复批：锚点下缘改热区实际下缘口径（横条总高 +
+	## 边距 + 热区高——原「视觉条下缘」与热区实际占位不一致的旧账随修）
 	## 参数 scroller_size：卷轴当前尺寸（全屏锚定 = 战斗屏尺寸）
 	## 返回：展开面板高（像素）
 	var board_h: float = scroller_size.y - BOARD_BOTTOM_RESERVE
-	var anchor_bottom_y: float = _AnchorMargin() + _AnchorHeight()
+	var anchor_bottom_y: float = _AnchorTopY() + maxf(_AnchorHeight(), _HitMinSize())
 	var max_h: float = board_h - anchor_bottom_y - _ExpandMargin()
 	return clampf(board_h * _ExpandHeightRatio(), _ExpandMinHeight(), max_h)
+
+func _AnchorTopY() -> float:
+	## 锚点热区顶纵坐标（范围修复批单源）：横条总高 + 锚点边距——锚点
+	## 下移与回合标识横条下缘平齐让位；_RecalcLayout 锚点落位与
+	## _ExpandHeightOf 钳制上限两消费点共用（几何一致）
+	## 参数：无
+	## 返回：锚点热区顶（像素）
+	return UiTheme.topbar_total_height(_cfg) + _AnchorMargin()
 
 func _ApplyStyle() -> void:
 	## 深底面板样式 + 锚点字号档（B-4 单源 make_dark_panel_style / B-7 minor
@@ -314,7 +329,9 @@ func _AnchorHeight() -> float:
 	return raw
 
 func _AnchorMargin() -> float:
-	## 锚点条距屏右上角边距（cfg 优先；值域 [0,64] 外回退兜底）
+	## 锚点热区距横条下缘边距（cfg 优先；值域 [0,64] 外回退兜底；范围修复
+	## 批：原「距屏右上角边距」语义——锚点下移与横条下缘平齐后边距基准
+	## 随之改为横条下缘，值 12 不变）
 	## 参数：无
 	## 返回：生效边距（像素）
 	var raw: float = UiTheme.BATTLE_LOG_ANCHOR_MARGIN

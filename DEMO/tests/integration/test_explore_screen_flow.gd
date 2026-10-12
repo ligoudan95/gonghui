@@ -124,9 +124,12 @@ func _HitEncounterSeed() -> int:
 func test_explore_screen_renders_fog_and_targets() -> void:
 	## 进图渲染：委托会话（q_lost）——村子段全亮（迷雾遮罩隐藏）/ 矿洞未探
 	## 浓雾（遮罩可见）/ 目标点仅绑定 tp_old_well 渲染高亮（2026-10-03 试玩
-	## 反馈修订：未绑定 5 目标点完全隐藏——原灰显路径删除）
+	## 反馈修订：未绑定 5 目标点完全隐藏——原灰显路径删除；2026-10-12 修订：
+	## 推翻案 7 #25「常显」条款——绑定目标点显示受迷雾口径约束同交互点，
+	## 进图首帧目标格未探索浓雾中不可见、抵近后显示金色）
 	var scene_manager: Node = get_tree().root.get_node("SceneManager")
-	scene_manager.pending_params = {&"expedition_run": _MakeQuestRun(&"q_lost_miner_keepsake")}
+	var run := _MakeQuestRun(&"q_lost_miner_keepsake")
+	scene_manager.pending_params = {&"expedition_run": run}
 	var runner: GdUnitSceneRunner = scene_runner(EXPLORE_SCENE)
 	var screen: Control = runner.scene() as Control
 	await _WaitFrames(2)
@@ -140,14 +143,12 @@ func test_explore_screen_renders_fog_and_targets() -> void:
 	## 数据 (7,1) 绘于 y'=13 行）
 	assert_bool(screen._board._party_icon.position
 			== screen._board._cell_origin(Vector2i(7, 1))).is_true()
-	# 目标点：绑定 tp_old_well 唯一渲染（图标+衬底可见、高亮金）
-	var game_data: Node = _GameData()
-	var cfg: CoreConfig = game_data.get_record(&"cfg_main") as CoreConfig
-	var active: Color = UiTheme.color_of(cfg, &"ui_explore_target_active_color",
-			UiTheme.EXPLORE_TARGET_ACTIVE)
-	assert_bool(screen._board._target_icons[&"tp_old_well"].visible).is_true()
-	assert_bool(screen._board._target_backdrops[&"tp_old_well"].visible).is_true()
-	assert_bool(screen._board._target_icons[&"tp_old_well"].modulate.is_equal_approx(active)).is_true()
+	# 目标点首帧：绑定 tp_old_well 在矿洞深处 (5,13)——未探索浓雾 UNSEEN
+	## 中不可见（常显推翻——不再穿雾显示）
+	assert_bool(screen._board._target_icons[&"tp_old_well"].visible).is_false() \
+			.override_failure_message("进图首帧目标格未探索——浓雾中绑定目标点应不可见")
+	assert_bool(screen._board._target_backdrops[&"tp_old_well"].visible).is_false() \
+			.override_failure_message("进图首帧目标格未探索——浓雾中绑定目标点衬底应不可见")
 	# 未绑定 5 目标点：图标+衬底完全隐藏
 	for tp_id: StringName in [&"tp_mine_east_gallery", &"tp_mine_north_wall",
 			&"tp_mine_south_shaft", &"tp_mine_west_camp", &"tp_mine_track_yard"]:
@@ -157,6 +158,20 @@ func test_explore_screen_renders_fog_and_targets() -> void:
 				.override_failure_message("%s 未绑定目标点衬底应隐藏" % tp_id)
 	# 暗门图标未揭示隐藏（隐藏内容不剧透）
 	assert_bool(screen._board._point_icons[&"evp_mine_secret"].visible).is_false()
+	# 抵近目标格（真实迷雾+墙体遮蔽装配链）：同格视野 LIT → 绑定目标点
+	## 显示金色高亮（迷雾口径下「已探索后可见」的正向锚点）
+	run.party_pos = Vector2i(5, 13)
+	run.fog.on_moved(Vector2i(5, 13))
+	screen._RefreshBoard()
+	var game_data: Node = _GameData()
+	var cfg: CoreConfig = game_data.get_record(&"cfg_main") as CoreConfig
+	var active: Color = UiTheme.color_of(cfg, &"ui_explore_target_active_color",
+			UiTheme.EXPLORE_TARGET_ACTIVE)
+	assert_bool(screen._board._target_icons[&"tp_old_well"].visible).is_true() \
+			.override_failure_message("抵近后（视野 LIT）绑定目标点应显示")
+	assert_bool(screen._board._target_backdrops[&"tp_old_well"].visible).is_true() \
+			.override_failure_message("抵近后（视野 LIT）绑定目标点衬底应显示")
+	assert_bool(screen._board._target_icons[&"tp_old_well"].modulate.is_equal_approx(active)).is_true()
 
 func test_fog_wall_occlusion_renders() -> void:
 	## 视野穿透墙壁修复（2026-09-25 用户拍板：视野被墙遮挡）：矿洞 (7,7)
